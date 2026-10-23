@@ -43,9 +43,6 @@ class MQ:
         self.connection = pika.BlockingConnection(params)
         self.channel = self.connection.channel()
 
-        # Same as channel.prefetch(1)
-        self.channel.basic_qos(prefetch_count=1)
-
         # basic_publish now waits for the broker to take the message, and
         # raises if it refuses — the TS side's confirm channel.
         self.channel.confirm_delivery()
@@ -89,11 +86,15 @@ class MQ:
         self.connection.add_callback_threadsafe(publish)
         sent.result(timeout=PUBLISH_CONFIRM_TIMEOUT_S)
 
-    def listen(
+    def consume(
         self,
         queue: QueueName,
         handler: Callable[[dict[str, Any]], None],
+        prefetch: int,
     ) -> None:
+        """Hand each message on `queue` to `handler`, at most `prefetch` at
+        once; the broker holds the rest back until one is settled. Nothing is
+        delivered until run()."""
         assert self.connection is not None and self.channel is not None
         connection, channel = self.connection, self.channel
 
@@ -127,17 +128,21 @@ class MQ:
         ) -> None:
             # Handlers run off-thread so this loop keeps pumping AMQP
             # heartbeats — a long download here would get the connection
-            # dropped. prefetch(1) still caps it to one job at a time.
+            # dropped. The prefetch caps how many threads a queue has.
             threading.Thread(
                 target=work, args=(method.delivery_tag, body), daemon=True
             ).start()
 
-        self.channel.basic_consume(
-            queue=queue,
-            on_message_callback=callback,
-        )
+        # RabbitMQ applies a non-global prefetch to each consumer the channel
+        # starts after it, so every queue keeps its own.
+        channel.basic_qos(prefetch_count=prefetch)
+        channel.basic_consume(queue=queue, on_message_callback=callback)
 
-        log.info("Listening on %s", queue)
+        log.info("Listening on %s, %d at a time", queue, prefetch)
+
+    def run(self) -> None:
+        """Deliver to every consumer until the process is told to stop."""
+        assert self.channel is not None
         self.channel.start_consuming()
 
 

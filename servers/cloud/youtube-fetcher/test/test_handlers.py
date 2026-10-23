@@ -17,10 +17,11 @@ CAPTIONS = [{"start": 0.0, "end": 1.5, "text": "the captions"}]
 def fake_contract():
     # The contract singleton is normally populated by the startup preflight.
     contract.queues = _Queues(
-        YT_FETCH=QueueName("yt_fetch"),
-        YT_FETCH_FAILED=QueueName("yt_fetch_failed"),
-        TRANSCRIBE=QueueName("transcribe"),
-        CAPTION_TRANSCRIPT=QueueName("caption_transcript"),
+        FETCH_YOUTUBE_CAPTIONS=QueueName("fetch_youtube_captions"),
+        FETCH_YOUTUBE_AUDIO=QueueName("fetch_youtube_audio"),
+        SAVE_CAPTIONS=QueueName("save_captions"),
+        TRANSCRIBE_AUDIO=QueueName("transcribe_audio"),
+        FAIL_YOUTUBE_JOB=QueueName("fail_youtube_job"),
     )
     contract.bucket = "uploads"
     contract.maxAudioBytes = MAX_BYTES
@@ -160,118 +161,85 @@ class TestFetchAndUpload:
         assert content_type == "audio/mpeg"
 
 
-class TestHandleYtFetch:
-    @pytest.fixture(autouse=True)
-    def no_captions(self, monkeypatch):
-        monkeypatch.setattr(handlers, "_fetch_captions", MagicMock(return_value=None))
+EVENT = {"audioUploadId": "u1", "url": "https://youtu.be/x", "userId": "usr"}
 
-    def test_success_queues_transcribe(self, publish, monkeypatch):
-        audio_fetch = MagicMock()
-        monkeypatch.setattr(handlers, "_fetch_with_retries", audio_fetch)
 
-        handlers.handle_yt_fetch(
-            {
-                "audioUploadId": "u1",
-                "url": "https://youtu.be/x",
-                "userId": "usr",
-                "useCaptionsIfAvailable": False,
-            }
-        )
-
-        audio_fetch.assert_called_once_with("u1", "https://youtu.be/x", "usr")
-        publish.assert_called_once_with(
-            QueueName("transcribe"),
-            {"audioUploadId": "u1"},
-        )
-
-    def test_captions_skip_the_audio_download_and_travel_in_the_message(
-        self, publish, monkeypatch
-    ):
+class TestHandleFetchYoutubeCaptions:
+    def test_captions_travel_in_the_save_captions_message(self, publish, monkeypatch):
         caption_fetch = MagicMock(return_value=CAPTIONS)
         audio_fetch = MagicMock()
         monkeypatch.setattr(handlers, "_fetch_captions", caption_fetch)
         monkeypatch.setattr(handlers, "_fetch_with_retries", audio_fetch)
 
-        handlers.handle_yt_fetch(
-            {
-                "audioUploadId": "u1",
-                "url": "https://youtu.be/x",
-                "userId": "usr",
-                "useCaptionsIfAvailable": True,
-            }
-        )
+        handlers.handle_fetch_youtube_captions(EVENT)
 
-        audio_fetch.assert_not_called()
         caption_fetch.assert_called_once_with("https://youtu.be/x")
+        audio_fetch.assert_not_called()
         publish.assert_called_once_with(
-            QueueName("caption_transcript"),
+            QueueName("save_captions"),
             {"audioUploadId": "u1", "segments": CAPTIONS},
         )
 
-    def test_captions_are_not_fetched_unless_asked_for(self, publish, monkeypatch):
+    def test_unavailable_captions_queue_the_audio_fetch(self, publish, monkeypatch):
+        audio_fetch = MagicMock()
+        monkeypatch.setattr(handlers, "_fetch_captions", MagicMock(return_value=None))
+        monkeypatch.setattr(handlers, "_fetch_with_retries", audio_fetch)
+
+        handlers.handle_fetch_youtube_captions(EVENT)
+
+        # Downloaded by the audio queue's consumer, not here.
+        audio_fetch.assert_not_called()
+        publish.assert_called_once_with(QueueName("fetch_youtube_audio"), EVENT)
+
+    def test_refused_fallback_publish_fails_the_job(self, publish, monkeypatch):
+        monkeypatch.setattr(handlers, "_fetch_captions", MagicMock(return_value=None))
+        # The fetch_youtube_audio publish is refused; the failure report goes
+        # through.
+        publish.side_effect = [RuntimeError("nacked"), None]
+
+        with pytest.raises(RuntimeError, match="nacked"):
+            handlers.handle_fetch_youtube_captions(EVENT)
+
+        publish.assert_called_with(
+            QueueName("fail_youtube_job"),
+            {"audioUploadId": "u1", "userId": "usr", "error": "nacked"},
+        )
+
+    def test_caption_fetch_failure_fails_the_job(self, publish, monkeypatch):
+        monkeypatch.setattr(
+            handlers, "_fetch_captions", MagicMock(side_effect=RuntimeError("boom"))
+        )
+
+        with pytest.raises(RuntimeError, match="boom"):
+            handlers.handle_fetch_youtube_captions(EVENT)
+
+        publish.assert_called_once_with(
+            QueueName("fail_youtube_job"),
+            {"audioUploadId": "u1", "userId": "usr", "error": "boom"},
+        )
+
+
+class TestHandleFetchYoutubeAudio:
+    def test_success_queues_transcribe_audio(self, publish, monkeypatch):
+        audio_fetch = MagicMock()
+        monkeypatch.setattr(handlers, "_fetch_with_retries", audio_fetch)
+
+        handlers.handle_fetch_youtube_audio(EVENT)
+
+        audio_fetch.assert_called_once_with("u1", "https://youtu.be/x", "usr")
+        publish.assert_called_once_with(
+            QueueName("transcribe_audio"),
+            {"audioUploadId": "u1"},
+        )
+
+    def test_never_fetches_captions(self, publish, monkeypatch):
         caption_fetch = MagicMock(return_value=CAPTIONS)
         monkeypatch.setattr(handlers, "_fetch_captions", caption_fetch)
         monkeypatch.setattr(handlers, "_fetch_with_retries", MagicMock())
 
-        handlers.handle_yt_fetch(
-            {
-                "audioUploadId": "u1",
-                "url": "https://youtu.be/x",
-                "userId": "usr",
-                "useCaptionsIfAvailable": False,
-            }
-        )
+        handlers.handle_fetch_youtube_audio(EVENT)
 
         caption_fetch.assert_not_called()
-        publish.assert_called_once_with(
-            QueueName("transcribe"), {"audioUploadId": "u1"}
-        )
-
-    def test_a_message_that_still_carries_a_caption_upload_id_works(
-        self, publish, monkeypatch
-    ):
-        # The API used to reserve a caption upload and send its id. A message
-        # still queued from before that changed must not fail on the field.
-        monkeypatch.setattr(
-            handlers, "_fetch_captions", MagicMock(return_value=CAPTIONS)
-        )
-
-        handlers.handle_yt_fetch(
-            {
-                "audioUploadId": "u1",
-                "captionUploadId": "c1",
-                "url": "https://youtu.be/x",
-                "userId": "usr",
-                "useCaptionsIfAvailable": True,
-            }
-        )
-
-        publish.assert_called_once_with(
-            QueueName("caption_transcript"),
-            {"audioUploadId": "u1", "segments": CAPTIONS},
-        )
-
-    def test_unavailable_captions_fall_back_to_audio(self, publish, monkeypatch):
-        caption_fetch = MagicMock(return_value=None)
-        audio_fetch = MagicMock()
-        monkeypatch.setattr(handlers, "_fetch_captions", caption_fetch)
-        monkeypatch.setattr(handlers, "_fetch_with_retries", audio_fetch)
-
-        handlers.handle_yt_fetch(
-            {
-                "audioUploadId": "u1",
-                "url": "https://youtu.be/x",
-                "userId": "usr",
-                "useCaptionsIfAvailable": True,
-            }
-        )
-
-        caption_fetch.assert_called_once_with("https://youtu.be/x")
-        audio_fetch.assert_called_once_with("u1", "https://youtu.be/x", "usr")
-        publish.assert_called_once_with(
-            QueueName("transcribe"),
-            {"audioUploadId": "u1"},
-        )
 
     def test_failure_notifies_api_and_reraises(self, publish, monkeypatch):
         monkeypatch.setattr(
@@ -281,37 +249,24 @@ class TestHandleYtFetch:
         )
 
         with pytest.raises(RuntimeError, match="boom"):
-            handlers.handle_yt_fetch(
-                {
-                    "audioUploadId": "u1",
-                    "url": "https://youtu.be/x",
-                    "userId": "usr",
-                    "useCaptionsIfAvailable": False,
-                }
-            )
+            handlers.handle_fetch_youtube_audio(EVENT)
 
         publish.assert_called_once_with(
-            QueueName("yt_fetch_failed"),
+            QueueName("fail_youtube_job"),
             {"audioUploadId": "u1", "userId": "usr", "error": "boom"},
         )
 
     def test_refused_transcribe_publish_fails_the_job(self, publish, monkeypatch):
         monkeypatch.setattr(handlers, "_fetch_with_retries", MagicMock())
-        # The transcribe publish is refused; the failure report goes through.
+        # The transcribe_audio publish is refused; the failure report goes
+        # through.
         publish.side_effect = [RuntimeError("nacked"), None]
 
         with pytest.raises(RuntimeError, match="nacked"):
-            handlers.handle_yt_fetch(
-                {
-                    "audioUploadId": "u1",
-                    "url": "https://youtu.be/x",
-                    "userId": "usr",
-                    "useCaptionsIfAvailable": False,
-                }
-            )
+            handlers.handle_fetch_youtube_audio(EVENT)
 
         publish.assert_called_with(
-            QueueName("yt_fetch_failed"),
+            QueueName("fail_youtube_job"),
             {"audioUploadId": "u1", "userId": "usr", "error": "nacked"},
         )
 
@@ -323,30 +278,29 @@ class TestHandleYtFetch:
         )
 
         with pytest.raises(RuntimeError):
-            handlers.handle_yt_fetch(
-                {
-                    "audioUploadId": "u1",
-                    "url": "https://youtu.be/x",
-                    "userId": "usr",
-                    "useCaptionsIfAvailable": False,
-                }
-            )
+            handlers.handle_fetch_youtube_audio(EVENT)
 
         (_, payload), _ = publish.call_args
         assert len(payload["error"]) == 500
 
-    def test_malformed_payload_with_audio_upload_id_still_fails_the_job(self, publish):
+
+@pytest.mark.parametrize(
+    "handler",
+    [handlers.handle_fetch_youtube_captions, handlers.handle_fetch_youtube_audio],
+)
+class TestMalformedPayloads:
+    def test_one_with_an_audio_upload_id_still_fails_the_job(self, handler, publish):
         with pytest.raises(KeyError):
-            handlers.handle_yt_fetch({"audioUploadId": "u1"})  # no url
+            handler({"audioUploadId": "u1"})  # no url
 
         (queue, payload), _ = publish.call_args
-        assert queue == "yt_fetch_failed"
+        assert queue == "fail_youtube_job"
         assert payload["audioUploadId"] == "u1"
         assert payload["userId"] == ""
 
-    def test_unidentifiable_payload_is_not_reported(self, publish):
+    def test_an_unidentifiable_one_is_not_reported(self, handler, publish):
         with pytest.raises(KeyError):
-            handlers.handle_yt_fetch({})
+            handler({})
 
         publish.assert_not_called()
 

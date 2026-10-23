@@ -1,8 +1,10 @@
 """Event handlers: fetch YouTube captions or audio and queue transcription."""
 
+import functools
 import logging
 import tempfile
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 import yt_dlp
@@ -18,7 +20,7 @@ log = logging.getLogger(__name__)
 # YouTube's media CDN intermittently rejects a signed download URL with 403,
 # and the same URL will keep being rejected — so a retry has to re-extract to
 # get fresh ones, which is why the whole fetch is retried rather than the
-# request. Handlers run off the AMQP I/O thread (message_queue.listen), so
+# request. Handlers run off the AMQP I/O thread (message_queue.consume), so
 # sleeping here does not stall heartbeats.
 FETCH_ATTEMPTS = 3
 RETRY_BACKOFF_SECONDS = 2
@@ -84,7 +86,7 @@ def _fetch_captions(url: str) -> list[dict] | None:
     """The video's first caption track, one segment per caption line in the
     shape the API's TranscriptSegment takes ({"start", "end", "text"}, in
     seconds), or None when it has none worth using. The segments travel in the
-    caption_transcript message itself: even a many-hour video's captions are a
+    save_captions message itself: even a many-hour video's captions are a
     few hundred KB."""
     video_id = YoutubeIE.extract_id(url)
 
@@ -120,44 +122,71 @@ def _fetch_captions(url: str) -> list[dict] | None:
     return segments
 
 
-def handle_yt_fetch(event: dict) -> None:
-    try:
-        audio_upload_id: str = event["audioUploadId"]
-        url: str = event["url"]
-        user_id: str = event["userId"]
-        use_captions_if_available = event["useCaptionsIfAvailable"]
+def _fails_the_job(handler: Callable[[dict], None]) -> Callable[[dict], None]:
+    """Tell the API when a fetch fails, so it can mark the job row failed. A
+    malformed payload (missing url/userId) must still fail the job if we know
+    which one it is. Re-raises so the dispatcher drops the message."""
 
-        segments = _fetch_captions(url) if use_captions_if_available else None
-        if segments:
-            mq.publish_threadsafe(
-                contract.queues.CAPTION_TRANSCRIPT,
-                {"audioUploadId": audio_upload_id, "segments": segments},
-            )
-            return
+    @functools.wraps(handler)
+    def handle(event: dict) -> None:
+        try:
+            handler(event)
+        except Exception as error:
+            if isinstance(event, dict) and event.get("audioUploadId"):
+                mq.publish_threadsafe(
+                    contract.queues.FAIL_YOUTUBE_JOB,
+                    {
+                        "audioUploadId": event["audioUploadId"],
+                        "userId": event.get("userId", ""),
+                        "error": str(error)[:500],
+                    },
+                )
+            raise
 
-        _fetch_with_retries(audio_upload_id, url, user_id)
-        # Inside the try: a transcribe the broker refuses must fail the job,
-        # or it would sit queued with nothing coming for it.
+    return handle
+
+
+@_fails_the_job
+def handle_fetch_youtube_captions(event: dict) -> None:
+    """Send the video's captions back as its transcript, or, when it has
+    none, queue its audio to be fetched instead."""
+    audio_upload_id: str = event["audioUploadId"]
+    url: str = event["url"]
+    user_id: str = event["userId"]
+
+    segments = _fetch_captions(url)
+    if segments:
         mq.publish_threadsafe(
-            contract.queues.TRANSCRIBE,
-            {"audioUploadId": audio_upload_id},
+            contract.queues.SAVE_CAPTIONS,
+            {"audioUploadId": audio_upload_id, "segments": segments},
         )
-    except Exception as error:
-        # Tell the API so it can mark the job row failed — a malformed
-        # payload (missing url/userId) must still fail the job if we know
-        # which one it is. Re-raise so the dispatcher drops the message.
-        if isinstance(event, dict) and event.get("audioUploadId"):
-            mq.publish_threadsafe(
-                contract.queues.YT_FETCH_FAILED,
-                {
-                    "audioUploadId": event["audioUploadId"],
-                    "userId": event.get("userId", ""),
-                    "error": str(error)[:500],
-                },
-            )
-        raise
+        log.info("Fetched captions for %s, queued save_captions", audio_upload_id)
+        return
 
-    log.info("Fetched %s, queued transcribe", audio_upload_id)
+    # Inside the handler: a fallback the broker refuses must fail the job, or
+    # it would sit queued with nothing coming for it.
+    mq.publish_threadsafe(
+        contract.queues.FETCH_YOUTUBE_AUDIO,
+        {"audioUploadId": audio_upload_id, "url": url, "userId": user_id},
+    )
+    log.info("No captions for %s, queued fetch_youtube_audio", audio_upload_id)
+
+
+@_fails_the_job
+def handle_fetch_youtube_audio(event: dict) -> None:
+    """Store the video's audio and queue it to be transcribed."""
+    audio_upload_id: str = event["audioUploadId"]
+    url: str = event["url"]
+    user_id: str = event["userId"]
+
+    _fetch_with_retries(audio_upload_id, url, user_id)
+    # Inside the handler: a transcribe_audio the broker refuses must fail the
+    # job, or it would sit queued with nothing coming for it.
+    mq.publish_threadsafe(
+        contract.queues.TRANSCRIBE_AUDIO,
+        {"audioUploadId": audio_upload_id},
+    )
+    log.info("Fetched %s, queued transcribe_audio", audio_upload_id)
 
 
 def _fetch_and_upload(audio_upload_id: str, url: str, user_id: str) -> None:
@@ -178,8 +207,8 @@ def _fetch_and_upload(audio_upload_id: str, url: str, user_id: str) -> None:
             "max_filesize": max_bytes,
             # YouTube's media CDN can reject non-ranged downloads with 403.
             "http_chunk_size": 1024 * 1024,
-            # A stalled connection shouldn't hold the (prefetch-1) worker
-            # hostage; yt-dlp retries after a timeout.
+            # A stalled connection shouldn't hold one of the audio queue's
+            # few slots hostage; yt-dlp retries after a timeout.
             "socket_timeout": 30,
             # YouTube signs its media URLs with an `n` parameter that has to be
             # descrambled by running their player JS. yt-dlp only enables deno

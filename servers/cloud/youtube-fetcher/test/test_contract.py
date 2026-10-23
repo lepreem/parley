@@ -5,14 +5,14 @@ import pytest
 import contract as contract_module
 from contract import _Contract
 
-# /contract serves every backend queue (backend/src/app.ts); the
-# fetcher must pick out only the ones it uses.
+# /contract serves every backend queue (backend/src/app.ts).
 FULL_CONTRACT = {
     "queues": {
-        "TRANSCRIBE": "transcribe",
-        "YT_FETCH": "yt_fetch",
-        "YT_FETCH_FAILED": "yt_fetch_failed",
-        "CAPTION_TRANSCRIPT": "caption_transcript",
+        "FETCH_YOUTUBE_CAPTIONS": "fetch_youtube_captions",
+        "FETCH_YOUTUBE_AUDIO": "fetch_youtube_audio",
+        "SAVE_CAPTIONS": "save_captions",
+        "TRANSCRIBE_AUDIO": "transcribe_audio",
+        "FAIL_YOUTUBE_JOB": "fail_youtube_job",
     },
     "bucket": "uploads",
     "maxAudioBytes": 25 * 1024 * 1024,
@@ -25,17 +25,18 @@ def make_response(body):
     return response
 
 
-def test_load_picks_used_queues_and_limits(monkeypatch):
+def test_load_reads_queues_and_limits(monkeypatch):
     get = MagicMock(return_value=make_response(FULL_CONTRACT))
     monkeypatch.setattr(contract_module.httpx, "get", get)
 
     c = _Contract()
     c.load()
 
-    assert c.queues.YT_FETCH == "yt_fetch"
-    assert c.queues.YT_FETCH_FAILED == "yt_fetch_failed"
-    assert c.queues.TRANSCRIBE == "transcribe"
-    assert c.queues.CAPTION_TRANSCRIPT == "caption_transcript"
+    assert c.queues.FETCH_YOUTUBE_CAPTIONS == "fetch_youtube_captions"
+    assert c.queues.FETCH_YOUTUBE_AUDIO == "fetch_youtube_audio"
+    assert c.queues.SAVE_CAPTIONS == "save_captions"
+    assert c.queues.TRANSCRIBE_AUDIO == "transcribe_audio"
+    assert c.queues.FAIL_YOUTUBE_JOB == "fail_youtube_job"
     assert c.bucket == "uploads"
     assert c.maxAudioBytes == 25 * 1024 * 1024
 

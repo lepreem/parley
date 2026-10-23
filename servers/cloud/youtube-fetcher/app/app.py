@@ -1,14 +1,26 @@
-"""Entrypoint: run the preflight, then consume yt_fetch until SIGTERM."""
+"""Entrypoint: run the preflight, then consume both fetch queues until SIGTERM."""
 
 import logging
 import signal
 
 from contract import contract
-from handlers import handle_yt_fetch
+from handlers import handle_fetch_youtube_audio, handle_fetch_youtube_captions
 from message_queue import mq
 from startup import verify_fetcher_services
 
 log = logging.getLogger(__name__)
+
+# A caption fetch is one small request to YouTube, so a queue of them clears
+# quickly, and on its own queue it never waits behind an audio download. Every
+# fetch goes out from the server's one IP, though, and YouTube blocks IPs that
+# ask for too many transcripts.
+CAPTIONS_PREFETCH = 5
+
+# An audio fetch downloads up to 50 MB and uploads it again, while yt-dlp runs
+# a JS runtime to get past YouTube's player challenge, all inside the
+# container's 1 GB (compose.prod.yaml). Raise this once production shows
+# there's room.
+AUDIO_PREFETCH = 3
 
 
 def main() -> None:
@@ -27,7 +39,17 @@ def main() -> None:
     signal.signal(signal.SIGTERM, stop)
 
     try:
-        mq.listen(contract.queues.YT_FETCH, handle_yt_fetch)
+        mq.consume(
+            contract.queues.FETCH_YOUTUBE_CAPTIONS,
+            handle_fetch_youtube_captions,
+            prefetch=CAPTIONS_PREFETCH,
+        )
+        mq.consume(
+            contract.queues.FETCH_YOUTUBE_AUDIO,
+            handle_fetch_youtube_audio,
+            prefetch=AUDIO_PREFETCH,
+        )
+        mq.run()
     except KeyboardInterrupt:
         log.info("Shutting down")
     finally:

@@ -42,19 +42,21 @@ const server = serve({
  */
 const TRANSCRIBE_ATTEMPTS = 2;
 
-await mq.consume(mq.queues.TRANSCRIBE, handleTranscribeJob, {
+await mq.consume(mq.queues.TRANSCRIBE_AUDIO, handleTranscribeJob, {
   attempts: TRANSCRIBE_ATTEMPTS,
   prefetch: await getTranscriptionConcurrency(),
 });
-// Captions are stored as they arrive, with no Deepgram call, so one at a time
-// keeps up.
-await mq.consume(mq.queues.CAPTION_TRANSCRIPT, handleTranscribeJob, {
+// Saving captions is nothing but database writes, so one at a time keeps the
+// queue to one of the pool's connections (src/db/pool.ts) and chat turns
+// don't wait behind a burst of them. Each one takes milliseconds; the fetch
+// before it takes seconds.
+await mq.consume(mq.queues.SAVE_CAPTIONS, handleTranscribeJob, {
   attempts: TRANSCRIBE_ATTEMPTS,
 });
-// youtube-fetcher couldn't download/upload the audio: mark the job failed and
-// notify the user. The row was created by POST /upload/youtube.
+// youtube-fetcher couldn't fetch the captions or the audio: mark the job
+// failed and notify the user. The row was created by POST /upload/youtube.
 await mq.consume(
-  mq.queues.YT_FETCH_FAILED,
+  mq.queues.FAIL_YOUTUBE_JOB,
   async ({ audioUploadId, userId, error }) => {
     await data.jobs.failAudioJobById(
       audioUploadId,

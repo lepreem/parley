@@ -32,7 +32,7 @@ class SyncThread:
 def deliver(mq, monkeypatch, body, handler):
     """Wire up a consumer and push one message through it."""
     monkeypatch.setattr(message_queue.threading, "Thread", SyncThread)
-    mq.listen("q", handler)
+    mq.consume("q", handler, prefetch=1)
 
     callback = mq.channel.basic_consume.call_args.kwargs["on_message_callback"]
     method = MagicMock()
@@ -111,7 +111,38 @@ def test_close_only_closes_an_open_connection():
     MQ().close()  # never connected: no-op, must not raise
 
 
-def test_listen_acks_after_successful_handling(monkeypatch):
+def test_consume_sets_each_queues_prefetch_right_before_starting_it():
+    mq = make_mq()
+    calls = MagicMock()
+    mq.channel.basic_qos = calls.basic_qos
+    mq.channel.basic_consume = calls.basic_consume
+
+    mq.consume("captions", lambda data: None, prefetch=5)
+    mq.consume("audio", lambda data: None, prefetch=3)
+
+    # RabbitMQ gives each consumer the prefetch set last before it started.
+    steps = [
+        (call[0], call.kwargs.get("prefetch_count") or call.kwargs.get("queue"))
+        for call in calls.mock_calls
+    ]
+    assert steps == [
+        ("basic_qos", 5),
+        ("basic_consume", "captions"),
+        ("basic_qos", 3),
+        ("basic_consume", "audio"),
+    ]
+    mq.channel.start_consuming.assert_not_called()
+
+
+def test_run_starts_delivering():
+    mq = make_mq()
+
+    mq.run()
+
+    mq.channel.start_consuming.assert_called_once()
+
+
+def test_consume_acks_after_successful_handling(monkeypatch):
     mq = make_mq()
     seen = []
 
@@ -122,7 +153,7 @@ def test_listen_acks_after_successful_handling(monkeypatch):
     mq.channel.basic_nack.assert_not_called()
 
 
-def test_listen_drops_message_when_handler_fails(monkeypatch):
+def test_consume_drops_message_when_handler_fails(monkeypatch):
     mq = make_mq()
 
     def handler(data):
@@ -134,7 +165,7 @@ def test_listen_drops_message_when_handler_fails(monkeypatch):
     mq.channel.basic_ack.assert_not_called()
 
 
-def test_listen_drops_undecodable_message(monkeypatch):
+def test_consume_drops_undecodable_message(monkeypatch):
     mq = make_mq()
     seen = []
 

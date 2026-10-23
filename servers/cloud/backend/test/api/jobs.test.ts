@@ -53,9 +53,10 @@ vi.mock("../../src/ai/ai_transcribe_client", () => ({
 
 vi.mock("../../src/message-queue/messageQueue", () => {
   const queues = {
-    TRANSCRIBE: "transcribe",
-    YT_FETCH: "yt_fetch",
-    YT_FETCH_FAILED: "yt_fetch_failed",
+    TRANSCRIBE_AUDIO: "transcribe_audio",
+    FETCH_YOUTUBE_CAPTIONS: "fetch_youtube_captions",
+    FETCH_YOUTUBE_AUDIO: "fetch_youtube_audio",
+    FAIL_YOUTUBE_JOB: "fail_youtube_job",
   } as const;
 
   return {
