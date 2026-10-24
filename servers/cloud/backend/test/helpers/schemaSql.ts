@@ -1,10 +1,19 @@
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { MIGRATIONS_FOLDER } from "../../scripts/migrations";
+
+/**
+ * Migrations written by hand for what schema.ts can't express, so `drizzle-kit
+ * export` leaves them out.
+ */
+const HANDWRITTEN_MIGRATIONS = ["0004_immutable_messages"];
 
 /**
  * The SQL that creates src/db/schema.ts's tables, from `drizzle-kit
- * export`, for the integration suites to run in their own schema.
+ * export`, and the handwritten migrations' triggers on them, for the
+ * integration suites to run in their own schema.
  *
  * drizzle-kit's bin.cjs isn't an exported path, and the npm workspace
  * installs drizzle-kit at the repo root rather than in this package, so it's
@@ -16,7 +25,7 @@ export function exportSchemaSql(): string {
     path.dirname(require.resolve("drizzle-kit")),
     "bin.cjs",
   );
-  return execFileSync(
+  const tables = execFileSync(
     process.execPath,
     [
       bin,
@@ -28,4 +37,8 @@ export function exportSchemaSql(): string {
     ],
     { encoding: "utf8" },
   );
+  const handwritten = HANDWRITTEN_MIGRATIONS.map((tag) =>
+    fs.readFileSync(`${MIGRATIONS_FOLDER}/${tag}.sql`, "utf8"),
+  );
+  return [tables, ...handwritten].join("\n");
 }

@@ -163,7 +163,8 @@ export const ChatMessages = pgTable(
     // turn roles so history can be replayed to the model as-is.
     role: chatRoleEnum("role").notNull(),
     // Written once: an edit deletes the message and saves a new one. Each API
-    // process caches it by id (src/chat/historyText.ts).
+    // process caches it by id (src/chat/historyText.ts). A trigger refuses any
+    // UPDATE to this table (drizzle/0004_immutable_messages.sql).
     content: text("content").notNull(),
     // Model that produced an assistant message; null for user messages.
     chosenModelId: text("chosen_model_id"),

@@ -1,0 +1,515 @@
+{
+  "id": "ff3a5744-956c-4072-830b-f52379edc326",
+  "prevId": "4ae6f3e9-30b0-404d-b9d0-1eca03de4bd8",
+  "version": "6",
+  "dialect": "sqlite",
+  "tables": {
+    "attachment_turn_reservations": {
+      "name": "attachment_turn_reservations",
+      "columns": {
+        "attachment_upload_id": {
+          "name": "attachment_upload_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "claim_token": {
+          "name": "claim_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "attachment_turn_reservations_claim_idx": {
+          "name": "attachment_turn_reservations_claim_idx",
+          "columns": ["claim_token"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "attachment_turn_reservations_attachment_upload_id_attachment_uploads_attachment_upload_id_fk": {
+          "name": "attachment_turn_reservations_attachment_upload_id_attachment_uploads_attachment_upload_id_fk",
+          "tableFrom": "attachment_turn_reservations",
+          "columnsFrom": ["attachment_upload_id"],
+          "tableTo": "attachment_uploads",
+          "columnsTo": ["attachment_upload_id"],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {
+        "attachment_turn_reservations_attachment_upload_id_claim_token_pk": {
+          "columns": ["attachment_upload_id", "claim_token"],
+          "name": "attachment_turn_reservations_attachment_upload_id_claim_token_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "attachment_uploads": {
+      "name": "attachment_uploads",
+      "columns": {
+        "attachment_upload_id": {
+          "name": "attachment_upload_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "file_name": {
+          "name": "file_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "mime_type": {
+          "name": "mime_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "size_bytes": {
+          "name": "size_bytes",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(unixepoch('subsec') * 1000 as integer))"
+        }
+      },
+      "indexes": {
+        "attachment_uploads_kind_created_idx": {
+          "name": "attachment_uploads_kind_created_idx",
+          "columns": ["kind", "created_at", "attachment_upload_id"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "attachment_uploads_kind": {
+          "name": "attachment_uploads_kind",
+          "value": "\"attachment_uploads\".\"kind\" in ('image', 'audio')"
+        }
+      }
+    },
+    "audio_transcription_jobs": {
+      "name": "audio_transcription_jobs",
+      "columns": {
+        "audio_upload_id": {
+          "name": "audio_upload_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "YT_source_url": {
+          "name": "YT_source_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "YT_use_captions_if_available": {
+          "name": "YT_use_captions_if_available",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'queued'"
+        },
+        "error": {
+          "name": "error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "claim_token": {
+          "name": "claim_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(unixepoch('subsec') * 1000 as integer))"
+        },
+        "transcription_model_id": {
+          "name": "transcription_model_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "audio_transcription_jobs_audio_upload_id_attachment_uploads_attachment_upload_id_fk": {
+          "name": "audio_transcription_jobs_audio_upload_id_attachment_uploads_attachment_upload_id_fk",
+          "tableFrom": "audio_transcription_jobs",
+          "columnsFrom": ["audio_upload_id"],
+          "tableTo": "attachment_uploads",
+          "columnsTo": ["attachment_upload_id"],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "audio_transcription_jobs_status": {
+          "name": "audio_transcription_jobs_status",
+          "value": "\"audio_transcription_jobs\".\"status\" in ('queued', 'processing', 'completed', 'failed')"
+        }
+      }
+    },
+    "chat_message_attachments": {
+      "name": "chat_message_attachments",
+      "columns": {
+        "message_id": {
+          "name": "message_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "attachment_upload_id": {
+          "name": "attachment_upload_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "position": {
+          "name": "position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "chat_message_attachments_message_position_idx": {
+          "name": "chat_message_attachments_message_position_idx",
+          "columns": ["message_id", "position"],
+          "isUnique": true
+        },
+        "chat_message_attachments_upload_idx": {
+          "name": "chat_message_attachments_upload_idx",
+          "columns": ["attachment_upload_id"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "chat_message_attachments_message_id_chat_messages_id_fk": {
+          "name": "chat_message_attachments_message_id_chat_messages_id_fk",
+          "tableFrom": "chat_message_attachments",
+          "columnsFrom": ["message_id"],
+          "tableTo": "chat_messages",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        },
+        "chat_message_attachments_attachment_upload_id_attachment_uploads_attachment_upload_id_fk": {
+          "name": "chat_message_attachments_attachment_upload_id_attachment_uploads_attachment_upload_id_fk",
+          "tableFrom": "chat_message_attachments",
+          "columnsFrom": ["attachment_upload_id"],
+          "tableTo": "attachment_uploads",
+          "columnsTo": ["attachment_upload_id"],
+          "onUpdate": "no action",
+          "onDelete": "restrict"
+        }
+      },
+      "compositePrimaryKeys": {
+        "chat_message_attachments_message_id_attachment_upload_id_pk": {
+          "columns": ["message_id", "attachment_upload_id"],
+          "name": "chat_message_attachments_message_id_attachment_upload_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "chat_messages": {
+      "name": "chat_messages",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "role_order": {
+          "name": "role_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "generated": {
+            "type": "virtual",
+            "as": "(case role when 'user' then 0 else 1 end)"
+          }
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "chosen_model_id": {
+          "name": "chosen_model_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "stopped": {
+          "name": "stopped",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(unixepoch('subsec') * 1000 as integer))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(unixepoch('subsec') * 1000 as integer))"
+        },
+        "conversation_id": {
+          "name": "conversation_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "chat_messages_conversation_created_idx": {
+          "name": "chat_messages_conversation_created_idx",
+          "columns": ["conversation_id", "created_at", "role_order", "id"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "chat_messages_conversation_id_conversations_id_fk": {
+          "name": "chat_messages_conversation_id_conversations_id_fk",
+          "tableFrom": "chat_messages",
+          "columnsFrom": ["conversation_id"],
+          "tableTo": "conversations",
+          "columnsTo": ["id"],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "chat_messages_role": {
+          "name": "chat_messages_role",
+          "value": "\"chat_messages\".\"role\" in ('user', 'assistant')"
+        }
+      }
+    },
+    "conversations": {
+      "name": "conversations",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'New conversation'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(unixepoch('subsec') * 1000 as integer))"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "(cast(unixepoch('subsec') * 1000 as integer))"
+        },
+        "last_message_id": {
+          "name": "last_message_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "context_window_message_count": {
+          "name": "context_window_message_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "active_turn_claim_token": {
+          "name": "active_turn_claim_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "active_turn_claimed_at": {
+          "name": "active_turn_claimed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "conversations_updated_idx": {
+          "name": "conversations_updated_idx",
+          "columns": ["updated_at", "id"],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "transcript_contents": {
+      "name": "transcript_contents",
+      "columns": {
+        "audio_upload_id": {
+          "name": "audio_upload_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "segments": {
+          "name": "segments",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "char_count": {
+          "name": "char_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "transcript_contents_audio_upload_id_audio_transcription_jobs_audio_upload_id_fk": {
+          "name": "transcript_contents_audio_upload_id_audio_transcription_jobs_audio_upload_id_fk",
+          "tableFrom": "transcript_contents",
+          "columnsFrom": ["audio_upload_id"],
+          "tableTo": "audio_transcription_jobs",
+          "columnsTo": ["audio_upload_id"],
+          "onUpdate": "no action",
+          "onDelete": "cascade"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}

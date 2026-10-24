@@ -141,8 +141,11 @@ still decides which messages, attachments and images a turn gets; the cache
 only fills in text for ids it returned. A process that has never seen a
 conversation reads it in full once.
 
-Keep message and transcript text write-once. A feature that rewrites either in
-place would let this cache serve the old text.
+The database holds this: triggers (`drizzle/0004_immutable_messages.sql`)
+refuse any UPDATE to `chat_messages`, `chat_message_attachments` and
+`transcript_contents`, so a feature that tried to rewrite either in place, and
+would have let this cache serve the old text, fails instead. Deletes, cascades
+included, are unaffected.
 
 ### Schema changes
 
@@ -154,6 +157,12 @@ a change to `schema.ts` comes with its migration:
    your own database.
 2. `npm run db:generate`, and commit the new file in `drizzle/` with the
    change. `test/unit/migrations.test.ts` fails until you do.
+
+What `schema.ts` can't express, such as the triggers above, goes in a
+migration written by hand: `npm run db:generate -- --custom --name <name>`
+makes the empty file. Push doesn't apply those, so run `npm run db:migrate`
+for them; add the file to `HANDWRITTEN_MIGRATIONS` in
+`test/helpers/schemaSql.ts` so the integration suites get it too.
 
 A database made with push rather than migrations (the existing ones were)
 needs `npm run db:baseline` once before its first `migrate`: it checks the

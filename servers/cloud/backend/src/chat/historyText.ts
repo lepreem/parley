@@ -11,7 +11,8 @@ import type {
  *
  * Nothing here can go stale: a message's content and a transcript's content
  * are written once and never updated (an edit deletes messages and writes new
- * ones, under new ids). The history query still decides which turns are in the
+ * ones, under new ids), and the database refuses an update to either
+ * (drizzle/0004_immutable_messages.sql). The history query still decides which turns are in the
  * window and what they carry; this only fills in text for ids it returned. So
  * each process keeps its own copy and nothing is routed or invalidated: an
  * entry another process made obsolete is only memory, and it goes when the
