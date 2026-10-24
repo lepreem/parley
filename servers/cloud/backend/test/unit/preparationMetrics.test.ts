@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   measurePreparation,
+  stepsInOrder,
   withPreparationMetrics,
+  type RecordedStep,
 } from "../../src/preparationMetrics";
 
 describe("preparation metrics", () => {
@@ -65,5 +67,33 @@ describe("preparation metrics", () => {
       "Message preparation operation completed",
       expect.objectContaining({ outcome: "rejected", imageCount: 2 }),
     );
+  });
+
+  it("keeps each step for the turn, its own steps under it", async () => {
+    const steps: RecordedStep[] = [];
+    const releaseImages = Promise.withResolvers<void>();
+    await withPreparationMetrics(
+      { log: { info: vi.fn() }, startedAt: performance.now(), steps },
+      () =>
+        Promise.all([
+          measurePreparation("images", undefined, async () => {
+            await releaseImages.promise;
+            return measurePreparation("signing", undefined, async () => 1);
+          }),
+          measurePreparation("history", undefined, async () => {
+            releaseImages.resolve();
+            return 2;
+          }),
+        ]),
+    );
+
+    // Signing started after history did, but it's part of images.
+    expect(
+      stepsInOrder(steps).map(({ operation, depth }) => ({ operation, depth })),
+    ).toEqual([
+      { operation: "images", depth: 0 },
+      { operation: "signing", depth: 1 },
+      { operation: "history", depth: 0 },
+    ]);
   });
 });

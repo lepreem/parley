@@ -20,7 +20,9 @@ import {
 import {
   measurePreparation,
   msSince,
+  stepsInOrder,
   withPreparationMetrics,
+  type RecordedStep,
 } from "../preparationMetrics";
 import { uploads } from "../uploads";
 import { events as serverEvents } from "../events";
@@ -114,7 +116,7 @@ export const handleListMessages = authed.createHandlers(
 
 /**
  * Answers a turn as server-sent events: `delta` ({ delta }) per model chunk,
- * then `done` ({ lastMessageId, stopped }) once the turn is stored, `cancelled`
+ * then `done` ({ lastMessageId, stopped, stats }) once the turn is stored, `cancelled`
  * if it was stopped before any reply came, or `error` ({ message }) if the
  * model call fails. A turn rejected before the model is
  * asked gets a plain JSON error instead. The client reads the stream with
@@ -158,27 +160,41 @@ function streamTurn(
 
       const modelStartedAt = performance.now();
       const modelStartedAfterMs = msSince(metrics.startedAt);
-      let firstTokenLogged = false;
+      let firstTokenAfterMs: number | null = null;
+      let modelFinishedAfterMs = modelStartedAfterMs;
       const answer = await answerTurn(
         request,
         claim,
         prepared,
         reply,
         (delta) => {
-          if (delta.length > 0 && !firstTokenLogged) {
-            firstTokenLogged = true;
+          if (delta.length > 0 && firstTokenAfterMs === null) {
+            firstTokenAfterMs = msSince(metrics.startedAt);
             metrics.log.info("Message first token generated", {
               modelStartedAfterMs,
               modelTimeToFirstTokenMs: msSince(modelStartedAt),
-              firstTokenAfterMs: msSince(metrics.startedAt),
+              firstTokenAfterMs,
             });
           }
           events.push("delta", { delta });
         },
+        () => {
+          modelFinishedAfterMs = msSince(metrics.startedAt);
+        },
       );
 
       if (answer) {
-        events.push("done", answer);
+        events.push("done", {
+          ...answer,
+          stats: {
+            steps: stepsInOrder(metrics.steps),
+            modelStartedAfterMs,
+            firstTokenAfterMs,
+            modelFinishedAfterMs,
+            totalMs: msSince(metrics.startedAt),
+            context: prepared.contextStats,
+          },
+        });
       } else {
         await claim.release();
         events.push("cancelled", {});
@@ -217,13 +233,15 @@ function streamTurn(
 type TurnMetrics = {
   log: Pick<typeof logger, "info">;
   startedAt: number;
+  steps: RecordedStep[];
 };
 
 /**
  * Times every step of a turn from the handler's start (after auth and body
  * validation). Each step logs "Message preparation operation completed"; the
  * claims and the reads that run beside them share a promiseAllId, so the
- * slowest of them is what the turn waited for.
+ * slowest of them is what the turn waited for. The steps are kept too, for
+ * the stats the turn's `done` carries.
  */
 function withTurnMetrics<T>(
   request: TurnRequest,
@@ -236,6 +254,7 @@ function withTurnMetrics<T>(
       conversationId: request.conversationId,
     }),
     startedAt: performance.now(),
+    steps: [],
   };
   return withPreparationMetrics(metrics, () => run(metrics));
 }

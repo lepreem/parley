@@ -71,8 +71,15 @@ export function ChatView() {
   const messagesQuery = useMessagesQuery(conversationId);
   const chatModels = useChatModelsQuery(ready);
   const [modelPick, setModelPick] = useState<string | null>(null);
-  const { pendingTurns, sendingKeys, stoppingKeys, send, edit, stop } =
-    useChatSend();
+  const {
+    pendingTurns,
+    sendingKeys,
+    stoppingKeys,
+    turnStats,
+    send,
+    edit,
+    stop,
+  } = useChatSend();
 
   const [dragging, setDragging] = useState(false);
   const dragDepth = useRef(0);
@@ -227,6 +234,7 @@ export function ChatView() {
           loading={!!conversationId && messagesQuery.isLoading}
           onEdit={handleEdit}
           canEdit={canEdit}
+          turnStats={turnStats}
         />
       )}
 

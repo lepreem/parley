@@ -6,6 +6,7 @@ import type {
   ReplyInProgress,
   ReplyStreamEvents,
   SendMessageBody,
+  TurnStats,
 } from "@parley/shared/contract";
 import {
   readServerSentEvents,
@@ -20,6 +21,7 @@ export type {
   MessagesResponse,
   MessageTranscript,
   ReplyInProgress,
+  TurnStats,
 };
 
 /**
@@ -66,7 +68,8 @@ type StreamCallbacks = {
   /** The reply has started, so it can be stopped from now on. */
   onOpen: () => void;
   onDelta: (delta: string) => void;
-  onDone: (lastMessageId: string, stopped: boolean) => void;
+  /** `stats` when the server sent them, for the reply's stats panel. */
+  onDone: (lastMessageId: string, stopped: boolean, stats?: TurnStats) => void;
   /** Stopped before any of the reply came: nothing was saved. */
   onCancelled: () => void;
 };
@@ -85,7 +88,13 @@ function dispatchReplyEvent(
   if (eventName === "delta" && typeof data.delta === "string") {
     callbacks.onDelta(data.delta);
   } else if (eventName === "done" && typeof data.lastMessageId === "string") {
-    callbacks.onDone(data.lastMessageId, data.stopped === true);
+    callbacks.onDone(
+      data.lastMessageId,
+      data.stopped === true,
+      Array.isArray(data.stats?.steps) && typeof data.stats.context === "object"
+        ? data.stats
+        : undefined,
+    );
   } else if (eventName === "cancelled") {
     callbacks.onCancelled();
   } else if (eventName === "error") {
@@ -130,9 +139,9 @@ export async function streamMessage(
   await readServerSentEvents(response.body, (event) =>
     dispatchReplyEvent(event, {
       ...callbacks,
-      onDone: (lastMessageId, stopped) => {
+      onDone: (lastMessageId, stopped, stats) => {
         completed = true;
-        callbacks.onDone(lastMessageId, stopped);
+        callbacks.onDone(lastMessageId, stopped, stats);
       },
       onCancelled: () => {
         completed = true;

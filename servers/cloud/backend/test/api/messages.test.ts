@@ -168,11 +168,13 @@ import { resetRateLimits } from "../../src/middleware/rateLimit.middleware";
 import { measurePreparation } from "../../src/preparationMetrics";
 import {
   MAX_CONTEXT_CHARS,
+  MAX_HISTORY_MESSAGES,
   MAX_RESPONSE_TOKENS,
 } from "../../src/chat/contextWindow";
 import { MAX_TRANSCRIPTS } from "../../src/schema/messages.schema";
 import { authedHeaders, sessionCookieHeader } from "../helpers/session";
 import { type HistoryCandidate } from "../../src/data/messages.data";
+import type { ReplyStreamEvents } from "@parley/shared/contract";
 
 const conversationId = "550e8400-e29b-41d4-a716-446655440000";
 const messageId = "650e8400-e29b-41d4-a716-446655440111";
@@ -209,6 +211,13 @@ const assistantRow = {
   conversationId,
   createdAt,
 };
+
+/** The data of the `done` event in a reply stream's body. */
+function doneOf(body: string): ReplyStreamEvents["done"] {
+  const data = /^event: done\ndata: (.*)$/m.exec(body)?.[1];
+  if (data === undefined) throw new Error("The stream has no done event");
+  return JSON.parse(data) as ReplyStreamEvents["done"];
+}
 
 /** A message as the database hands it over, where the JSON has a string. */
 function rowOf<Message extends { createdAt: string }>(message: Message) {
@@ -939,10 +948,10 @@ describe("POST /conversations/:conversationId/messages", () => {
     expect(body).toContain("event: delta");
     expect(body).toContain(JSON.stringify({ delta: "Hello " }));
     expect(body).toContain(JSON.stringify({ delta: "world" }));
-    expect(body).toContain("event: done");
-    expect(body).toContain(
-      JSON.stringify({ lastMessageId: assistantRow.id, stopped: false }),
-    );
+    expect(doneOf(body)).toMatchObject({
+      lastMessageId: assistantRow.id,
+      stopped: false,
+    });
     expect(body).not.toContain("event: error");
     // The persisted head trails the tokens the client rendered.
     expect(body.indexOf("event: delta")).toBeLessThan(
@@ -969,6 +978,88 @@ describe("POST /conversations/:conversationId/messages", () => {
       }),
     );
     expect(mockGenerateTitle).toHaveBeenCalledWith("conversation", "Hi there");
+  });
+
+  it("ends with the turn's stats: its steps, the model's times and its context", async () => {
+    mockChatAI.mockImplementation(
+      async (
+        _model: string,
+        _turns: unknown,
+        opts: { onDelta: (d: string) => Promise<void> },
+      ) => {
+        await opts.onDelta("Hello world");
+        return "Hello world";
+      },
+    );
+
+    const response = await postMessage({
+      messageContent: "Hi there",
+      chosenModelId: modelId,
+    });
+    const { stats } = doneOf(await response.text());
+
+    expect(stats).toBeDefined();
+    if (!stats) return;
+    expect(stats.steps.map((step) => step.operation).sort()).toEqual([
+      "claimAttachments",
+      "claimConversationTurn",
+      "findContextHistory",
+      "findTranscripts",
+      "persistAndUnclaimChatTurn",
+      "resolveImages",
+    ]);
+    expect(stats.steps.at(-1)?.operation).toBe("persistAndUnclaimChatTurn");
+    expect(stats.firstTokenAfterMs).not.toBeNull();
+    expect(stats.modelStartedAfterMs).toBeLessThanOrEqual(
+      stats.firstTokenAfterMs ?? 0,
+    );
+    expect(stats.firstTokenAfterMs).toBeLessThanOrEqual(
+      stats.modelFinishedAfterMs,
+    );
+    expect(stats.modelFinishedAfterMs).toBeLessThanOrEqual(stats.totalMs);
+    expect(stats.context).toEqual({
+      historyReadMessages: 0,
+      historyCachedMessages: 0,
+      historyMessages: 0,
+      historyChars: 0,
+      newTurnChars: "Hi there".length,
+      maxChars: MAX_CONTEXT_CHARS,
+      maxHistoryMessages: MAX_HISTORY_MESSAGES,
+    });
+  });
+
+  it("counts the history whose text the server already held", async () => {
+    const olderId = "650e8400-e29b-41d4-a716-446655440000";
+    const older = createMessageHistory({ id: olderId, content: "Earlier" });
+    mockFindContextHistory.mockResolvedValueOnce([older]);
+    mockFindContextHistory.mockResolvedValueOnce([
+      createMessageHistory({
+        id: assistantRow.id,
+        role: "assistant",
+        content: "Hello world",
+      }),
+      createMessageHistory({ id: userRow.id, content: "Hi there" }),
+      older,
+      createMessageHistory({ id: "uncached", content: "Not held" }),
+    ]);
+    mockChatAI.mockResolvedValueOnce("Hello world");
+    mockChatAI.mockResolvedValueOnce("Second reply");
+
+    const contexts = [];
+    for (const messageContent of ["Hi there", "And again"]) {
+      const res = await postMessage({ messageContent, chosenModelId: modelId });
+      contexts.push(doneOf(await res.text()).stats?.context);
+    }
+
+    expect(contexts[0]).toMatchObject({
+      historyReadMessages: 1,
+      historyCachedMessages: 0,
+    });
+    expect(contexts[1]).toMatchObject({
+      historyReadMessages: 4,
+      historyCachedMessages: 3,
+      historyMessages: 4,
+    });
   });
 
   it("times the claims and the reads beside them as one group, then the save", async () => {
@@ -1656,9 +1747,19 @@ describe("PATCH /conversations/:conversationId/messages/:messageId", () => {
 
     expect(response.status).toBe(200);
     expect(body).toContain("event: delta");
-    expect(body).toContain(
-      JSON.stringify({ lastMessageId: assistantRow.id, stopped: false }),
+    const { lastMessageId, stopped, stats } = doneOf(body);
+    expect({ lastMessageId, stopped }).toEqual({
+      lastMessageId: assistantRow.id,
+      stopped: false,
+    });
+    // The rewind is timed with the rest, between the reads and the save.
+    expect(stats?.steps.map((step) => step.operation)).toEqual(
+      expect.arrayContaining(["findContextHistory", "rewindTo"]),
     );
+    expect(stats?.context).toMatchObject({
+      historyMessages: 2,
+      newTurnChars: "Edited transcript\n\nUpdated question".length,
+    });
 
     // The history stops before the edited message.
     expect(mockFindContextHistory).toHaveBeenCalledWith(
@@ -1927,10 +2028,10 @@ describe("stopping a reply", () => {
 
     const body = await (await sendTurn()).text();
 
-    expect(body).toContain("event: done");
-    expect(body).toContain(
-      JSON.stringify({ lastMessageId: assistantRow.id, stopped: true }),
-    );
+    expect(doneOf(body)).toMatchObject({
+      lastMessageId: assistantRow.id,
+      stopped: true,
+    });
     expect(mockPersistAndUnclaimChatTurn).toHaveBeenCalledWith(
       expect.objectContaining({
         content: "Hi there",

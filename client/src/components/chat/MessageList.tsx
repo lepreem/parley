@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { ChatMessage } from "../../api/messages";
+import type { ChatMessage, TurnStats } from "../../api/messages";
 import { Icon } from "../ui/Icon";
 import { Meter } from "../ui/Meter";
 import { AssistantTurn } from "./AssistantTurn";
@@ -38,6 +38,7 @@ export function MessageList({
   loading,
   onEdit,
   canEdit,
+  turnStats,
 }: {
   messages: ChatMessage[];
   pending: PendingTurn | null;
@@ -45,6 +46,8 @@ export function MessageList({
   /** Replaces a user message, and every turn after it, with a new turn. */
   onEdit: (message: ChatMessage, content: string) => void;
   canEdit: boolean;
+  /** Stats for the replies streamed to this page, by message id. */
+  turnStats: Record<string, TurnStats>;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [stuckToBottom, setStuckToBottom] = useState(true);
@@ -106,6 +109,7 @@ export function MessageList({
                     content={message.content}
                     modelId={message.chosenModelId}
                     stopped={message.stopped}
+                    stats={turnStats[message.id]}
                   />
                 ),
               )}

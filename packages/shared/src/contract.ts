@@ -109,14 +109,55 @@ export type SendMessageBody = {
   lastMessageId: string | null;
 };
 
+/** One timed step of a turn, in milliseconds from the turn's start. */
+export type TurnStep = {
+  operation: string;
+  /** How many steps it ran inside: 0 for one the turn itself ran. */
+  depth: number;
+  startOffsetMs: number;
+  durationMs: number;
+};
+
+/**
+ * How one turn went. Times are milliseconds from the turn's start, which is
+ * after sign-in and the request's checks.
+ */
+export type TurnStats = {
+  /** Every timed step, by when it started, each followed by its own steps. */
+  steps: TurnStep[];
+  modelStartedAfterMs: number;
+  /** Null when the model finished without writing anything. */
+  firstTokenAfterMs: number | null;
+  modelFinishedAfterMs: number;
+  /** Until the turn was saved. */
+  totalMs: number;
+  context: {
+    /** Past messages the history read returned. */
+    historyReadMessages: number;
+    /** Of those, how many the server already held the text of. */
+    historyCachedMessages: number;
+    /** Past messages that fit, and went into the prompt. */
+    historyMessages: number;
+    /** Characters those carried, transcripts included. */
+    historyChars: number;
+    newTurnChars: number;
+    maxChars: number;
+    maxHistoryMessages: number;
+  };
+};
+
 /**
  * The server-sent events a reply streams back, by event name: pieces of the
  * answer, then either done or error.
  */
 export type ReplyStreamEvents = {
   delta: { delta: string };
-  /** The turn is saved. `stopped` when it was stopped partway. */
-  done: { lastMessageId: string; stopped: boolean };
+  /**
+   * The turn is saved. `stopped` when it was stopped partway. `stats` is how
+   * the turn went, for anyone curious; a server that doesn't time its turns
+   * leaves it out.
+   */
+  done: { lastMessageId: string; stopped: boolean; stats?: TurnStats };
   /** Stopped before any of the reply came, so nothing was saved. */
   cancelled: Record<string, never>;
   error: ErrorBody;

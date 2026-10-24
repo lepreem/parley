@@ -9,6 +9,7 @@ import {
   type ChatMessage,
   type MessageAttachmentInput,
   type MessagesResponse,
+  type TurnStats,
 } from "../../api/messages";
 import { queryKeys } from "../../lib/queryClient";
 import { useServer } from "../../hooks/server/useServer";
@@ -241,6 +242,11 @@ export function useChatSend() {
   );
   const [sendingKeys, setSendingKeys] = useState<Record<string, boolean>>({});
   const [stoppingKeys, setStoppingKeys] = useState<Record<string, boolean>>({});
+  /**
+   * How each reply streamed to this page went, by its stored id. Kept for
+   * the page's life only: a reply loaded from history has none.
+   */
+  const [turnStats, setTurnStats] = useState<Record<string, TurnStats>>({});
 
   const dropPending = useCallback((conversationId: string) => {
     setPendingTurns((current) => without(current, conversationId));
@@ -300,7 +306,11 @@ export function useChatSend() {
 
       // Set from a callback, which TypeScript doesn't follow; typed by hand so
       // it isn't narrowed to null for good.
-      let stored = null as { id: string; stopped: boolean } | null;
+      let stored = null as {
+        id: string;
+        stopped: boolean;
+        stats?: TurnStats;
+      } | null;
       let cancelled = false;
       const deltas = createDeltaBuffer((assistantContent) =>
         setPendingTurns((current) => {
@@ -329,8 +339,8 @@ export function useChatSend() {
                 return { ...current, [target]: { ...turn, stoppable: true } };
               }),
             onDelta: (delta) => deltas.push(delta),
-            onDone: (lastMessageId, stopped) => {
-              stored = { id: lastMessageId, stopped };
+            onDone: (lastMessageId, stopped, stats) => {
+              stored = { id: lastMessageId, stopped, stats };
             },
             onCancelled: () => {
               cancelled = true;
@@ -342,6 +352,11 @@ export function useChatSend() {
         setStoppingKeys((current) => without(current, target));
       }
       if (cancelled) throw new TurnCancelled();
+      const stats = stored?.stats;
+      if (stored && stats) {
+        const storedId = stored.id;
+        setTurnStats((current) => ({ ...current, [storedId]: stats }));
+      }
       const assistant = {
         id: stored?.id ?? `local:${localId()}`,
         content: deltas.text,
@@ -520,6 +535,7 @@ export function useChatSend() {
     pendingTurns,
     sendingKeys,
     stoppingKeys,
+    turnStats,
     send,
     edit,
     stop,

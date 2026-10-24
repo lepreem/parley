@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import type { TurnStats } from "@parley/shared/contract";
 import type { TrackedReply } from "@parley/shared/replies";
 import { logger, messageOf } from "@parley/shared/logger";
 import { data, type HistoryCandidate, type HistoryTranscript } from "../data";
@@ -90,6 +91,8 @@ export type PreparedTurn = {
   newTurnCharCount: number;
   /** The new turn's transcripts, kept with its text once it's saved. */
   newTurnTranscripts: HistoryTranscript[];
+  /** What went into the prompt, for the turn's stats. */
+  contextStats: TurnStats["context"];
 };
 
 /** History candidates as the prompt would carry them, measured for the budget. */
@@ -238,11 +241,23 @@ export async function prepareTurn(
     throw new TurnRejected(404, { message: "Attachment not found" });
   }
 
+  const historyCharCounts = history.map((turn) => turn.contextCharCount);
   return {
     prompt,
-    historyCharCounts: history.map((turn) => turn.contextCharCount),
+    historyCharCounts,
     newTurnCharCount: newTurnContent.length,
     newTurnTranscripts,
+    contextStats: {
+      historyReadMessages: historyCandidates.length,
+      historyCachedMessages: historyCandidates.filter((candidate) =>
+        knownText?.messages.has(candidate.id),
+      ).length,
+      historyMessages: history.length,
+      historyChars: historyCharCounts.reduce((total, n) => total + n, 0),
+      newTurnChars: newTurnContent.length,
+      maxChars: MAX_CONTEXT_CHARS,
+      maxHistoryMessages: MAX_HISTORY_MESSAGES,
+    },
   };
 }
 
@@ -307,6 +322,8 @@ async function titleForFirstTurn(content: string, conversationId: string) {
  * Asks the model, handing each piece of the answer to `onDelta`, then saves
  * the turn and lets go of the claim in one transaction, keeping its text for
  * the next turn's history read here. Returns the conversation's new head.
+ * `onModelFinished` marks the model being done with a reply that will be
+ * saved, stopped or not.
  *
  * A stopped reply is saved with what came before the stop, marked as
  * stopped. One stopped before anything came isn't saved: this returns null,
@@ -318,6 +335,7 @@ export async function answerTurn(
   prepared: PreparedTurn,
   reply: TrackedReply,
   onDelta: (delta: string) => void,
+  onModelFinished: () => void,
 ) {
   const conversationTitle =
     request.expectedLastMessageId === null
@@ -346,6 +364,7 @@ export async function answerTurn(
     assistantContent = reply.text;
     stopped = true;
   }
+  onModelFinished();
 
   const title = await conversationTitle;
   const saved = await measurePreparation(
