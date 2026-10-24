@@ -163,7 +163,7 @@ vi.mock("../../src/preparationMetrics", async (importActual) => {
 
 import { createApp } from "../../src/app";
 import { events } from "../../src/events";
-import { resetHistoryText } from "../../src/chat/historyText";
+import { resetHistoryTextCache } from "../../src/chat/historyText.cache";
 import { resetRateLimits } from "../../src/middleware/rateLimit.middleware";
 import { measurePreparation } from "../../src/preparationMetrics";
 import {
@@ -279,7 +279,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   // Every case sends turns; none should spend another's chat-turn budget.
   resetRateLimits();
-  resetHistoryText();
+  resetHistoryTextCache();
   mockFindOwnedConversation.mockResolvedValue(ownedConversation);
   mockClaimConversationTurn.mockImplementation(
     (_userId, _conversationId, _lastMessageId, claimToken = "claim-token") =>

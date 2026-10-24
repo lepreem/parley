@@ -13,7 +13,7 @@ import {
   admitHistory,
   countMessagesInContextWindow,
 } from "./contextWindow";
-import { historyText } from "./historyText";
+import { historyTextCache } from "./historyText.cache";
 import { buildPrompt, containsImageInput, withTranscripts } from "./prompt";
 import type { TurnClaim } from "./turnClaim";
 
@@ -143,7 +143,10 @@ export async function prepareTurn(
   claim: TurnClaim,
   beforeMessageId?: string,
 ): Promise<PreparedTurn> {
-  const knownText = historyText.known(request.userId, request.conversationId);
+  const knownText = historyTextCache.known(
+    request.userId,
+    request.conversationId,
+  );
   const [
     conversationClaimed,
     attachmentsReserved,
@@ -169,7 +172,7 @@ export async function prepareTurn(
       }),
     ),
   ]);
-  historyText.rememberHistory(
+  historyTextCache.rememberHistory(
     request.userId,
     request.conversationId,
     candidates,
@@ -366,7 +369,7 @@ export async function answerTurn(
         claimToken: claim.token,
       }),
   );
-  historyText.rememberTurn(request.userId, request.conversationId, {
+  historyTextCache.rememberTurn(request.userId, request.conversationId, {
     userMessageId: saved.userMessageId,
     content: request.content,
     transcripts: prepared.newTurnTranscripts,

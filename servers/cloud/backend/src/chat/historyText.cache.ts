@@ -5,18 +5,21 @@ import type {
 } from "../data";
 
 /**
- * Message and transcript text this process has already read or written, per
- * conversation, so the next turn's history read sends only text it hasn't
- * seen. Sending the text is most of what that read costs.
+ * In-process cache of message and transcript text, per conversation. A turn
+ * hands the ids held here to its history read, which leaves their text out:
+ * sending the text is most of what that read costs. Filled from each history
+ * read and from each turn once it's saved.
  *
- * Nothing here can go stale: a message's content and a transcript's content
- * are written once and never updated (an edit deletes messages and writes new
- * ones, under new ids), and the database refuses an update to either
- * (drizzle/0004_immutable_messages.sql). The history query still decides which turns are in the
- * window and what they carry; this only fills in text for ids it returned. So
- * each process keeps its own copy and nothing is routed or invalidated: an
- * entry another process made obsolete is only memory, and it goes when the
- * next read here rebuilds the entry or the limits below drop it.
+ * Entries are never invalidated, because the text never changes: a message's
+ * content and a transcript's content are written once (an edit deletes
+ * messages and writes new ones, under new ids), and the database refuses an
+ * update to either (drizzle/0004_immutable_messages.sql).
+ *
+ * The history query still decides which turns are in the window and what
+ * they carry; this only fills in text for ids it returned. So each process
+ * keeps its own copy and nothing is routed or shared: an entry another
+ * process made obsolete is only memory, and it goes when the next read here
+ * rebuilds the entry or the limits below drop it.
  */
 
 /** Most conversations held per user; their least recently used goes first. */
@@ -187,9 +190,9 @@ function rememberTurn(
 }
 
 /** Test-only: drops every entry so cases don't leak into each other. */
-export function resetHistoryText() {
+export function resetHistoryTextCache() {
   entries.clear();
   totalBytes = 0;
 }
 
-export const historyText = { known, rememberHistory, rememberTurn };
+export const historyTextCache = { known, rememberHistory, rememberTurn };
