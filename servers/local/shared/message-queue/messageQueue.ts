@@ -40,7 +40,7 @@ type QueueState<Q extends Queue> = {
   waiting: QueuePayloads[Q][];
   consumer?: { handler: Handler<Q>; attempts: number };
   /** The run working through `waiting`, while there is one. */
-  draining?: Promise<void>;
+  drainPromise?: Promise<void>;
 };
 
 const queues = new Map<Queue, QueueState<Queue>>();
@@ -106,9 +106,9 @@ async function handle<Q extends Queue>(
 function drain<Q extends Queue>(queue: Q) {
   const state = stateOf(queue);
   const { consumer } = state;
-  if (!consumer || state.draining || stopped) return;
+  if (!consumer || state.drainPromise || stopped) return;
 
-  state.draining = (async () => {
+  state.drainPromise = (async () => {
     // A turn first, so publishing never runs a handler inside the publisher.
     await new Promise((resolve) => setImmediate(resolve));
     while (!stopped) {
@@ -117,7 +117,7 @@ function drain<Q extends Queue>(queue: Q) {
       await handle(queue, payload, consumer);
     }
   })().finally(() => {
-    state.draining = undefined;
+    state.drainPromise = undefined;
   });
 }
 
@@ -165,7 +165,7 @@ export const mq = {
   async stopConsuming() {
     stopped = true;
     await Promise.allSettled(
-      [...queues.values()].map((state) => state.draining),
+      [...queues.values()].map((state) => state.drainPromise),
     );
   },
 };

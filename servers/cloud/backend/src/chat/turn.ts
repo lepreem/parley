@@ -13,7 +13,7 @@ import {
   admitHistory,
   countMessagesInContextWindow,
 } from "./contextWindow";
-import { historyText } from "./historyText";
+import { historyTextCache } from "./historyText.cache";
 import { buildPrompt, containsImageInput, withTranscripts } from "./prompt";
 import type { TurnClaim } from "./turnClaim";
 
@@ -143,16 +143,19 @@ export async function prepareTurn(
   claim: TurnClaim,
   beforeMessageId?: string,
 ): Promise<PreparedTurn> {
-  const knownText = historyText.known(request.userId, request.conversationId);
+  const knownText = historyTextCache.known(
+    request.userId,
+    request.conversationId,
+  );
   const [
     conversationClaimed,
     attachmentsReserved,
-    resolvedImages,
-    transcriptByAudioUploadId,
-    candidates,
+    newTurnResolvedImages,
+    newTurnTranscriptByAudioUploadId,
+    historyCandidates,
   ] = await Promise.all([
-    claim.conversationClaimed,
-    claim.attachmentsReserved,
+    claim.conversationClaimedPromise,
+    claim.attachmentsReservedPromise,
     measurePreparation("resolveImages", claim.preparationId, () =>
       data.images.resolveImages(request.userId, request.imageUploadIds),
     ),
@@ -169,10 +172,10 @@ export async function prepareTurn(
       }),
     ),
   ]);
-  historyText.rememberHistory(
+  historyTextCache.rememberHistory(
     request.userId,
     request.conversationId,
-    candidates,
+    historyCandidates,
   );
 
   if (!conversationClaimed) {
@@ -186,20 +189,20 @@ export async function prepareTurn(
         })
       : new TurnRejected(404, { message: "Conversation not found" });
   }
-  if (resolvedImages.length !== request.imageUploadIds.length) {
+  if (newTurnResolvedImages.length !== request.imageUploadIds.length) {
     throw new TurnRejected(404, { message: "Image not found" });
   }
-  const transcripts = request.audioUploadIds.flatMap((audioUploadId) => {
-    const content = transcriptByAudioUploadId.get(audioUploadId);
+  const newTurnTranscripts = request.audioUploadIds.flatMap((audioUploadId) => {
+    const content = newTurnTranscriptByAudioUploadId.get(audioUploadId);
     return content === undefined ? [] : [{ audioUploadId, content }];
   });
-  if (transcripts.length !== request.audioUploadIds.length) {
+  if (newTurnTranscripts.length !== request.audioUploadIds.length) {
     throw new TurnRejected(404, { message: "Transcript not found" });
   }
 
   const newTurnContent = withTranscripts(
     request.content,
-    transcripts.map((transcript) => transcript.content),
+    newTurnTranscripts.map((transcript) => transcript.content),
   );
   if (newTurnContent.length >= MAX_CONTEXT_CHARS) {
     throw new TurnRejected(413, {
@@ -211,14 +214,14 @@ export async function prepareTurn(
 
   const history = await admitAndSignHistory(
     request.userId,
-    candidates,
+    historyCandidates,
     newTurnContent.length,
   );
   const prompt = buildPrompt(
     history,
     buildUserTurn(
       newTurnContent,
-      resolvedImages.map((image) => image.url),
+      newTurnResolvedImages.map((image) => image.url),
     ),
   );
   // The request schema already turned away new images for a text-only
@@ -239,7 +242,7 @@ export async function prepareTurn(
     prompt,
     historyCharCounts: history.map((turn) => turn.contextCharCount),
     newTurnCharCount: newTurnContent.length,
-    newTurnTranscripts: transcripts,
+    newTurnTranscripts,
   };
 }
 
@@ -366,7 +369,7 @@ export async function answerTurn(
         claimToken: claim.token,
       }),
   );
-  historyText.rememberTurn(request.userId, request.conversationId, {
+  historyTextCache.rememberTurn(request.userId, request.conversationId, {
     userMessageId: saved.userMessageId,
     content: request.content,
     transcripts: prepared.newTurnTranscripts,

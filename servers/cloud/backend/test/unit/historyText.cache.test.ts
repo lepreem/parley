@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { historyText, resetHistoryText } from "../../src/chat/historyText";
+import {
+  historyTextCache,
+  resetHistoryTextCache,
+} from "../../src/chat/historyText.cache";
 import type { HistoryCandidate } from "../../src/data";
 
 function turn(
@@ -26,31 +29,31 @@ const savedTurn = {
 };
 
 beforeEach(() => {
-  resetHistoryText();
+  resetHistoryTextCache();
 });
 
 afterEach(() => {
   vi.useRealTimers();
 });
 
-describe("historyText", () => {
+describe("historyTextCache", () => {
   it("holds nothing for a conversation's first turn", () => {
-    historyText.rememberHistory("user-1", "conversation-1", []);
-    historyText.rememberTurn("user-1", "conversation-1", savedTurn);
+    historyTextCache.rememberHistory("user-1", "conversation-1", []);
+    historyTextCache.rememberTurn("user-1", "conversation-1", savedTurn);
 
-    expect(historyText.known("user-1", "conversation-1")).toBeUndefined();
+    expect(historyTextCache.known("user-1", "conversation-1")).toBeUndefined();
   });
 
   it("holds what a read returned, then the turn saved after it", () => {
-    historyText.rememberHistory("user-1", "conversation-1", [
+    historyTextCache.rememberHistory("user-1", "conversation-1", [
       turn("message-2", "Answer"),
       turn("message-1", "Question", [
         { audioUploadId: "audio-1", content: "Transcript" },
       ]),
     ]);
-    historyText.rememberTurn("user-1", "conversation-1", savedTurn);
+    historyTextCache.rememberTurn("user-1", "conversation-1", savedTurn);
 
-    const known = historyText.known("user-1", "conversation-1");
+    const known = historyTextCache.known("user-1", "conversation-1");
     expect(Object.fromEntries(known!.messages)).toEqual({
       "message-1": "Question",
       "message-2": "Answer",
@@ -64,27 +67,27 @@ describe("historyText", () => {
   });
 
   it("drops what a later read no longer returns", () => {
-    historyText.rememberHistory("user-1", "conversation-1", [
+    historyTextCache.rememberHistory("user-1", "conversation-1", [
       turn("message-2", "Answer"),
       turn("message-1", "Question"),
     ]);
     // An edit elsewhere deleted message-2 and wrote message-5.
-    historyText.rememberHistory("user-1", "conversation-1", [
+    historyTextCache.rememberHistory("user-1", "conversation-1", [
       turn("message-5", "Edited answer"),
       turn("message-1", "Question"),
     ]);
 
     expect([
-      ...historyText.known("user-1", "conversation-1")!.messages.keys(),
+      ...historyTextCache.known("user-1", "conversation-1")!.messages.keys(),
     ]).toEqual(["message-5", "message-1"]);
   });
 
   it("hands out a copy a later store can't change", () => {
-    historyText.rememberHistory("user-1", "conversation-1", [
+    historyTextCache.rememberHistory("user-1", "conversation-1", [
       turn("message-1", "Question"),
     ]);
-    const known = historyText.known("user-1", "conversation-1");
-    historyText.rememberHistory("user-1", "conversation-1", [
+    const known = historyTextCache.known("user-1", "conversation-1");
+    historyTextCache.rememberHistory("user-1", "conversation-1", [
       turn("message-2", "Other"),
     ]);
 
@@ -92,59 +95,65 @@ describe("historyText", () => {
   });
 
   it("serves and evicts only for the conversation's own user", () => {
-    historyText.rememberHistory("user-1", "conversation-1", [
+    historyTextCache.rememberHistory("user-1", "conversation-1", [
       turn("message-1", "Question"),
     ]);
 
-    expect(historyText.known("user-2", "conversation-1")).toBeUndefined();
+    expect(historyTextCache.known("user-2", "conversation-1")).toBeUndefined();
     // Not theirs, so the read finds nothing; that mustn't evict the owner's.
-    historyText.rememberHistory("user-2", "conversation-1", []);
-    expect(historyText.known("user-1", "conversation-1")).toBeDefined();
+    historyTextCache.rememberHistory("user-2", "conversation-1", []);
+    expect(historyTextCache.known("user-1", "conversation-1")).toBeDefined();
   });
 
   it("keeps a user's two most recently used conversations", () => {
     for (const conversationId of ["conversation-1", "conversation-2"]) {
-      historyText.rememberHistory("user-1", conversationId, [
+      historyTextCache.rememberHistory("user-1", conversationId, [
         turn(`${conversationId}-message`, "Text"),
       ]);
     }
-    historyText.known("user-1", "conversation-1");
-    historyText.rememberHistory("user-1", "conversation-3", [
+    historyTextCache.known("user-1", "conversation-1");
+    historyTextCache.rememberHistory("user-1", "conversation-3", [
       turn("conversation-3-message", "Text"),
     ]);
-    historyText.rememberHistory("user-2", "conversation-4", [
+    historyTextCache.rememberHistory("user-2", "conversation-4", [
       turn("conversation-4-message", "Text"),
     ]);
 
-    expect(historyText.known("user-1", "conversation-1")).toBeDefined();
-    expect(historyText.known("user-1", "conversation-2")).toBeUndefined();
-    expect(historyText.known("user-1", "conversation-3")).toBeDefined();
-    expect(historyText.known("user-2", "conversation-4")).toBeDefined();
+    expect(historyTextCache.known("user-1", "conversation-1")).toBeDefined();
+    expect(historyTextCache.known("user-1", "conversation-2")).toBeUndefined();
+    expect(historyTextCache.known("user-1", "conversation-3")).toBeDefined();
+    expect(historyTextCache.known("user-2", "conversation-4")).toBeDefined();
   });
 
   it("forgets a conversation left idle for 15 minutes", () => {
     vi.useFakeTimers();
-    historyText.rememberHistory("user-1", "conversation-1", [
+    historyTextCache.rememberHistory("user-1", "conversation-1", [
       turn("message-1", "Question"),
     ]);
 
     vi.advanceTimersByTime(15 * 60 * 1000);
-    expect(historyText.known("user-1", "conversation-1")).toBeDefined();
+    expect(historyTextCache.known("user-1", "conversation-1")).toBeDefined();
     vi.advanceTimersByTime(15 * 60 * 1000 + 1);
-    expect(historyText.known("user-1", "conversation-1")).toBeUndefined();
+    expect(historyTextCache.known("user-1", "conversation-1")).toBeUndefined();
   });
 
   it("drops the least recently used conversations past the byte cap", () => {
     // Two conversations of ~48 MB each fit under 128 MB; a third doesn't.
     const text = "x".repeat(24 * 1024 * 1024);
     for (const userId of ["user-1", "user-2", "user-3"]) {
-      historyText.rememberHistory(userId, `${userId}-conversation`, [
+      historyTextCache.rememberHistory(userId, `${userId}-conversation`, [
         turn(`${userId}-message`, text),
       ]);
     }
 
-    expect(historyText.known("user-1", "user-1-conversation")).toBeUndefined();
-    expect(historyText.known("user-2", "user-2-conversation")).toBeDefined();
-    expect(historyText.known("user-3", "user-3-conversation")).toBeDefined();
+    expect(
+      historyTextCache.known("user-1", "user-1-conversation"),
+    ).toBeUndefined();
+    expect(
+      historyTextCache.known("user-2", "user-2-conversation"),
+    ).toBeDefined();
+    expect(
+      historyTextCache.known("user-3", "user-3-conversation"),
+    ).toBeDefined();
   });
 });
