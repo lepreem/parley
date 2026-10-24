@@ -15,9 +15,9 @@ export type TurnClaim = {
   /** Groups the claim's timings with the reads prepareTurn runs beside it. */
   preparationId: string;
   /** False when the conversation moved on or another turn holds it. */
-  conversationClaimed: Promise<boolean>;
+  conversationClaimedPromise: Promise<boolean>;
   /** False when an attachment is missing or not the user's. */
-  attachmentsReserved: Promise<boolean>;
+  attachmentsReservedPromise: Promise<boolean>;
   /**
    * Lets go of both, for a turn that won't be saved. A saved turn lets go in
    * the transaction that saves it, so it never calls this. Never throws.
@@ -37,7 +37,7 @@ export function claimTurn(request: {
 }): TurnClaim {
   const token = randomUUID();
   const preparationId = randomUUID();
-  const conversationClaimed = measurePreparation(
+  const conversationClaimedPromise = measurePreparation(
     "claimConversationTurn",
     preparationId,
     () =>
@@ -48,7 +48,7 @@ export function claimTurn(request: {
         token,
       ),
   ).then((claimToken) => claimToken !== null);
-  const attachmentsReserved = measurePreparation(
+  const attachmentsReservedPromise = measurePreparation(
     "claimAttachments",
     preparationId,
     () =>
@@ -62,7 +62,10 @@ export function claimTurn(request: {
   async function release() {
     // A failed read elsewhere doesn't cancel the claim; let it land before
     // undoing it, or the undo could run first and leave it held.
-    await Promise.allSettled([conversationClaimed, attachmentsReserved]);
+    await Promise.allSettled([
+      conversationClaimedPromise,
+      attachmentsReservedPromise,
+    ]);
     await data.attachments.unclaimAttachments(token).catch((error) => {
       log.error("Failed to release attachment reservations", error, {
         conversationId: request.conversationId,
@@ -80,8 +83,8 @@ export function claimTurn(request: {
   return {
     token,
     preparationId,
-    conversationClaimed,
-    attachmentsReserved,
+    conversationClaimedPromise,
+    attachmentsReservedPromise,
     release,
   };
 }
