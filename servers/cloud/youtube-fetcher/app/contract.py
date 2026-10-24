@@ -10,10 +10,11 @@ QueueName = NewType("QueueName", str)
 
 @dataclass
 class _Queues:
-    YT_FETCH: QueueName
-    YT_FETCH_FAILED: QueueName
-    TRANSCRIBE: QueueName
-    CAPTION_TRANSCRIPT: QueueName
+    YT_FETCH_CAPTIONS: QueueName
+    YT_FETCH_AUDIO: QueueName
+    YT_SAVE_CAPTIONS: QueueName
+    TRANSCRIBE_AUDIO: QueueName
+    YT_FAIL_JOB: QueueName
 
 
 class _Contract:
@@ -28,13 +29,14 @@ class _Contract:
         response = httpx.get(f"{api_base_url.rstrip('/')}/contract", timeout=5)
         response.raise_for_status()
         body = response.json()
-        # /contract serves every backend queue; pick only the ones we use.
+        # /contract serves every backend queue, the fetcher's included.
         queues = body["queues"]
         self.queues = _Queues(
-            YT_FETCH=QueueName(queues["YT_FETCH"]),
-            YT_FETCH_FAILED=QueueName(queues["YT_FETCH_FAILED"]),
-            TRANSCRIBE=QueueName(queues["TRANSCRIBE"]),
-            CAPTION_TRANSCRIPT=QueueName(queues["CAPTION_TRANSCRIPT"]),
+            YT_FETCH_CAPTIONS=QueueName(queues["YT_FETCH_CAPTIONS"]),
+            YT_FETCH_AUDIO=QueueName(queues["YT_FETCH_AUDIO"]),
+            YT_SAVE_CAPTIONS=QueueName(queues["YT_SAVE_CAPTIONS"]),
+            TRANSCRIBE_AUDIO=QueueName(queues["TRANSCRIBE_AUDIO"]),
+            YT_FAIL_JOB=QueueName(queues["YT_FAIL_JOB"]),
         )
         self.bucket = body["bucket"]
         self.maxAudioBytes = body["maxAudioBytes"]

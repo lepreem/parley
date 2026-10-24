@@ -106,9 +106,9 @@ export const handleYoutubeUpload = authed.createHandlers(
     const audioUploadId: UploadId = randomUUID();
 
     // Created queued with placeholder metadata. When asked to, the fetcher tries
-    // the video's captions first and sends them back as the transcript;
-    // otherwise it writes audio under `audioUploadId` and queues it to be
-    // transcribed.
+    // the video's captions first and sends them back as the transcript, falling
+    // back to the audio when there are none; otherwise it goes straight to the
+    // audio, writes it under `audioUploadId` and queues it to be transcribed.
     await data.jobs.createYoutubeAudioJob({
       audioUploadId,
       userId,
@@ -123,12 +123,12 @@ export const handleYoutubeUpload = authed.createHandlers(
     // A failed publish would leave the job queued with no fetcher coming for
     // it; failing it puts that in front of the user instead.
     await audioTranscription.publishOrFail(audioUploadId, () =>
-      mq.publish(mq.queues.YT_FETCH, {
-        audioUploadId,
-        url,
-        userId,
-        useCaptionsIfAvailable,
-      }),
+      mq.publish(
+        useCaptionsIfAvailable
+          ? mq.queues.YT_FETCH_CAPTIONS
+          : mq.queues.YT_FETCH_AUDIO,
+        { audioUploadId, url, userId },
+      ),
     );
     return c.json({
       audioUploadId,

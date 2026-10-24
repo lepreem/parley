@@ -108,11 +108,11 @@ afterEach(async () => {
 
 describe("publishing", () => {
   it("settles each concurrent publish from its own confirmation", async () => {
-    await mq.consume(QUEUES.TRANSCRIBE, () => {}, { attempts: 1 }); // opens the connection
+    await mq.consume(QUEUES.TRANSCRIBE_AUDIO, () => {}, { attempts: 1 }); // opens the connection
     broker.heldConfirmations = [];
 
-    const firstPublish = mq.publish(QUEUES.TRANSCRIBE, payload);
-    const secondPublish = mq.publish(QUEUES.TRANSCRIBE, {
+    const firstPublish = mq.publish(QUEUES.TRANSCRIBE_AUDIO, payload);
+    const secondPublish = mq.publish(QUEUES.TRANSCRIBE_AUDIO, {
       audioUploadId: "c56a4180-65aa-42ec-a945-5fd21dec0538",
     });
     const firstPublishResult = expect(firstPublish).rejects.toThrow(
@@ -144,7 +144,7 @@ describe("consuming", () => {
     handler: () => Promise<void> | void,
     attempts = 2,
   ) {
-    await mq.consume(QUEUES.TRANSCRIBE, handler, { attempts });
+    await mq.consume(QUEUES.TRANSCRIBE_AUDIO, handler, { attempts });
     return async (message: ConsumeMessage) => {
       broker.deliver!(message);
       await flush();
@@ -225,7 +225,7 @@ describe("consuming", () => {
     expect(deadLetters()).toEqual([
       [
         "dead_letter",
-        QUEUES.TRANSCRIBE,
+        QUEUES.TRANSCRIBE_AUDIO,
         message.content,
         expect.anything(),
         expect.any(Function),
@@ -321,22 +321,22 @@ describe("consuming", () => {
 
   it("refuses a consumer with no attempts", async () => {
     await expect(
-      mq.consume(QUEUES.TRANSCRIBE, () => {}, { attempts: 0 }),
+      mq.consume(QUEUES.TRANSCRIBE_AUDIO, () => {}, { attempts: 0 }),
     ).rejects.toThrow("at least one attempt");
   });
 
   it("sets each consumer's prefetch right before starting it, 1 by default", async () => {
-    await mq.consume(QUEUES.TRANSCRIBE, () => {}, {
+    await mq.consume(QUEUES.TRANSCRIBE_AUDIO, () => {}, {
       attempts: 1,
       prefetch: 40,
     });
-    await mq.consume(QUEUES.YT_FETCH_FAILED, () => {}, { attempts: 1 });
+    await mq.consume(QUEUES.YT_FAIL_JOB, () => {}, { attempts: 1 });
 
     const { prefetch, consume } = broker.consumer!;
     expect(prefetch.mock.calls).toEqual([[40], [1]]);
     expect(consume.mock.calls.map(([queue]) => queue)).toEqual([
-      QUEUES.TRANSCRIBE,
-      QUEUES.YT_FETCH_FAILED,
+      QUEUES.TRANSCRIBE_AUDIO,
+      QUEUES.YT_FAIL_JOB,
     ]);
     expect([
       prefetch.mock.invocationCallOrder[0],
@@ -353,7 +353,10 @@ describe("consuming", () => {
 
   it("refuses a consumer with no prefetch", async () => {
     await expect(
-      mq.consume(QUEUES.TRANSCRIBE, () => {}, { attempts: 1, prefetch: 0 }),
+      mq.consume(QUEUES.TRANSCRIBE_AUDIO, () => {}, {
+        attempts: 1,
+        prefetch: 0,
+      }),
     ).rejects.toThrow("prefetch of at least 1");
   });
 });
@@ -362,13 +365,13 @@ describe("stopConsuming", () => {
   it("cancels every consumer, then waits for the handler still running", async () => {
     let finishHandler!: () => void;
     await mq.consume(
-      QUEUES.TRANSCRIBE,
+      QUEUES.TRANSCRIBE_AUDIO,
       () => new Promise<void>((resolve) => (finishHandler = resolve)),
       { attempts: 1 },
     );
     const message = deliveryOf(JSON.stringify(payload));
     broker.deliver!(message);
-    await mq.consume(QUEUES.CAPTION_TRANSCRIPT, () => {}, { attempts: 1 });
+    await mq.consume(QUEUES.YT_SAVE_CAPTIONS, () => {}, { attempts: 1 });
 
     let stopped = false;
     const stopping = mq.stopConsuming().then(() => (stopped = true));
@@ -389,7 +392,7 @@ describe("stopConsuming", () => {
 
 describe("connection loss", () => {
   it("exits when the broker closes the connection", async () => {
-    await mq.consume(QUEUES.YT_FETCH_FAILED, () => {}, { attempts: 1 });
+    await mq.consume(QUEUES.YT_FAIL_JOB, () => {}, { attempts: 1 });
 
     broker.connection!.emit("close", new Error("CONNECTION_FORCED"));
     await flush();
@@ -399,7 +402,7 @@ describe("connection loss", () => {
   });
 
   it("exits once when a channel closes, however many events follow", async () => {
-    await mq.consume(QUEUES.YT_FETCH_FAILED, () => {}, { attempts: 1 });
+    await mq.consume(QUEUES.YT_FAIL_JOB, () => {}, { attempts: 1 });
 
     broker.consumer!.emit("error", new Error("PRECONDITION_FAILED"));
     broker.consumer!.emit("close");
@@ -410,7 +413,7 @@ describe("connection loss", () => {
   });
 
   it("does not exit when this process closes the connection", async () => {
-    await mq.consume(QUEUES.YT_FETCH_FAILED, () => {}, { attempts: 1 });
+    await mq.consume(QUEUES.YT_FAIL_JOB, () => {}, { attempts: 1 });
 
     await mq.close();
     await flush();

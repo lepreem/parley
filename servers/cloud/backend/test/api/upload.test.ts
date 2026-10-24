@@ -116,8 +116,9 @@ vi.mock("../../src/storage/sign", () => ({
 vi.mock("../../src/message-queue/messageQueue", () => ({
   mq: {
     queues: {
-      TRANSCRIBE: "transcribe",
-      YT_FETCH: "yt_fetch",
+      TRANSCRIBE_AUDIO: "transcribe_audio",
+      YT_FETCH_CAPTIONS: "yt_fetch_captions",
+      YT_FETCH_AUDIO: "yt_fetch_audio",
     },
     publish: mockSendEvent,
   },
@@ -455,7 +456,7 @@ describe("POST /upload/audio/confirm", () => {
         source: "video",
       }),
     );
-    expect(mockSendEvent).toHaveBeenCalledWith("transcribe", {
+    expect(mockSendEvent).toHaveBeenCalledWith("transcribe_audio", {
       audioUploadId: UPLOAD_ID,
     });
   });
@@ -591,11 +592,10 @@ describe("POST /upload/youtube", () => {
       [{ kind: "audio", uploadId: body.audioUploadId }],
       expect.anything(),
     );
-    expect(mockSendEvent).toHaveBeenCalledWith("yt_fetch", {
+    expect(mockSendEvent).toHaveBeenCalledWith("yt_fetch_audio", {
       audioUploadId: body.audioUploadId,
       url: YT_URL,
       userId: "user_01",
-      useCaptionsIfAvailable: false,
     });
   });
 
@@ -620,7 +620,7 @@ describe("POST /upload/youtube", () => {
     });
   });
 
-  it("forwards the caption preference to the fetcher", async () => {
+  it("sends a caption preference to the fetcher's captions queue", async () => {
     const res = await (
       await createApp()
     ).request("http://localhost/upload/youtube", {
@@ -644,11 +644,10 @@ describe("POST /upload/youtube", () => {
       [{ kind: "audio", uploadId: body.audioUploadId }],
       expect.anything(),
     );
-    expect(mockSendEvent).toHaveBeenCalledWith("yt_fetch", {
+    expect(mockSendEvent).toHaveBeenCalledWith("yt_fetch_captions", {
       audioUploadId: body.audioUploadId,
       url: YT_URL,
       userId: "user_01",
-      useCaptionsIfAvailable: true,
     });
   });
 });

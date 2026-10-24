@@ -30,7 +30,9 @@ async function queue(job: {
   if (!confirmed) return false;
 
   await publishOrFail(job.audioUploadId, () =>
-    mq.publish(mq.queues.TRANSCRIBE, { audioUploadId: job.audioUploadId }),
+    mq.publish(mq.queues.TRANSCRIBE_AUDIO, {
+      audioUploadId: job.audioUploadId,
+    }),
   );
   return true;
 }
