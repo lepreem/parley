@@ -119,7 +119,10 @@ the job's `audioUploadId` and publishes `transcribe`.
 Completed transcripts are immutable. The API has no rerun route, and a source
 linked to a message or reserved for a response cannot be deleted. Trying another
 transcription requires a new upload and job, so old conversation history cannot
-change underneath a message.
+change underneath a message. The database holds this for messages too: triggers
+(`drizzle/0003_immutable_messages.sql`) refuse any UPDATE to `chat_messages`,
+`chat_message_attachments` and `transcript_contents`, so an edit deletes rows
+and inserts new ones.
 
 **Transcripts are not summarized.** The transcript is stored in SQLite under
 the audio job's `audioUploadId`. The user feeds one or more completed jobs to a
