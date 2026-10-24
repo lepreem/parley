@@ -125,8 +125,8 @@ export const handleYoutubeUpload = authed.createHandlers(
     await audioTranscription.publishOrFail(audioUploadId, () =>
       mq.publish(
         useCaptionsIfAvailable
-          ? mq.queues.FETCH_YOUTUBE_CAPTIONS
-          : mq.queues.FETCH_YOUTUBE_AUDIO,
+          ? mq.queues.YT_FETCH_CAPTIONS
+          : mq.queues.YT_FETCH_AUDIO,
         { audioUploadId, url, userId },
       ),
     );

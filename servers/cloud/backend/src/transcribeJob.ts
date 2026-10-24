@@ -115,7 +115,7 @@ async function settleFailedJob(
 
 /**
  * Stores a job's transcript: the video's captions when the message carries
- * them (save_captions), otherwise its audio transcribed (transcribe_audio).
+ * them (yt_save_captions), otherwise its audio transcribed (transcribe_audio).
  */
 export async function handleTranscribeJob(
   {

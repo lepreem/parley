@@ -4,7 +4,7 @@ import logging
 import signal
 
 from contract import contract
-from handlers import handle_fetch_youtube_audio, handle_fetch_youtube_captions
+from handlers import handle_yt_fetch_audio, handle_yt_fetch_captions
 from message_queue import mq
 from startup import verify_fetcher_services
 
@@ -40,13 +40,13 @@ def main() -> None:
 
     try:
         mq.consume(
-            contract.queues.FETCH_YOUTUBE_CAPTIONS,
-            handle_fetch_youtube_captions,
+            contract.queues.YT_FETCH_CAPTIONS,
+            handle_yt_fetch_captions,
             prefetch=CAPTIONS_PREFETCH,
         )
         mq.consume(
-            contract.queues.FETCH_YOUTUBE_AUDIO,
-            handle_fetch_youtube_audio,
+            contract.queues.YT_FETCH_AUDIO,
+            handle_yt_fetch_audio,
             prefetch=AUDIO_PREFETCH,
         )
         mq.run()

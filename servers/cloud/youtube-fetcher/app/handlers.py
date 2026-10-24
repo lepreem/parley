@@ -86,7 +86,7 @@ def _fetch_captions(url: str) -> list[dict] | None:
     """The video's first caption track, one segment per caption line in the
     shape the API's TranscriptSegment takes ({"start", "end", "text"}, in
     seconds), or None when it has none worth using. The segments travel in the
-    save_captions message itself: even a many-hour video's captions are a
+    yt_save_captions message itself: even a many-hour video's captions are a
     few hundred KB."""
     video_id = YoutubeIE.extract_id(url)
 
@@ -134,7 +134,7 @@ def _fails_the_job(handler: Callable[[dict], None]) -> Callable[[dict], None]:
         except Exception as error:
             if isinstance(event, dict) and event.get("audioUploadId"):
                 mq.publish_threadsafe(
-                    contract.queues.FAIL_YOUTUBE_JOB,
+                    contract.queues.YT_FAIL_JOB,
                     {
                         "audioUploadId": event["audioUploadId"],
                         "userId": event.get("userId", ""),
@@ -147,7 +147,7 @@ def _fails_the_job(handler: Callable[[dict], None]) -> Callable[[dict], None]:
 
 
 @_fails_the_job
-def handle_fetch_youtube_captions(event: dict) -> None:
+def handle_yt_fetch_captions(event: dict) -> None:
     """Send the video's captions back as its transcript, or, when it has
     none, queue its audio to be fetched instead."""
     audio_upload_id: str = event["audioUploadId"]
@@ -157,23 +157,23 @@ def handle_fetch_youtube_captions(event: dict) -> None:
     segments = _fetch_captions(url)
     if segments:
         mq.publish_threadsafe(
-            contract.queues.SAVE_CAPTIONS,
+            contract.queues.YT_SAVE_CAPTIONS,
             {"audioUploadId": audio_upload_id, "segments": segments},
         )
-        log.info("Fetched captions for %s, queued save_captions", audio_upload_id)
+        log.info("Fetched captions for %s, queued yt_save_captions", audio_upload_id)
         return
 
     # Inside the handler: a fallback the broker refuses must fail the job, or
     # it would sit queued with nothing coming for it.
     mq.publish_threadsafe(
-        contract.queues.FETCH_YOUTUBE_AUDIO,
+        contract.queues.YT_FETCH_AUDIO,
         {"audioUploadId": audio_upload_id, "url": url, "userId": user_id},
     )
-    log.info("No captions for %s, queued fetch_youtube_audio", audio_upload_id)
+    log.info("No captions for %s, queued yt_fetch_audio", audio_upload_id)
 
 
 @_fails_the_job
-def handle_fetch_youtube_audio(event: dict) -> None:
+def handle_yt_fetch_audio(event: dict) -> None:
     """Store the video's audio and queue it to be transcribed."""
     audio_upload_id: str = event["audioUploadId"]
     url: str = event["url"]

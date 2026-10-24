@@ -8,11 +8,11 @@ from contract import _Contract
 # /contract serves every backend queue (backend/src/app.ts).
 FULL_CONTRACT = {
     "queues": {
-        "FETCH_YOUTUBE_CAPTIONS": "fetch_youtube_captions",
-        "FETCH_YOUTUBE_AUDIO": "fetch_youtube_audio",
-        "SAVE_CAPTIONS": "save_captions",
+        "YT_FETCH_CAPTIONS": "yt_fetch_captions",
+        "YT_FETCH_AUDIO": "yt_fetch_audio",
+        "YT_SAVE_CAPTIONS": "yt_save_captions",
         "TRANSCRIBE_AUDIO": "transcribe_audio",
-        "FAIL_YOUTUBE_JOB": "fail_youtube_job",
+        "YT_FAIL_JOB": "yt_fail_job",
     },
     "bucket": "uploads",
     "maxAudioBytes": 25 * 1024 * 1024,
@@ -32,11 +32,11 @@ def test_load_reads_queues_and_limits(monkeypatch):
     c = _Contract()
     c.load()
 
-    assert c.queues.FETCH_YOUTUBE_CAPTIONS == "fetch_youtube_captions"
-    assert c.queues.FETCH_YOUTUBE_AUDIO == "fetch_youtube_audio"
-    assert c.queues.SAVE_CAPTIONS == "save_captions"
+    assert c.queues.YT_FETCH_CAPTIONS == "yt_fetch_captions"
+    assert c.queues.YT_FETCH_AUDIO == "yt_fetch_audio"
+    assert c.queues.YT_SAVE_CAPTIONS == "yt_save_captions"
     assert c.queues.TRANSCRIBE_AUDIO == "transcribe_audio"
-    assert c.queues.FAIL_YOUTUBE_JOB == "fail_youtube_job"
+    assert c.queues.YT_FAIL_JOB == "yt_fail_job"
     assert c.bucket == "uploads"
     assert c.maxAudioBytes == 25 * 1024 * 1024
 

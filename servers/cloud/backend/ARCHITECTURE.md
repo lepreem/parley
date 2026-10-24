@@ -35,15 +35,15 @@ starting half-alive.
 ## Message queues
 
 Defined in `src/message-queue/queues.ts`, each named for what its consumer
-does with a message:
+does with a message, with `yt_` on the ones only YouTube uploads go through:
 
-| Queue                    | Producer → Consumer                     | Payload                             |
-| ------------------------ | --------------------------------------- | ----------------------------------- |
-| `fetch_youtube_captions` | api → youtube-fetcher                   | `{ audioUploadId, url, userId }`    |
-| `fetch_youtube_audio`    | api / youtube-fetcher → youtube-fetcher | `{ audioUploadId, url, userId }`    |
-| `save_captions`          | youtube-fetcher → api                   | `{ audioUploadId, segments }`       |
-| `transcribe_audio`       | api / youtube-fetcher → api             | `{ audioUploadId }`                 |
-| `fail_youtube_job`       | youtube-fetcher → api                   | `{ audioUploadId, userId, error? }` |
+| Queue               | Producer → Consumer                     | Payload                             |
+| ------------------- | --------------------------------------- | ----------------------------------- |
+| `yt_fetch_captions` | api → youtube-fetcher                   | `{ audioUploadId, url, userId }`    |
+| `yt_fetch_audio`    | api / youtube-fetcher → youtube-fetcher | `{ audioUploadId, url, userId }`    |
+| `yt_save_captions`  | youtube-fetcher → api                   | `{ audioUploadId, segments }`       |
+| `transcribe_audio`  | api / youtube-fetcher → api             | `{ audioUploadId }`                 |
+| `yt_fail_job`       | youtube-fetcher → api                   | `{ audioUploadId, userId, error? }` |
 
 The API publishes to `transcribe_audio` and consumes it too. The queue is what
 keeps an upload's job across a restart or deploy, and what holds back the
@@ -55,13 +55,13 @@ otherwise. `transcribe_audio` takes `getTranscriptionConcurrency()`
 (`src/transcribeJob.ts`): 40, under the 50 transcriptions Deepgram runs at
 once for a project. Every API instance together has to stay under that, so
 once there are several, each one's share comes from the load balancer.
-`save_captions` stays at 1: it is only database writes, and one at a time
+`yt_save_captions` stays at 1: it is only database writes, and one at a time
 keeps it to one of the pool's connections, so chat turns don't wait behind a
 burst of them.
 
 The fetcher sets its own in `youtube-fetcher/app/app.py`: 5 for
-`fetch_youtube_captions`, one small request each, and 3 for
-`fetch_youtube_audio`, a download of up to 50 MB each in a 1 GB container.
+`yt_fetch_captions`, one small request each, and 3 for
+`yt_fetch_audio`, a download of up to 50 MB each in a 1 GB container.
 Captions get their own queue so they never wait behind a download.
 
 Each consumer also sets how many attempts a message gets. A handler fails an attempt by
@@ -96,14 +96,14 @@ reconnects in-process; the platform's restart policy brings it back.
 ```
 
 A YouTube upload takes the same path one step earlier. When captions are
-preferred, the API publishes `fetch_youtube_captions`: if the video has a
+preferred, the API publishes `yt_fetch_captions`: if the video has a
 caption track, the Python fetcher skips the audio download and publishes
-`save_captions` with the caption segments in the message, which the API stores
+`yt_save_captions` with the caption segments in the message, which the API stores
 as the transcript; if it has none, the fetcher publishes
-`fetch_youtube_audio`. Otherwise the API publishes `fetch_youtube_audio`
+`yt_fetch_audio`. Otherwise the API publishes `yt_fetch_audio`
 itself. For that one, the fetcher stores audio under the job's
 `audioUploadId` and publishes `transcribe_audio`. Either fetch that fails
-publishes `fail_youtube_job`.
+publishes `yt_fail_job`.
 
 Completed transcripts are immutable. The API has no rerun route, and a source
 linked to a message or reserved for a response cannot be deleted. Trying another

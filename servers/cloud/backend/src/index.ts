@@ -50,13 +50,13 @@ await mq.consume(mq.queues.TRANSCRIBE_AUDIO, handleTranscribeJob, {
 // queue to one of the pool's connections (src/db/pool.ts) and chat turns
 // don't wait behind a burst of them. Each one takes milliseconds; the fetch
 // before it takes seconds.
-await mq.consume(mq.queues.SAVE_CAPTIONS, handleTranscribeJob, {
+await mq.consume(mq.queues.YT_SAVE_CAPTIONS, handleTranscribeJob, {
   attempts: TRANSCRIBE_ATTEMPTS,
 });
 // youtube-fetcher couldn't fetch the captions or the audio: mark the job
 // failed and notify the user. The row was created by POST /upload/youtube.
 await mq.consume(
-  mq.queues.FAIL_YOUTUBE_JOB,
+  mq.queues.YT_FAIL_JOB,
   async ({ audioUploadId, userId, error }) => {
     await data.jobs.failAudioJobById(
       audioUploadId,

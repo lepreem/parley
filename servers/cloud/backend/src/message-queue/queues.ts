@@ -3,15 +3,16 @@ import { transcriptSegmentSchema } from "@parley/shared/transcript";
 import type { UploadId } from "@parley/shared/types";
 
 /**
- * Each queue is named for what its consumer does with a message. The YouTube
- * fetcher takes the two fetch queues, the API the rest.
+ * Each queue is named for what its consumer does with a message, with `YT_`
+ * on the ones only YouTube uploads go through. The YouTube fetcher takes the
+ * two fetch queues, the API the rest.
  */
 export const QUEUES = {
-  FETCH_YOUTUBE_CAPTIONS: "fetch_youtube_captions",
-  FETCH_YOUTUBE_AUDIO: "fetch_youtube_audio",
-  SAVE_CAPTIONS: "save_captions",
+  YT_FETCH_CAPTIONS: "yt_fetch_captions",
+  YT_FETCH_AUDIO: "yt_fetch_audio",
+  YT_SAVE_CAPTIONS: "yt_save_captions",
   TRANSCRIBE_AUDIO: "transcribe_audio",
-  FAIL_YOUTUBE_JOB: "fail_youtube_job",
+  YT_FAIL_JOB: "yt_fail_job",
 } as const;
 
 export type Queue = (typeof QUEUES)[keyof typeof QUEUES];
@@ -34,12 +35,12 @@ const youtubeFetch = z.object({
  * dead-lettered before its handler runs.
  */
 export const QUEUE_PAYLOAD_SCHEMAS = {
-  [QUEUES.FETCH_YOUTUBE_CAPTIONS]: youtubeFetch,
+  [QUEUES.YT_FETCH_CAPTIONS]: youtubeFetch,
 
   /** Also published by the fetcher, for a video with no usable captions. */
-  [QUEUES.FETCH_YOUTUBE_AUDIO]: youtubeFetch,
+  [QUEUES.YT_FETCH_AUDIO]: youtubeFetch,
 
-  [QUEUES.SAVE_CAPTIONS]: z.object({
+  [QUEUES.YT_SAVE_CAPTIONS]: z.object({
     audioUploadId: uploadId,
     /** The video's captions, used as the transcript instead of its audio. */
     segments: z.array(transcriptSegmentSchema),
@@ -49,7 +50,7 @@ export const QUEUE_PAYLOAD_SCHEMAS = {
     audioUploadId: uploadId,
   }),
 
-  [QUEUES.FAIL_YOUTUBE_JOB]: z.object({
+  [QUEUES.YT_FAIL_JOB]: z.object({
     audioUploadId: uploadId,
     userId: z.string(),
     error: z.string().optional(),

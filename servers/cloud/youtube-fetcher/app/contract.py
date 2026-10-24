@@ -10,11 +10,11 @@ QueueName = NewType("QueueName", str)
 
 @dataclass
 class _Queues:
-    FETCH_YOUTUBE_CAPTIONS: QueueName
-    FETCH_YOUTUBE_AUDIO: QueueName
-    SAVE_CAPTIONS: QueueName
+    YT_FETCH_CAPTIONS: QueueName
+    YT_FETCH_AUDIO: QueueName
+    YT_SAVE_CAPTIONS: QueueName
     TRANSCRIBE_AUDIO: QueueName
-    FAIL_YOUTUBE_JOB: QueueName
+    YT_FAIL_JOB: QueueName
 
 
 class _Contract:
@@ -32,11 +32,11 @@ class _Contract:
         # /contract serves every backend queue, the fetcher's included.
         queues = body["queues"]
         self.queues = _Queues(
-            FETCH_YOUTUBE_CAPTIONS=QueueName(queues["FETCH_YOUTUBE_CAPTIONS"]),
-            FETCH_YOUTUBE_AUDIO=QueueName(queues["FETCH_YOUTUBE_AUDIO"]),
-            SAVE_CAPTIONS=QueueName(queues["SAVE_CAPTIONS"]),
+            YT_FETCH_CAPTIONS=QueueName(queues["YT_FETCH_CAPTIONS"]),
+            YT_FETCH_AUDIO=QueueName(queues["YT_FETCH_AUDIO"]),
+            YT_SAVE_CAPTIONS=QueueName(queues["YT_SAVE_CAPTIONS"]),
             TRANSCRIBE_AUDIO=QueueName(queues["TRANSCRIBE_AUDIO"]),
-            FAIL_YOUTUBE_JOB=QueueName(queues["FAIL_YOUTUBE_JOB"]),
+            YT_FAIL_JOB=QueueName(queues["YT_FAIL_JOB"]),
         )
         self.bucket = body["bucket"]
         self.maxAudioBytes = body["maxAudioBytes"]

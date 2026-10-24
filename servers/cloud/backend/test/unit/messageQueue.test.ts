@@ -330,13 +330,13 @@ describe("consuming", () => {
       attempts: 1,
       prefetch: 40,
     });
-    await mq.consume(QUEUES.FAIL_YOUTUBE_JOB, () => {}, { attempts: 1 });
+    await mq.consume(QUEUES.YT_FAIL_JOB, () => {}, { attempts: 1 });
 
     const { prefetch, consume } = broker.consumer!;
     expect(prefetch.mock.calls).toEqual([[40], [1]]);
     expect(consume.mock.calls.map(([queue]) => queue)).toEqual([
       QUEUES.TRANSCRIBE_AUDIO,
-      QUEUES.FAIL_YOUTUBE_JOB,
+      QUEUES.YT_FAIL_JOB,
     ]);
     expect([
       prefetch.mock.invocationCallOrder[0],
@@ -371,7 +371,7 @@ describe("stopConsuming", () => {
     );
     const message = deliveryOf(JSON.stringify(payload));
     broker.deliver!(message);
-    await mq.consume(QUEUES.SAVE_CAPTIONS, () => {}, { attempts: 1 });
+    await mq.consume(QUEUES.YT_SAVE_CAPTIONS, () => {}, { attempts: 1 });
 
     let stopped = false;
     const stopping = mq.stopConsuming().then(() => (stopped = true));
@@ -392,7 +392,7 @@ describe("stopConsuming", () => {
 
 describe("connection loss", () => {
   it("exits when the broker closes the connection", async () => {
-    await mq.consume(QUEUES.FAIL_YOUTUBE_JOB, () => {}, { attempts: 1 });
+    await mq.consume(QUEUES.YT_FAIL_JOB, () => {}, { attempts: 1 });
 
     broker.connection!.emit("close", new Error("CONNECTION_FORCED"));
     await flush();
@@ -402,7 +402,7 @@ describe("connection loss", () => {
   });
 
   it("exits once when a channel closes, however many events follow", async () => {
-    await mq.consume(QUEUES.FAIL_YOUTUBE_JOB, () => {}, { attempts: 1 });
+    await mq.consume(QUEUES.YT_FAIL_JOB, () => {}, { attempts: 1 });
 
     broker.consumer!.emit("error", new Error("PRECONDITION_FAILED"));
     broker.consumer!.emit("close");
@@ -413,7 +413,7 @@ describe("connection loss", () => {
   });
 
   it("does not exit when this process closes the connection", async () => {
-    await mq.consume(QUEUES.FAIL_YOUTUBE_JOB, () => {}, { attempts: 1 });
+    await mq.consume(QUEUES.YT_FAIL_JOB, () => {}, { attempts: 1 });
 
     await mq.close();
     await flush();

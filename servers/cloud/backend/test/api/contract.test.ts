@@ -22,11 +22,11 @@ describe("GET /contract", () => {
       maxAudioBytes: number;
     };
     // These keys + values are the contract contract.py consumes.
-    expect(body.queues.FETCH_YOUTUBE_CAPTIONS).toBe("fetch_youtube_captions");
-    expect(body.queues.FETCH_YOUTUBE_AUDIO).toBe("fetch_youtube_audio");
-    expect(body.queues.SAVE_CAPTIONS).toBe("save_captions");
+    expect(body.queues.YT_FETCH_CAPTIONS).toBe("yt_fetch_captions");
+    expect(body.queues.YT_FETCH_AUDIO).toBe("yt_fetch_audio");
+    expect(body.queues.YT_SAVE_CAPTIONS).toBe("yt_save_captions");
     expect(body.queues.TRANSCRIBE_AUDIO).toBe("transcribe_audio");
-    expect(body.queues.FAIL_YOUTUBE_JOB).toBe("fail_youtube_job");
+    expect(body.queues.YT_FAIL_JOB).toBe("yt_fail_job");
     expect(body.bucket).toBe("Audio");
     expect(body.maxAudioBytes).toBe(50 * 1024 * 1024);
   });

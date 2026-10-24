@@ -117,8 +117,8 @@ vi.mock("../../src/message-queue/messageQueue", () => ({
   mq: {
     queues: {
       TRANSCRIBE_AUDIO: "transcribe_audio",
-      FETCH_YOUTUBE_CAPTIONS: "fetch_youtube_captions",
-      FETCH_YOUTUBE_AUDIO: "fetch_youtube_audio",
+      YT_FETCH_CAPTIONS: "yt_fetch_captions",
+      YT_FETCH_AUDIO: "yt_fetch_audio",
     },
     publish: mockSendEvent,
   },
@@ -592,7 +592,7 @@ describe("POST /upload/youtube", () => {
       [{ kind: "audio", uploadId: body.audioUploadId }],
       expect.anything(),
     );
-    expect(mockSendEvent).toHaveBeenCalledWith("fetch_youtube_audio", {
+    expect(mockSendEvent).toHaveBeenCalledWith("yt_fetch_audio", {
       audioUploadId: body.audioUploadId,
       url: YT_URL,
       userId: "user_01",
@@ -644,7 +644,7 @@ describe("POST /upload/youtube", () => {
       [{ kind: "audio", uploadId: body.audioUploadId }],
       expect.anything(),
     );
-    expect(mockSendEvent).toHaveBeenCalledWith("fetch_youtube_captions", {
+    expect(mockSendEvent).toHaveBeenCalledWith("yt_fetch_captions", {
       audioUploadId: body.audioUploadId,
       url: YT_URL,
       userId: "user_01",
