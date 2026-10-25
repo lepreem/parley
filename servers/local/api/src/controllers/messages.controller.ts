@@ -8,9 +8,9 @@ import type {
   ChatMessage,
   MessagesResponse,
   ReplyStreamEvents,
-} from "@parley/shared/contract";
-import { SSEEventQueue } from "@parley/shared/sse";
-import type { TrackedReply } from "@parley/shared/replies";
+} from "@parley/contract";
+import { SSEEventQueue } from "@parley/server-kit/sse/replyQueue";
+import type { TrackedReply } from "@parley/server-kit/chat/replies";
 import {
   data,
   type CreateMessageHistory,
@@ -18,18 +18,18 @@ import {
   type MessageRow,
   type ResolvedImage,
   type StoredTranscriptAttachment,
-} from "../../../shared/data";
-import { CTX_KEYS } from "../../../shared/keys";
+} from "../../../core/data";
+import { CTX_KEYS } from "../../../core/keys";
 import {
   buildUserTurn,
   chatAI,
   chatImageInput,
   generateTitle,
   findChatModel,
-} from "../../../shared/ai/ai_chat_client";
-import type { ChatImage, ChatTurn } from "../../../shared/ai/ai_chat_client";
-import { logger, messageOf } from "@parley/shared/logger";
-import { files } from "../../../shared/files";
+} from "../../../core/ai/ai_chat_client";
+import type { ChatImage, ChatTurn } from "../../../core/ai/ai_chat_client";
+import { logger, messageOf } from "@parley/server-kit/runtime/logger";
+import { files } from "../../../core/files";
 import type { MessageAttachmentInput } from "../schema/messages.schema";
 import { EVERYONE, events as serverEvents } from "../events";
 import { replies } from "../replies";

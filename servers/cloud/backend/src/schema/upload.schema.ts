@@ -1,8 +1,8 @@
 import { z } from "zod";
-import type { QueueYoutubeBody } from "@parley/shared/contract";
-import { takesBody } from "@parley/shared/takesBody";
-import { isYoutubeUrl } from "@parley/shared/youtube";
-import type { UploadId } from "@parley/shared/types";
+import type { QueueYoutubeBody } from "@parley/contract";
+import { takesBody } from "@parley/server-kit/http/takesBody";
+import { isYoutubeUrl } from "@parley/contract/youtube";
+import type { UploadId } from "@parley/server-kit/ids";
 import { DEFAULT_TRANSCRIBE_MODEL, transcription } from "../ai";
 
 /** Treat a blank ("" or null) optional field as unset. */

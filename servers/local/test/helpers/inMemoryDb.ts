@@ -1,9 +1,9 @@
-import { openDatabase } from "../../shared/db/connect";
-import * as schema from "../../shared/db/schema";
+import { openDatabase } from "../../core/db/connect";
+import * as schema from "../../core/db/schema";
 
 /**
- * shared/db against a fresh in-memory database, opened and migrated the way
- * the API opens and migrates the real one. For `vi.mock("../../shared/db",
+ * core/db against a fresh in-memory database, opened and migrated the way
+ * the API opens and migrates the real one. For `vi.mock("../../core/db",
  * ...)`: each test file gets its own.
  */
 export async function inMemoryDbModule() {

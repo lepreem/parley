@@ -2,7 +2,7 @@ import type {
   ChatModel,
   ModelsResponse,
   TranscribeModel,
-} from "@parley/shared/contract";
+} from "@parley/contract";
 import { chat, transcription } from "../ai";
 import { authed } from "../middleware/auth.middleware";
 

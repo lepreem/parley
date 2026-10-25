@@ -1,4 +1,4 @@
-import { createReplyRegistry } from "@parley/shared/replies";
+import { createReplyRegistry } from "@parley/server-kit/chat/replies";
 
 /** The replies this instance is writing, by owner and conversation. */
 export const replies = createReplyRegistry();

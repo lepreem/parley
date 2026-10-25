@@ -1,7 +1,7 @@
 import type { z } from "zod";
-import type { TurnStats } from "@parley/shared/contract";
-import type { TrackedReply } from "@parley/shared/replies";
-import { logger, messageOf } from "@parley/shared/logger";
+import type { TurnStats } from "@parley/contract";
+import type { TrackedReply } from "@parley/server-kit/chat/replies";
+import { logger, messageOf } from "@parley/server-kit/runtime/logger";
 import { data, type HistoryCandidate, type HistoryTranscript } from "../data";
 import { buildUserTurn, chat, type ChatTurn } from "../ai";
 import { measurePreparation } from "../preparationMetrics";

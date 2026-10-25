@@ -16,7 +16,8 @@ COPY package.json package-lock.json ./
 COPY client/package.json client/
 COPY servers/cloud/backend/package.json servers/cloud/backend/
 COPY servers/local/package.json servers/local/
-COPY packages/shared/package.json packages/shared/
+COPY packages/contract/package.json packages/contract/
+COPY packages/server-kit/package.json packages/server-kit/
 
 FROM manifests AS client
 RUN npm ci --ignore-scripts --workspace @parley/client

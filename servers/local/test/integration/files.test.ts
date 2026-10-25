@@ -14,7 +14,7 @@ const dataDirs = vi.hoisted(async () => {
   return { shared, own: process.env.DATA_DIR };
 });
 
-import { files } from "../../shared/files";
+import { files } from "../../core/files";
 
 afterAll(async () => {
   const { shared, own } = await dataDirs;

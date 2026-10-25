@@ -1,5 +1,5 @@
 /**
- * Stand-ins for the drizzle tables, for suites that mock `shared/db` wholesale.
+ * Stand-ins for the drizzle tables, for suites that mock `core/db` wholesale.
  *
  * Controllers read columns at module scope (their `select()` projections are
  * module-level consts), so a mock missing a table — or a column — fails the

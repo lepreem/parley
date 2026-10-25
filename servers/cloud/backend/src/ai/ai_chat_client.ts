@@ -7,8 +7,8 @@ import type {
   ChatRequest,
   PublicPricing,
 } from "@openrouter/sdk/models";
-import { withTimeout } from "@parley/shared/withTimeout";
-import type { ChatModel, ModelPricing } from "@parley/shared/contract";
+import { withTimeout } from "@parley/server-kit/runtime/withTimeout";
+import type { ChatModel, ModelPricing } from "@parley/contract";
 
 const client = new OpenRouter({
   apiKey: getEnv().OPENROUTER_API_KEY,

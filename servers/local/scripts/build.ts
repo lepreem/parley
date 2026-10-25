@@ -49,6 +49,6 @@ const failed = results.filter((result) => result.errors.length > 0);
 if (failed.length > 0) process.exit(1);
 
 // Transcription runs this script from beside the bundle.
-await copyFile("shared/ai/whisper.py", "dist/whisper.py");
+await copyFile("core/ai/whisper.py", "dist/whisper.py");
 
 console.log(`built ${Object.keys(ENTRYPOINTS).join(", ")} into dist/`);

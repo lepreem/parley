@@ -5,19 +5,19 @@ const { mockRequeue, mockPublish } = vi.hoisted(() => ({
   mockPublish: vi.fn(),
 }));
 
-vi.mock("../../shared/data", () => ({
+vi.mock("../../core/data", () => ({
   data: { jobs: { requeueUnfinishedAudioJobs: mockRequeue } },
 }));
 
-vi.mock("../../shared/message-queue/messageQueue", async (importActual) => {
+vi.mock("../../core/message-queue/messageQueue", async (importActual) => {
   const { QUEUES } =
     await importActual<
-      typeof import("../../shared/message-queue/messageQueue")
+      typeof import("../../core/message-queue/messageQueue")
     >();
   return { mq: { queues: QUEUES, publish: mockPublish } };
 });
 
-import { resumeUnfinishedJobs } from "../../shared/audioTranscription";
+import { resumeUnfinishedJobs } from "../../core/audioTranscription";
 
 const audioUploadId = "11111111-1111-4111-8111-111111111111";
 const unfinished = {

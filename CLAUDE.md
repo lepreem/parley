@@ -9,7 +9,7 @@ Gitignored setup doesn't come with the worktree. From inside the new worktree:
     ln -s ../../../summarizer/servers/cloud/.env servers/cloud/.env
     npm install
 
-The repo is one npm workspace, so that installs the client, both servers and packages/shared. In the sandbox, run `npx -y npm@11.14.1 install --ignore-scripts` and then `npx -y npm@11.14.1 rebuild mise`: the sandbox's system npm fails on this mount, and the root's prepare script would rewrite the git hooks every worktree shares.
+The repo is one npm workspace, so that installs the client, both servers and the two packages under packages/. In the sandbox, run `npx -y npm@11.14.1 install --ignore-scripts` and then `npx -y npm@11.14.1 rebuild mise`: the sandbox's system npm fails on this mount, and the root's prepare script would rewrite the git hooks every worktree shares.
 
 Only if the work touches the YouTube fetcher (the pre-commit hook runs its ruff). The sandbox's python3 has no ensurepip, so use uv:
 

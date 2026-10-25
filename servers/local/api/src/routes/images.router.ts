@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import * as imagesController from "../controllers/images.controller";
-import { CTX_KEYS } from "../../../shared/keys";
-import { MAX_IMAGE_BYTES } from "../../../shared/files";
+import { CTX_KEYS } from "../../../core/keys";
+import { MAX_IMAGE_BYTES } from "../../../core/files";
 import {
   validateReqForm,
   validateReqParams,

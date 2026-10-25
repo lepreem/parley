@@ -40,9 +40,9 @@ const {
   mockUnclaimAttachments: vi.fn(),
 }));
 
-vi.mock("../../shared/data/attachments.data", async (importActual) => {
+vi.mock("../../core/data/attachments.data", async (importActual) => {
   const actual =
-    await importActual<typeof import("../../shared/data/attachments.data")>();
+    await importActual<typeof import("../../core/data/attachments.data")>();
   return {
     ...actual,
     attachments: {
@@ -58,14 +58,14 @@ vi.mock("../../shared/data/attachments.data", async (importActual) => {
 // join queries behind the history loaders are a data-layer concern. The
 // table stubs stand in for the columns other controllers read at module scope
 // when createApp wires the whole app.
-vi.mock("../../shared/db", async () => ({
+vi.mock("../../core/db", async () => ({
   db: {},
   ...(await import("../helpers/dbTableStubs")).tableStubs,
 }));
 
-vi.mock("../../shared/data/conversations.data", async (importActual) => {
+vi.mock("../../core/data/conversations.data", async (importActual) => {
   const actual =
-    await importActual<typeof import("../../shared/data/conversations.data")>();
+    await importActual<typeof import("../../core/data/conversations.data")>();
   return {
     ...actual,
     conversations: {
@@ -77,9 +77,9 @@ vi.mock("../../shared/data/conversations.data", async (importActual) => {
   };
 });
 
-vi.mock("../../shared/data/messages.data", async (importActual) => {
+vi.mock("../../core/data/messages.data", async (importActual) => {
   const actual =
-    await importActual<typeof import("../../shared/data/messages.data")>();
+    await importActual<typeof import("../../core/data/messages.data")>();
   return {
     ...actual,
     messages: {
@@ -92,9 +92,9 @@ vi.mock("../../shared/data/messages.data", async (importActual) => {
   };
 });
 
-vi.mock("../../shared/data/images.data", async (importActual) => {
+vi.mock("../../core/data/images.data", async (importActual) => {
   const actual =
-    await importActual<typeof import("../../shared/data/images.data")>();
+    await importActual<typeof import("../../core/data/images.data")>();
   return {
     ...actual,
     images: {
@@ -106,9 +106,9 @@ vi.mock("../../shared/data/images.data", async (importActual) => {
   };
 });
 
-vi.mock("../../shared/data/transcripts.data", async (importActual) => {
+vi.mock("../../core/data/transcripts.data", async (importActual) => {
   const actual =
-    await importActual<typeof import("../../shared/data/transcripts.data")>();
+    await importActual<typeof import("../../core/data/transcripts.data")>();
   return {
     ...actual,
     transcripts: {
@@ -121,16 +121,16 @@ vi.mock("../../shared/data/transcripts.data", async (importActual) => {
 });
 
 // Controllers release deleted objects through the upload module.
-vi.mock("../../shared/files", async (importActual) => {
-  const actual = await importActual<typeof import("../../shared/files")>();
+vi.mock("../../core/files", async (importActual) => {
+  const actual = await importActual<typeof import("../../core/files")>();
   return { ...actual, files: { ...actual.files, delete: mockDeleteFiles } };
 });
 
 // buildUserTurn is the real one: what the model is handed for an image turn is
 // exactly what these tests are checking.
-vi.mock("../../shared/ai/ai_chat_client", async (importActual) => {
+vi.mock("../../core/ai/ai_chat_client", async (importActual) => {
   const actual =
-    await importActual<typeof import("../../shared/ai/ai_chat_client")>();
+    await importActual<typeof import("../../core/ai/ai_chat_client")>();
   return {
     ...actual,
     findChatModel: mockFindChatModel,
@@ -146,7 +146,7 @@ import { events } from "../../api/src/events";
 import { MAX_CONTEXT_CHARS } from "../../api/src/controllers/messages.controller";
 import { MAX_TRANSCRIPTS } from "../../api/src/schema/messages.schema";
 import { originHeaders } from "../helpers/headers";
-import { type CreateMessageHistory } from "../../shared/data/messages.data";
+import { type CreateMessageHistory } from "../../core/data/messages.data";
 
 const conversationId = "550e8400-e29b-41d4-a716-446655440000";
 const messageId = "650e8400-e29b-41d4-a716-446655440111";

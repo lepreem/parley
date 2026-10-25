@@ -6,7 +6,7 @@ clients talk to, with job updates pushed over server-sent events (`GET
 /events`), which also fetches YouTube videos and runs
 transcription off in-memory queues. It keeps its data in SQLite, in one file under `DATA_DIR`. Migrations in `drizzle/` are
 applied at startup. Statements and transactions run one at a time, in order
-(`shared/db/connect.ts` says why), so work inside a transaction goes through
+(`core/db/connect.ts` says why), so work inside a transaction goes through
 its own handle, never `db`.
 
 ## Attachment vocabulary
@@ -22,7 +22,7 @@ Physical SQL names and API fields such as `imageUploadId` and `audioUploadId` re
 ## Files
 
 Uploaded images and audio, and the audio a YouTube fetch downloads, are files
-under `DATA_DIR` (`shared/files.ts`): `images/<uploadId>` and
+under `DATA_DIR` (`core/files.ts`): `images/<uploadId>` and
 `audios/<uploadId>`. An upload arrives as a multipart form and is written
 before its row, so a row never points at a missing file; a deletion removes the
 row first, then the file. Whatever a crash leaves between the two, and audio a
@@ -34,7 +34,7 @@ handed it inline, base64-encoded in the prompt (`chatImageInput`).
 
 ## Chat
 
-Chat runs on the user's own Claude Code (`shared/ai/ai_chat_client.ts`): each
+Chat runs on the user's own Claude Code (`core/ai/ai_chat_client.ts`): each
 turn is one `claude --print` run, with the app's system prompt and no tools,
 MCP servers, slash commands or settings, so none of the user's own setup
 reaches the conversation. Claude Code keeps history only in its own sessions,
@@ -47,7 +47,7 @@ names the program when it isn't on PATH.
 ## Transcription
 
 Audio is transcribed on this machine by faster-whisper, in
-`shared/ai/whisper.py`, which uv runs with the dependencies the script declares
+`core/ai/whisper.py`, which uv runs with the dependencies the script declares
 (`uv run --script`). The script prints each segment as it's transcribed;
 `transcribeAI` joins them into paragraphs, breaking where the speaker pauses
 or at a sentence end once a paragraph passes 500 characters, and gives up on
@@ -63,7 +63,7 @@ them can't run, it aborts instead of starting half-alive.
 
 ## Message queues
 
-Defined in `shared/message-queue/queues.ts`:
+Defined in `core/message-queue/queues.ts`:
 
 | Queue                | Producer → Consumer                          | Payload                                          |
 | -------------------- | -------------------------------------------- | ------------------------------------------------ |
@@ -73,7 +73,7 @@ Defined in `shared/message-queue/queues.ts`:
 | `transcribe`         | upload route / YouTube fetch → transcription | `{ audioUploadId }`                              |
 | `transcribe_done`    | transcription → browser notifier             | `{ audioUploadId }`                              |
 
-The queues are in memory (`shared/message-queue/messageQueue.ts`). Each
+The queues are in memory (`core/message-queue/messageQueue.ts`). Each
 queue's consumer takes its messages one at a time, in the order they were
 published, and publishing never runs a handler inside the publisher.
 

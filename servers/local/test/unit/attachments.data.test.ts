@@ -26,7 +26,7 @@ const {
   mockValues: vi.fn(),
 }));
 
-vi.mock("../../shared/db", async () => ({
+vi.mock("../../core/db", async () => ({
   db: {
     transaction: mockTransaction,
     delete: mockDelete,
@@ -37,8 +37,8 @@ vi.mock("../../shared/db", async () => ({
 }));
 
 // The ledger update itself is covered by the storage ledger integration tests.
-import { attachments } from "../../shared/data/attachments.data";
-import { Attachments, ChatMessageAttachmentLinks } from "../../shared/db";
+import { attachments } from "../../core/data/attachments.data";
+import { Attachments, ChatMessageAttachmentLinks } from "../../core/db";
 
 type AttachmentExecutor = NonNullable<
   Parameters<typeof attachments.createAttachment>[1]

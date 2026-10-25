@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import path from "node:path";
 import { describe, it, expect } from "vitest";
-import { apiEnvSchema, baseEnvSchema } from "../../shared/env";
+import { apiEnvSchema, baseEnvSchema } from "../../core/env";
 
 const validBase = {
   DATA_DIR: "/tmp/parley",

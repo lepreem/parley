@@ -1,5 +1,5 @@
 import { data } from "./data";
-import { logger } from "@parley/shared/logger";
+import { logger } from "@parley/server-kit/runtime/logger";
 import { UPLOAD_CONFIRM_WINDOW_MS, uploads } from "./uploads";
 
 const log = logger.child({ component: "sweeper" });

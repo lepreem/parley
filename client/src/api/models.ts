@@ -3,7 +3,7 @@ import type {
   ModelPricing,
   ModelsResponse,
   TranscribeModel,
-} from "@parley/shared/contract";
+} from "@parley/contract";
 import { apiJson } from "./http";
 import type { Server } from "./server";
 

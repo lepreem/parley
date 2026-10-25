@@ -7,11 +7,8 @@ import type {
   ReplyStreamEvents,
   SendMessageBody,
   TurnStats,
-} from "@parley/shared/contract";
-import {
-  readServerSentEvents,
-  type ServerSentEvent,
-} from "@parley/shared/sseReader";
+} from "@parley/contract";
+import { readServerSentEvents, type ServerSentEvent } from "../sse/reader";
 import { ApiError, apiFetch, apiJson, jsonRequest } from "./http";
 import { serverUrl, type Server } from "./server";
 

@@ -6,7 +6,8 @@
     "client",
     "servers/cloud/backend",
     "servers/local",
-    "packages/shared"
+    "packages/contract",
+    "packages/server-kit"
   ],
   "scripts": {
     "dev": "concurrently -k -n backend,client,fetcher -c blue,green,yellow \"npm run dev --prefix servers/cloud/backend\" \"npm run dev --prefix client\" \"npm run dev:fetcher\"",

@@ -5,12 +5,12 @@ import type {
   ChatMessage,
   MessagesResponse,
   ReplyStreamEvents,
-} from "@parley/shared/contract";
+} from "@parley/contract";
 import { randomUUID } from "node:crypto";
 import { streamSSE } from "hono/streaming";
-import { logger } from "@parley/shared/logger";
-import { SSEEventQueue } from "@parley/shared/sse";
-import type { TrackedReply } from "@parley/shared/replies";
+import { logger } from "@parley/server-kit/runtime/logger";
+import { SSEEventQueue } from "@parley/server-kit/sse/replyQueue";
+import type { TrackedReply } from "@parley/server-kit/chat/replies";
 import {
   data,
   type MessageRow,

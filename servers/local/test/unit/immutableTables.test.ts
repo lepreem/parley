@@ -2,7 +2,7 @@ import fs from "node:fs";
 import { getTableName, is } from "drizzle-orm";
 import { getTableConfig, SQLiteTable } from "drizzle-orm/sqlite-core";
 import { describe, expect, it } from "vitest";
-import * as schema from "../../shared/db/schema";
+import * as schema from "../../core/db/schema";
 
 const MIGRATIONS_FOLDER = "./drizzle";
 

@@ -14,14 +14,14 @@ const {
   mockDeleteFiles: vi.fn(),
 }));
 
-vi.mock("../../shared/db", async () => ({
+vi.mock("../../core/db", async () => ({
   db: {},
   ...(await import("../helpers/dbTableStubs")).tableStubs,
 }));
 
-vi.mock("../../shared/data/jobs.data", async (importActual) => {
+vi.mock("../../core/data/jobs.data", async (importActual) => {
   const actual =
-    await importActual<typeof import("../../shared/data/jobs.data")>();
+    await importActual<typeof import("../../core/data/jobs.data")>();
   return {
     ...actual,
     jobs: {
@@ -33,9 +33,9 @@ vi.mock("../../shared/data/jobs.data", async (importActual) => {
   };
 });
 
-vi.mock("../../shared/data/transcripts.data", async (importActual) => {
+vi.mock("../../core/data/transcripts.data", async (importActual) => {
   const actual =
-    await importActual<typeof import("../../shared/data/transcripts.data")>();
+    await importActual<typeof import("../../core/data/transcripts.data")>();
   return {
     ...actual,
     transcripts: {
@@ -45,13 +45,13 @@ vi.mock("../../shared/data/transcripts.data", async (importActual) => {
   };
 });
 
-vi.mock("../../shared/ai/ai_transcribe_client", () => ({
+vi.mock("../../core/ai/ai_transcribe_client", () => ({
   DEFAULT_TRANSCRIBE_MODEL: "small",
   listTranscribeModels: vi.fn(),
   isValidTranscribeModel: vi.fn(),
 }));
 
-vi.mock("../../shared/message-queue/messageQueue", () => {
+vi.mock("../../core/message-queue/messageQueue", () => {
   const queues = {
     TRANSCRIBE: "transcribe",
     TRANSCRIBE_DONE: "transcribe_done",
@@ -65,8 +65,8 @@ vi.mock("../../shared/message-queue/messageQueue", () => {
   };
 });
 
-vi.mock("../../shared/files", async (importActual) => {
-  const actual = await importActual<typeof import("../../shared/files")>();
+vi.mock("../../core/files", async (importActual) => {
+  const actual = await importActual<typeof import("../../core/files")>();
   return { ...actual, files: { ...actual.files, delete: mockDeleteFiles } };
 });
 

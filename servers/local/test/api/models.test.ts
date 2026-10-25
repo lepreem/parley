@@ -6,28 +6,28 @@ const { mockListChatModels, mockListTranscribeModels } = vi.hoisted(() => ({
   mockListTranscribeModels: vi.fn(),
 }));
 
-vi.mock("../../shared/ai/ai_chat_client", async (importActual) => {
+vi.mock("../../core/ai/ai_chat_client", async (importActual) => {
   // importActual is the correct way to get real values inside vi.mock
   const actual =
-    await importActual<typeof import("../../shared/ai/ai_chat_client")>();
+    await importActual<typeof import("../../core/ai/ai_chat_client")>();
   return {
     ...actual, // preserves DEFAULT_MODELS and anything else
     listChatModels: mockListChatModels, // override only what needs mocking
   };
 });
 
-vi.mock("../../shared/ai/ai_transcribe_client", async (importActual) => {
+vi.mock("../../core/ai/ai_transcribe_client", async (importActual) => {
   const actual =
-    await importActual<typeof import("../../shared/ai/ai_transcribe_client")>();
+    await importActual<typeof import("../../core/ai/ai_transcribe_client")>();
   return {
     ...actual,
     listTranscribeModels: mockListTranscribeModels,
   };
 });
 
-vi.mock("../../shared/ai/ai_transcribe_client", async (importActual) => {
+vi.mock("../../core/ai/ai_transcribe_client", async (importActual) => {
   const actual =
-    await importActual<typeof import("../../shared/ai/ai_transcribe_client")>();
+    await importActual<typeof import("../../core/ai/ai_transcribe_client")>();
   return {
     ...actual,
     listTranscribeModels: mockListTranscribeModels,

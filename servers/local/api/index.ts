@@ -1,15 +1,15 @@
 const env = getApiEnv();
 
-import { getApiEnv } from "../shared/env";
+import { getApiEnv } from "../core/env";
 import { EVERYONE, events } from "./src/events";
 
-import { mq } from "../shared/message-queue/messageQueue";
-import { resumeUnfinishedJobs } from "../shared/audioTranscription";
-import { data } from "../shared/data";
-import { closeDb, migrateDb } from "../shared/db";
-import { onShutdown } from "@parley/shared/shutdown";
-import { files } from "../shared/files";
-import { logger } from "@parley/shared/logger";
+import { mq } from "../core/message-queue/messageQueue";
+import { resumeUnfinishedJobs } from "../core/audioTranscription";
+import { data } from "../core/data";
+import { closeDb, migrateDb } from "../core/db";
+import { onShutdown } from "@parley/server-kit/runtime/shutdown";
+import { files } from "../core/files";
+import { logger } from "@parley/server-kit/runtime/logger";
 import { handleTranscribeJob } from "./src/transcribeJob";
 import { handleYoutubeFetch } from "./src/youtubeFetch";
 

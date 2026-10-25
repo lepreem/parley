@@ -4,7 +4,7 @@ import {
   validateReqParams,
   validateReqBody,
 } from "../middleware/validate.middleware";
-import { CTX_KEYS } from "../../../shared/keys";
+import { CTX_KEYS } from "../../../core/keys";
 import {
   conversationReqParamSchema,
   conversationCreateBodySchema,

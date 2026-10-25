@@ -1,4 +1,4 @@
-import { logger } from "@parley/shared/logger";
+import { logger } from "@parley/server-kit/runtime/logger";
 import { CACHE_KEYS, type CacheKey } from "./cacheKeys";
 
 /**

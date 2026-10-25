@@ -1,4 +1,4 @@
-import { createEventHub } from "@parley/shared/events";
+import { createEventHub } from "@parley/server-kit/sse/hub";
 
 /** The local server has one user, so every open stream hears every event. */
 export const EVERYONE = "everyone";

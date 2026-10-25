@@ -3,18 +3,18 @@ import { SQLiteAsyncDialect } from "drizzle-orm/sqlite-core";
 
 const { mockAll } = vi.hoisted(() => ({ mockAll: vi.fn() }));
 
-vi.mock("../../shared/db", async () => ({
+vi.mock("../../core/db", async () => ({
   db: { all: mockAll },
-  ...(await import("../../shared/db/schema")),
+  ...(await import("../../core/db/schema")),
 }));
 
-vi.mock("../../shared/data/images.data", () => ({
+vi.mock("../../core/data/images.data", () => ({
   images: {
     deleteUnlinkedUnreservedImageAttachments: vi.fn(),
   },
 }));
 
-import { messages } from "../../shared/data/messages.data";
+import { messages } from "../../core/data/messages.data";
 
 const createdAt = new Date("2026-08-31T00:00:00.000Z");
 

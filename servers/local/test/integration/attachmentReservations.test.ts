@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../../shared/db", async () =>
+vi.mock("../../core/db", async () =>
   (await import("../helpers/inMemoryDb")).inMemoryDbModule(),
 );
 
@@ -12,10 +12,10 @@ import {
   ChatMessageAttachmentLinks,
   Conversations,
   db,
-} from "../../shared/db";
-import { attachments } from "../../shared/data/attachments.data";
-import { images } from "../../shared/data/images.data";
-import { messages } from "../../shared/data/messages.data";
+} from "../../core/db";
+import { attachments } from "../../core/data/attachments.data";
+import { images } from "../../core/data/images.data";
+import { messages } from "../../core/data/messages.data";
 import { deleteAllRows } from "../helpers/inMemoryDb";
 
 const imageUploadId = randomUUID();

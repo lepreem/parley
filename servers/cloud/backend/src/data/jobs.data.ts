@@ -3,7 +3,7 @@ import { and, desc, eq, ilike, inArray, lt, or, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { Attachments, AudioTranscriptionJobs, db, type Executor } from "../db";
 import type { jobStatusEnum } from "../db";
-import type { UploadId } from "@parley/shared/types";
+import type { UploadId } from "@parley/server-kit/ids";
 import { attachments } from "./attachments.data";
 import { storageLedger } from "./storageLedger.data";
 

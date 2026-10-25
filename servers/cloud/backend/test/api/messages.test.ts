@@ -174,7 +174,7 @@ import {
 import { MAX_TRANSCRIPTS } from "../../src/schema/messages.schema";
 import { authedHeaders, sessionCookieHeader } from "../helpers/session";
 import { type HistoryCandidate } from "../../src/data/messages.data";
-import type { ReplyStreamEvents } from "@parley/shared/contract";
+import type { ReplyStreamEvents } from "@parley/contract";
 
 const conversationId = "550e8400-e29b-41d4-a716-446655440000";
 const messageId = "650e8400-e29b-41d4-a716-446655440111";

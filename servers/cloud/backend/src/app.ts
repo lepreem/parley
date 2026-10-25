@@ -7,7 +7,7 @@ import { compress } from "hono/compress";
 import { cors } from "hono/cors";
 import { csrf } from "hono/csrf";
 import { HTTPException } from "hono/http-exception";
-import { logger } from "@parley/shared/logger";
+import { logger } from "@parley/server-kit/runtime/logger";
 import { getEnv } from "./env";
 import { jobsRouter } from "./routes/jobs.router";
 import { uploadRouter } from "./routes/upload.router";

@@ -10,7 +10,7 @@ import { authed } from "../middleware/auth.middleware";
 
 import { COOKIE_KEYS } from "../cookies/session";
 import { data } from "../data";
-import { logger } from "@parley/shared/logger";
+import { logger } from "@parley/server-kit/runtime/logger";
 
 const log = logger.child({ controller: "auth" });
 

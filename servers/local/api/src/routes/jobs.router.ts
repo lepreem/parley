@@ -4,9 +4,9 @@ import {
   validateReqParams,
   validateReqQuery,
 } from "../middleware/validate.middleware";
-import { CTX_KEYS } from "../../../shared/keys";
+import { CTX_KEYS } from "../../../core/keys";
 import { jobReqParamSchema, jobsListQuerySchema } from "../schema/jobs.schema";
-import { httpCache } from "@parley/shared/cache.middleware";
+import { httpCache } from "@parley/server-kit/http/cache.middleware";
 
 export const jobsRouter = new Hono();
 

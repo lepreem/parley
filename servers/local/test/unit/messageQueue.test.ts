@@ -5,7 +5,7 @@ import {
   mq,
   QUEUES,
   resetQueues,
-} from "../../shared/message-queue/messageQueue";
+} from "../../core/message-queue/messageQueue";
 
 const first = {
   audioUploadId: "11111111-1111-4111-8111-111111111111",

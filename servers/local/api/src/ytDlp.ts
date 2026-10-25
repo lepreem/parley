@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { getApiEnv } from "../../shared/env";
+import { getApiEnv } from "../../core/env";
 
 /** yt-dlp exited unsuccessfully; the message is the last error it printed. */
 export class YtDlpError extends Error {

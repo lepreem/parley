@@ -1,13 +1,13 @@
 import { z } from "zod";
-import type { QueueYoutubeBody } from "@parley/shared/contract";
-import { takesBody } from "@parley/shared/takesBody";
-import { isYoutubeUrl } from "@parley/shared/youtube";
-import { CTX_KEYS, FORM_KEYS } from "../../../shared/keys";
+import type { QueueYoutubeBody } from "@parley/contract";
+import { takesBody } from "@parley/server-kit/http/takesBody";
+import { isYoutubeUrl } from "@parley/contract/youtube";
+import { CTX_KEYS, FORM_KEYS } from "../../../core/keys";
 import {
   DEFAULT_TRANSCRIBE_MODEL,
   isValidTranscribeModel,
-} from "../../../shared/ai/ai_transcribe_client";
-import { MAX_AUDIO_BYTES } from "../../../shared/files";
+} from "../../../core/ai/ai_transcribe_client";
+import { MAX_AUDIO_BYTES } from "../../../core/files";
 
 /** Treat a blank ("" or null) optional field as unset. */
 const blankToUndefined = (v: unknown) =>

@@ -1,17 +1,17 @@
 import {
   DEFAULT_TRANSCRIBE_MODEL,
   transcribeAI,
-} from "../../shared/ai/ai_transcribe_client";
-import { files } from "../../shared/files";
-import { data } from "../../shared/data";
-import { logger } from "@parley/shared/logger";
+} from "../../core/ai/ai_transcribe_client";
+import { files } from "../../core/files";
+import { data } from "../../core/data";
+import { logger } from "@parley/server-kit/runtime/logger";
 import {
   DeadLetterError,
   mq,
   type DeliveryMetadata,
-} from "../../shared/message-queue/messageQueue";
-import type { TranscriptSegment } from "@parley/shared/transcript";
-import type { UploadId } from "@parley/shared/types";
+} from "../../core/message-queue/messageQueue";
+import type { TranscriptSegment } from "@parley/server-kit/transcription/transcript";
+import type { UploadId } from "@parley/server-kit/ids";
 
 const log = logger.child({ component: "transcribe" });
 

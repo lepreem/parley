@@ -1,6 +1,6 @@
 import { tmpdir } from "node:os";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { CLAIM_LEASE_MS } from "../../shared/data/conversations.data";
+import { CLAIM_LEASE_MS } from "../../core/data/conversations.data";
 import { fakeProcess, spawned, valueOf } from "../helpers/fakeProcess";
 
 const { mockSpawn } = vi.hoisted(() => ({ mockSpawn: vi.fn() }));
@@ -15,7 +15,7 @@ import {
   generateTitle,
   listChatModels,
   pingChatAI,
-} from "../../shared/ai/ai_chat_client";
+} from "../../core/ai/ai_chat_client";
 
 type Line = Record<string, unknown>;
 

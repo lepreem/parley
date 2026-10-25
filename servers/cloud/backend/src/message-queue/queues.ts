@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { transcriptSegmentSchema } from "@parley/shared/transcript";
-import type { UploadId } from "@parley/shared/types";
+import { transcriptSegmentSchema } from "@parley/server-kit/transcription/transcript";
+import type { UploadId } from "@parley/server-kit/ids";
 
 /**
  * Each queue is named for what its consumer does with a message, with `YT_`

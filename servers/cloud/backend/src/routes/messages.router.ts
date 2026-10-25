@@ -5,7 +5,7 @@ import {
   conversationRateLimiter,
 } from "../middleware/rateLimit.middleware";
 import { requireAuth, type AuthEnv } from "../middleware/auth.middleware";
-import { httpCache } from "@parley/shared/cache.middleware";
+import { httpCache } from "@parley/server-kit/http/cache.middleware";
 
 /**
  * Mounted under /conversations/:conversationId/messages, ahead of the parent's

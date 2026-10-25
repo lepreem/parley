@@ -3,9 +3,9 @@ import type {
   ChatModel,
   ModelsResponse,
   TranscribeModel,
-} from "@parley/shared/contract";
-import { listChatModels } from "../../../shared/ai/ai_chat_client";
-import { listTranscribeModels } from "../../../shared/ai/ai_transcribe_client";
+} from "@parley/contract";
+import { listChatModels } from "../../../core/ai/ai_chat_client";
+import { listTranscribeModels } from "../../../core/ai/ai_transcribe_client";
 
 export async function handleGetModels(c: Context) {
   return c.json({

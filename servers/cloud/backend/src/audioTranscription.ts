@@ -1,6 +1,6 @@
 import { data } from "./data";
 import { mq } from "./message-queue/messageQueue";
-import type { UploadId } from "@parley/shared/types";
+import type { UploadId } from "@parley/server-kit/ids";
 import { uploads } from "./uploads";
 
 /**

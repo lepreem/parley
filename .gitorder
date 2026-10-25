@@ -13,7 +13,8 @@ Dockerfile
 doppler.yaml
 tsconfig*.json
 requirements*.txt
-packages/shared/*
+packages/contract/*
+packages/server-kit/*
 
 # Backend foundations before API consumers
 servers/cloud/backend/src/env.ts

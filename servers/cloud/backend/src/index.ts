@@ -4,7 +4,7 @@ import { events } from "./events";
 import { mq } from "./message-queue/messageQueue";
 import { data } from "./data";
 import { sweeper } from "./sweeper";
-import { onShutdown } from "@parley/shared/shutdown";
+import { onShutdown } from "@parley/server-kit/runtime/shutdown";
 import {
   getTranscriptionConcurrency,
   handleTranscribeJob,
