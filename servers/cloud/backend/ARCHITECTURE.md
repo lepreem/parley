@@ -158,7 +158,9 @@ The database holds this: triggers (`drizzle/0004_immutable_messages.sql`)
 refuse any UPDATE to `chat_messages`, `chat_message_attachments` and
 `transcript_contents`, so a feature that tried to rewrite either in place, and
 would have let this cache serve the old text, fails instead. Deletes, cascades
-included, are unaffected.
+included, are unaffected. A table with a foreign key to `chat_messages`, however
+indirect, is part of a message and needs the trigger too;
+`test/unit/immutableTables.test.ts` fails, naming the table, until it has one.
 
 ### Schema changes
 
