@@ -142,7 +142,7 @@ vi.mock("../../core/ai/ai_chat_client", async (importActual) => {
 });
 
 import { createApp } from "../../api/app";
-import { events } from "../../api/src/events";
+import { eventHub } from "../../api/src/sse/hub";
 import { MAX_CONTEXT_CHARS } from "../../api/src/controllers/messages.controller";
 import { MAX_TRANSCRIPTS } from "../../api/src/schema/messages.schema";
 import { originHeaders } from "../helpers/headers";
@@ -1794,7 +1794,7 @@ describe("stopping a reply", () => {
 
   it("shows a reloaded page the turn being answered, and stops showing it once saved", async () => {
     mockFindConversationMessages.mockResolvedValue([]);
-    const sendEvent = vi.spyOn(events, "send");
+    const sendEvent = vi.spyOn(eventHub, "send");
     let whileWriting: unknown;
     modelThatWaits(["Hello "], async () => {
       whileWriting = await (await request("")).json();

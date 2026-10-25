@@ -1,10 +1,10 @@
 import { useContext, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { EventsContext } from "./context";
-import { queryKeys } from "../../lib/queryClient";
-import { useToast } from "../toast/useToast";
-import type { Job } from "../../api/jobs";
-import { useServer } from "../server/useServer";
+import { queryKeys } from "../lib/queryClient";
+import { useToast } from "../hooks/toast/useToast";
+import type { Job } from "../api/jobs";
+import { useServer } from "../hooks/server/useServer";
 
 /**
  * The fast path for transcript progress: a job update refreshes that job, which

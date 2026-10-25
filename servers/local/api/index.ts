@@ -1,7 +1,7 @@
 const env = getApiEnv();
 
 import { getApiEnv } from "../core/env";
-import { EVERYONE, events } from "./src/events";
+import { EVERYONE, eventHub } from "./src/sse/hub";
 
 import { mq } from "../core/message-queue/messageQueue";
 import { resumeUnfinishedJobs } from "../core/audioTranscription";
@@ -42,7 +42,7 @@ const server = serve({ fetch: app.fetch, port, hostname }, () => {
 mq.consume(
   mq.queues.TRANSCRIBE_DONE,
   ({ audioUploadId }) => {
-    events.send(EVERYONE, "jobUpdated", { audioUploadId });
+    eventHub.send(EVERYONE, "jobUpdated", { audioUploadId });
   },
   { attempts: 1 },
 );
@@ -57,7 +57,7 @@ mq.consume(
       audioUploadId,
       error ?? "Failed to fetch YouTube audio",
     );
-    events.send(EVERYONE, "jobUpdated", { audioUploadId });
+    eventHub.send(EVERYONE, "jobUpdated", { audioUploadId });
   },
   { attempts: 2 },
 );
@@ -93,7 +93,7 @@ onShutdown(
   async () => {
     await mq.stopConsuming();
     // An open event stream would hold the server open until it ended.
-    await events.close();
+    await eventHub.close();
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await closeDb();
   },

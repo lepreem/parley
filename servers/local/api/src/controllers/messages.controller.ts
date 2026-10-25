@@ -31,8 +31,8 @@ import type { ChatImage, ChatTurn } from "../../../core/ai/ai_chat_client";
 import { logger, messageOf } from "@parley/server-kit/runtime/logger";
 import { files } from "../../../core/files";
 import type { MessageAttachmentInput } from "../schema/messages.schema";
-import { EVERYONE, events as serverEvents } from "../events";
-import { replies } from "../replies";
+import { EVERYONE, eventHub } from "../sse/hub";
+import { replies } from "../chat/replies";
 
 const log = logger.child({ controller: "messages" });
 
@@ -477,7 +477,7 @@ function streamAndPersistMessageTurn(
 
   // The HTTP response can be ready before the task that owns the claims finishes.
   void (async () => {
-    const events = new SSEEventQueue<ReplyStreamEvents>();
+    const replyEvents = new SSEEventQueue<ReplyStreamEvents>();
     let streamResponse: Response | undefined;
     let reply: TrackedReply | undefined;
 
@@ -488,7 +488,7 @@ function streamAndPersistMessageTurn(
       const tracked = reply;
 
       streamResponse = streamSSE(c, (stream) =>
-        events.pipeTo(stream, c.req.raw.signal),
+        replyEvents.pipeTo(stream, c.req.raw.signal),
       );
       responseReady.resolve(streamResponse);
 
@@ -502,7 +502,7 @@ function streamAndPersistMessageTurn(
         assistantContent = await chatAI(messageInput.chosenModelId, turns, {
           onDelta: async (delta) => {
             tracked.append(delta);
-            events.push("delta", { delta });
+            replyEvents.push("delta", { delta });
           },
           signal: tracked.signal,
         });
@@ -512,7 +512,7 @@ function streamAndPersistMessageTurn(
         if (!tracked.stopped) throw error;
         if (tracked.text.length === 0) {
           await releaseClaims(messageInput, claimPromises, claimToken);
-          events.push("cancelled", {});
+          replyEvents.push("cancelled", {});
           return streamResponse;
         }
         assistantContent = tracked.text;
@@ -535,7 +535,7 @@ function streamAndPersistMessageTurn(
         claimToken,
       });
 
-      events.push("done", { lastMessageId, stopped });
+      replyEvents.push("done", { lastMessageId, stopped });
       return streamResponse;
     } catch (error) {
       // Released before answering, so a client that retries at once doesn't
@@ -549,15 +549,15 @@ function streamAndPersistMessageTurn(
         throw error;
       }
 
-      events.push("error", { message: "Model response failed" });
+      replyEvents.push("error", { message: "Model response failed" });
       return streamResponse;
     } finally {
-      events.end();
+      replyEvents.end();
       if (reply) {
         reply.end();
         // For a page that was reloaded mid-reply: its stream is gone, and
         // this is how it hears the turn is saved.
-        serverEvents.send(EVERYONE, "replyFinished", {
+        eventHub.send(EVERYONE, "replyFinished", {
           conversationId: messageInput.conversationId,
         });
       }

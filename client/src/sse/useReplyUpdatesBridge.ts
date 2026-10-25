@@ -1,8 +1,8 @@
 import { useContext, useEffect } from "react";
 import { useQueryClient, type Query } from "@tanstack/react-query";
-import type { MessagesResponse } from "../../api/messages";
-import { queryKeys } from "../../lib/queryClient";
-import { useServer } from "../server/useServer";
+import type { MessagesResponse } from "../api/messages";
+import { queryKeys } from "../lib/queryClient";
+import { useServer } from "../hooks/server/useServer";
 import { EventsContext } from "./context";
 
 /** A chat shown with a reply this page isn't streaming, so it can't see it end. */

@@ -7,10 +7,10 @@ import {
   type ReactNode,
 } from "react";
 import type { ServerEvents } from "@parley/contract";
-import { readServerSentEvents } from "../../sse/reader";
-import { apiFetch } from "../../api/http";
-import { useServer } from "../server/useServer";
-import { useServerReady } from "../server/useServerReady";
+import { readServerSentEvents } from "./reader";
+import { apiFetch } from "../api/http";
+import { useServer } from "../hooks/server/useServer";
+import { useServerReady } from "../hooks/server/useServerReady";
 import { EventsContext, type EventListener } from "./context";
 
 /** How long to wait before opening the stream again, by failed attempt. */

@@ -122,6 +122,29 @@ only a queued job; a broker redelivery can reclaim a processing job. Every claim
 gets a new token, which prevents an older delivery from writing a stale result if
 it later finishes.
 
+## Server-sent events
+
+There are two kinds of stream, and both are read with fetch, not EventSource
+(EventSource can't POST):
+
+- **A chat reply** is the response to the POST or PATCH that asks for it:
+  `delta` per model chunk, then `done`, `cancelled` or `error`, and then it
+  closes. The turn runs apart from the connection, so a client that leaves
+  mid-reply still gets the turn saved.
+- **`GET /events`** stays open for as long as the page does. It carries
+  `jobUpdated` and `replyFinished`, so a page hears about work it didn't start,
+  or a reply it stopped streaming when it reloaded.
+
+| What                                       | Where                                                     |
+| ------------------------------------------ | --------------------------------------------------------- |
+| A chat reply's stream                      | `src/chat/replyStream.ts`                                 |
+| Replies being written, for stop and reload | `src/chat/replies.ts`                                     |
+| The queue between a reply and its stream   | `@parley/server-kit/sse/replyQueue`                       |
+| `GET /events`, one stream per user         | `src/sse/hub.ts`, `src/sse/events.controller.ts`          |
+| The hub behind it                          | `@parley/server-kit/sse/hub`                              |
+| Event names and payloads                   | `ReplyStreamEvents`, `ServerEvents` in `@parley/contract` |
+| The client side                            | `client/src/sse/`                                         |
+
 ## Deployment & scaling
 
 Production is one VPS running `servers/cloud/compose.yaml` with
@@ -135,7 +158,7 @@ randomize it.
 
 Running more than one instance needs more than a replica count: rate limits
 and event streams are per process (see the root TODO.md), and so are the
-replies being written (`src/replies.ts`), so a stop request or a reloaded
+replies being written (`src/chat/replies.ts`), so a stop request or a reloaded
 page has to reach the instance writing the reply. The instances
 have to split the transcription concurrency between them (see
 [Message queues](#message-queues)), and each holds its own database

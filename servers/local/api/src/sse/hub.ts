@@ -4,4 +4,4 @@ import { createEventHub } from "@parley/server-kit/sse/hub";
 export const EVERYONE = "everyone";
 
 /** The GET /events streams this server's clients hold open. */
-export const events = createEventHub<typeof EVERYONE>();
+export const eventHub = createEventHub<typeof EVERYONE>();

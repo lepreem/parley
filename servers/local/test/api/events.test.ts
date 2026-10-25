@@ -5,7 +5,7 @@ vi.mock("../../core/db", async () =>
 );
 
 import { createApp } from "../../api/app";
-import { EVERYONE, events } from "../../api/src/events";
+import { EVERYONE, eventHub } from "../../api/src/sse/hub";
 
 describe("GET /events", () => {
   it("streams job updates to a page the app trusts", async () => {
@@ -25,11 +25,11 @@ describe("GET /events", () => {
     const next = async () => decoder.decode((await reader.read()).value);
     expect(await next()).toBe(": heartbeat\n\n");
 
-    events.send(EVERYONE, "jobUpdated", { audioUploadId: "a1" });
+    eventHub.send(EVERYONE, "jobUpdated", { audioUploadId: "a1" });
 
     expect(await next()).toBe(
       'event: jobUpdated\ndata: {"audioUploadId":"a1"}\n\n',
     );
-    await events.close();
+    await eventHub.close();
   });
 });

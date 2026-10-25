@@ -162,7 +162,7 @@ vi.mock("../../src/preparationMetrics", async (importActual) => {
 });
 
 import { createApp } from "../../src/app";
-import { events } from "../../src/events";
+import { eventHub } from "../../src/sse/hub";
 import { resetHistoryTextCache } from "../../src/chat/historyText.cache";
 import { resetRateLimits } from "../../src/middleware/rateLimit.middleware";
 import { measurePreparation } from "../../src/preparationMetrics";
@@ -2058,7 +2058,7 @@ describe("stopping a reply", () => {
 
   it("shows a reloaded page the turn being answered, and stops showing it once saved", async () => {
     mockFindConversationMessages.mockResolvedValue([]);
-    const sendEvent = vi.spyOn(events, "send");
+    const sendEvent = vi.spyOn(eventHub, "send");
     let whileWriting: unknown;
     modelThatWaits(["Hello "], async () => {
       whileWriting = await (await request("")).json();

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useQueries } from "@tanstack/react-query";
 import { fetchJob, type Job } from "../api/jobs";
 import { useServer } from "../hooks/server/useServer";
-import { useEventsConnected } from "../hooks/events/useEventsConnected";
+import { useEventsConnected } from "../sse/useEventsConnected";
 import { queryKeys } from "../lib/queryClient";
 import type { StagedSource } from "./types";
 
