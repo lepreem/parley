@@ -122,7 +122,9 @@ transcription requires a new upload and job, so old conversation history cannot
 change underneath a message. The database holds this for messages too: triggers
 (`drizzle/0003_immutable_messages.sql`) refuse any UPDATE to `chat_messages`,
 `chat_message_attachments` and `transcript_contents`, so an edit deletes rows
-and inserts new ones.
+and inserts new ones. A table with a foreign key to `chat_messages`, however
+indirect, needs the trigger too; `test/unit/immutableTables.test.ts` fails,
+naming the table, until it has one.
 
 **Transcripts are not summarized.** The transcript is stored in SQLite under
 the audio job's `audioUploadId`. The user feeds one or more completed jobs to a
