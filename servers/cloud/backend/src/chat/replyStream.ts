@@ -43,19 +43,21 @@ export function streamTurn(
   claim: TurnClaim,
   prepare: () => Promise<PreparedTurn>,
 ) {
+  // TODO: move responseReady, streamResponse
   const responseReady = Promise.withResolvers<Response>();
 
   // The HTTP response can be ready before the task that owns the claim finishes.
   void (async () => {
     const replyEvents = new SSEEventQueue<ReplyStreamEvents>();
     let streamResponse: Response | undefined;
-    let reply: TrackedReply | undefined;
+    let reply: TrackedReply | undefined; // TODO: make it somehow clearer in the name that this is an in memory thing?
 
     try {
       const prepared = await prepare();
       reply = replies.start(
+        // adds entry for this user, for recovering a stream if the user refreshes in the mid of it, and also allows the user to stop the stream
         replyKey(request.userId, request.conversationId),
-        request.content,
+        request.content, // the user's message isnt written in the db yet, so we also need to store it to recover it for the mid-refreshs
       );
 
       streamResponse = streamSSE(c, (stream) =>
@@ -63,10 +65,12 @@ export function streamTurn(
       );
       responseReady.resolve(streamResponse);
 
+      // TODO: make this one stats object?
       const modelStartedAt = performance.now();
       const modelStartedAfterMs = msSince(metrics.startedAt);
       let firstTokenAfterMs: number | null = null;
       let modelFinishedAfterMs = modelStartedAfterMs;
+
       const answer = await answerTurn(
         request,
         claim,
