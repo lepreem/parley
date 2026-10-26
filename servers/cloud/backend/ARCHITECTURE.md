@@ -138,8 +138,8 @@ There are two kinds of stream, and both are read with fetch, not EventSource
 | What                                       | Where                                                     |
 | ------------------------------------------ | --------------------------------------------------------- |
 | A chat reply's stream                      | `src/chat/replyStream.ts`                                 |
-| Replies being written, for stop and reload | `src/chat/replies.ts`                                     |
-| The queue between a reply and its stream   | `@parley/server-kit/sse/replyQueue`                       |
+| Replies being written, for stop and reload | `src/chat/repliesInProgress.ts`                           |
+| The queue between a reply and its stream   | `@parley/server-kit/sse/eventQueue`                       |
 | `GET /events`, one stream per user         | `src/sse/hub.ts`, `src/sse/events.controller.ts`          |
 | The hub behind it                          | `@parley/server-kit/sse/hub`                              |
 | Event names and payloads                   | `ReplyStreamEvents`, `ServerEvents` in `@parley/contract` |
@@ -158,7 +158,7 @@ randomize it.
 
 Running more than one instance needs more than a replica count: rate limits
 and event streams are per process (see the root TODO.md), and so are the
-replies being written (`src/chat/replies.ts`), so a stop request or a reloaded
+replies being written (`src/chat/repliesInProgress.ts`), so a stop request or a reloaded
 page has to reach the instance writing the reply. The instances
 have to split the transcription concurrency between them (see
 [Message queues](#message-queues)), and each holds its own database

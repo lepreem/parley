@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import type { TurnStats } from "@parley/contract";
-import type { TrackedReply } from "@parley/server-kit/chat/replies";
+import type { ReplyInProgressEntry } from "@parley/server-kit/chat/repliesInProgress";
 import { logger, messageOf } from "@parley/server-kit/runtime/logger";
 import { data, type HistoryCandidate, type HistoryTranscript } from "../data";
 import { buildUserTurn, chat, type ChatTurn } from "../ai";
@@ -333,7 +333,7 @@ export async function answerTurn(
   request: TurnRequest,
   claim: TurnClaim,
   prepared: PreparedTurn,
-  reply: TrackedReply,
+  entry: ReplyInProgressEntry,
   onDelta: (delta: string) => void,
   onModelFinished: () => void,
 ) {
@@ -350,18 +350,18 @@ export async function answerTurn(
       prepared.prompt,
       {
         onDelta: async (delta) => {
-          reply.append(delta);
+          entry.append(delta);
           onDelta(delta);
         },
         maxOutputTokens: MAX_RESPONSE_TOKENS,
         sessionId: request.conversationId,
-        signal: reply.signal,
+        signal: entry.signal,
       },
     );
   } catch (error) {
-    if (!reply.stopped) throw error;
-    if (reply.text.length === 0) return null;
-    assistantContent = reply.text;
+    if (!entry.stopped) throw error;
+    if (entry.text.length === 0) return null;
+    assistantContent = entry.text;
     stopped = true;
   }
   onModelFinished();

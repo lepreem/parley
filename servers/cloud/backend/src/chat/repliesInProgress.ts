@@ -1,7 +1,7 @@
-import { createReplyRegistry } from "@parley/server-kit/chat/replies";
+import { createRepliesInProgress } from "@parley/server-kit/chat/repliesInProgress";
 
 /** The replies this instance is writing, by owner and conversation. */
-export const replies = createReplyRegistry();
+export const repliesInProgress = createRepliesInProgress();
 
 /** A user only ever reaches their own conversations' replies. */
 export function replyKey(userId: string, conversationId: string) {

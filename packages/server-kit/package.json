@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Code both servers run and the client never does, so neither server carries its own copy.",
   "exports": {
-    "./chat/replies": "./src/chat/replies.ts",
+    "./chat/repliesInProgress": "./src/chat/repliesInProgress.ts",
     "./http/cache.middleware": "./src/http/cache.middleware.ts",
     "./http/cursor": "./src/http/cursor.ts",
     "./http/takesBody": "./src/http/takesBody.ts",
@@ -16,7 +16,7 @@
     "./runtime/try-catch": "./src/runtime/try-catch.ts",
     "./runtime/withTimeout": "./src/runtime/withTimeout.ts",
     "./sse/hub": "./src/sse/hub.ts",
-    "./sse/replyQueue": "./src/sse/replyQueue.ts",
+    "./sse/eventQueue": "./src/sse/eventQueue.ts",
     "./transcription/transcript": "./src/transcription/transcript.ts"
   },
   "scripts": {

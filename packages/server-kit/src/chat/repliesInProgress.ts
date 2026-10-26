@@ -16,23 +16,23 @@ export class ReplyStopped extends Error {
  * Only this process's replies, like the event hub: a server running as several
  * instances would need the stop request to reach the one writing the reply.
  */
-export function createReplyRegistry() {
-  const replies = new Map<
+export function createRepliesInProgress() {
+  const entries = new Map<
     string,
     { reply: ReplyInProgress; controller: AbortController }
   >();
 
   return {
     /**
-     * Starts tracking the reply to `content`. Call `end` once it's saved or
-     * failed; a later reply under the same key replaces this one.
+     * Adds an entry for the reply to `content`. Call `remove` on it once the
+     * reply is saved or failed; a later entry under the same key replaces this one.
      */
-    start(key: string, content: string) {
+    add(key: string, content: string) {
       const entry = {
         reply: { content, assistantContent: "" },
         controller: new AbortController(),
       };
-      replies.set(key, entry);
+      entries.set(key, entry);
 
       return {
         /** Aborts when someone stops the reply. */
@@ -47,21 +47,21 @@ export function createReplyRegistry() {
         append(delta: string) {
           entry.reply.assistantContent += delta;
         },
-        end() {
-          if (replies.get(key) === entry) replies.delete(key);
+        remove() {
+          if (entries.get(key) === entry) entries.delete(key);
         },
       };
     },
 
     /** The reply being written under `key`, as it stands. */
     find(key: string): ReplyInProgress | null {
-      const entry = replies.get(key);
+      const entry = entries.get(key);
       return entry ? { ...entry.reply } : null;
     },
 
     /** Stops the reply under `key`. False when there's none to stop. */
     stop(key: string) {
-      const entry = replies.get(key);
+      const entry = entries.get(key);
       if (!entry) return false;
       entry.controller.abort(new ReplyStopped());
       return true;
@@ -69,5 +69,5 @@ export function createReplyRegistry() {
   };
 }
 
-type ReplyRegistry = ReturnType<typeof createReplyRegistry>;
-export type TrackedReply = ReturnType<ReplyRegistry["start"]>;
+type RepliesInProgress = ReturnType<typeof createRepliesInProgress>;
+export type ReplyInProgressEntry = ReturnType<RepliesInProgress["add"]>;

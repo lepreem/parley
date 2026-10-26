@@ -1,16 +1,16 @@
 import type { Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import type { ReplyStreamEvents } from "@parley/contract";
-import type { TrackedReply } from "@parley/server-kit/chat/replies";
+import type { ReplyInProgressEntry } from "@parley/server-kit/chat/repliesInProgress";
 import type { logger } from "@parley/server-kit/runtime/logger";
-import { SSEEventQueue } from "@parley/server-kit/sse/replyQueue";
+import { SSEEventQueue } from "@parley/server-kit/sse/eventQueue";
 import {
   msSince,
   stepsInOrder,
   type RecordedStep,
 } from "../preparationMetrics";
 import { eventHub } from "../sse/hub";
-import { replies, replyKey } from "./replies";
+import { repliesInProgress, replyKey } from "./repliesInProgress";
 import {
   answerTurn,
   TurnRejected,
@@ -48,20 +48,23 @@ export function streamTurn(
 
   // The HTTP response can be ready before the task that owns the claim finishes.
   void (async () => {
-    const replyEvents = new SSEEventQueue<ReplyStreamEvents>();
+    const sseEvents = new SSEEventQueue<ReplyStreamEvents>();
     let streamResponse: Response | undefined;
-    let reply: TrackedReply | undefined; // TODO: make it somehow clearer in the name that this is an in memory thing?
+    let entryToRemove: ReplyInProgressEntry | undefined;
 
     try {
       const prepared = await prepare();
-      reply = replies.start(
-        // adds entry for this user, for recovering a stream if the user refreshes in the mid of it, and also allows the user to stop the stream
+      // An entry for this reply while it's being written, so a page reloaded
+      // midway can show it and the stop button can reach it. It holds the
+      // user's message too, which isn't saved until the turn is.
+      const entry = repliesInProgress.add(
         replyKey(request.userId, request.conversationId),
-        request.content, // the user's message isnt written in the db yet, so we also need to store it to recover it for the mid-refreshs
+        request.content,
       );
+      entryToRemove = entry;
 
       streamResponse = streamSSE(c, (stream) =>
-        replyEvents.pipeTo(stream, c.req.raw.signal),
+        sseEvents.pipeTo(stream, c.req.raw.signal),
       );
       responseReady.resolve(streamResponse);
 
@@ -75,7 +78,7 @@ export function streamTurn(
         request,
         claim,
         prepared,
-        reply,
+        entry,
         (delta) => {
           if (delta.length > 0 && firstTokenAfterMs === null) {
             firstTokenAfterMs = msSince(metrics.startedAt);
@@ -85,7 +88,7 @@ export function streamTurn(
               firstTokenAfterMs,
             });
           }
-          replyEvents.push("delta", { delta });
+          sseEvents.push("delta", { delta });
         },
         () => {
           modelFinishedAfterMs = msSince(metrics.startedAt);
@@ -93,7 +96,7 @@ export function streamTurn(
       );
 
       if (answer) {
-        replyEvents.push("done", {
+        sseEvents.push("done", {
           ...answer,
           stats: {
             steps: stepsInOrder(metrics.steps),
@@ -106,7 +109,7 @@ export function streamTurn(
         });
       } else {
         await claim.release();
-        replyEvents.push("cancelled", {});
+        sseEvents.push("cancelled", {});
       }
       return streamResponse;
     } catch (error) {
@@ -121,12 +124,12 @@ export function streamTurn(
         throw error;
       }
 
-      replyEvents.push("error", { message: "Model response failed" });
+      sseEvents.push("error", { message: "Model response failed" });
       return streamResponse;
     } finally {
-      replyEvents.end();
-      if (reply) {
-        reply.end();
+      sseEvents.end();
+      if (entryToRemove) {
+        entryToRemove.remove();
         // For a page that was reloaded mid-reply: its stream is gone, and
         // this is how it hears the turn is saved.
         eventHub.send(request.userId, "replyFinished", {
