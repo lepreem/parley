@@ -10,7 +10,7 @@ import {
   type RecordedStep,
 } from "../preparationMetrics";
 import { eventHub } from "../sse/hub";
-import { repliesInProgress, replyKey } from "../memory/repliesInProgress";
+import { memory, replyKey } from "../memory";
 import {
   answerTurn,
   TurnRejected,
@@ -57,7 +57,7 @@ export function streamTurn(
       // An entry for this reply while it's being written, so a page reloaded
       // midway can show it and the stop button can reach it. It holds the
       // user's message too, which isn't saved until the turn is.
-      const entry = repliesInProgress.add(
+      const entry = memory.repliesInProgress.add(
         replyKey(request.userId, request.conversationId),
         request.content,
       );

@@ -195,4 +195,4 @@ export function resetHistoryTextCache() {
   totalBytes = 0;
 }
 
-export const historyTextCache = { known, rememberHistory, rememberTurn };
+export const historyText = { known, rememberHistory, rememberTurn };

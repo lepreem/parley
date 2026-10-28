@@ -2,7 +2,7 @@ import { DeepgramClient } from "@deepgram/sdk";
 import type { TranscribeModel } from "@parley/contract";
 import type { TranscriptSegment } from "@parley/server-kit/transcription/transcript";
 import { getEnv } from "../env";
-import { CACHE_KEYS, cache } from "../memory/modelLists";
+import { CACHE_KEYS, memory } from "../memory";
 
 const deepgram = new DeepgramClient({
   apiKey: getEnv().DEEPGRAM_API_KEY,
@@ -105,7 +105,7 @@ async function fetchTranscribeModelData(): Promise<TranscribeModelData> {
 export function getTranscribeModelData(): Promise<TranscribeModelData> {
   // Served stale while it refreshes, like the chat catalog, so no request
   // waits on Deepgram once a process has loaded it.
-  return cache.getOrSet(
+  return memory.modelLists.getOrSet(
     CACHE_KEYS.deepgramTranscribeModels,
     fetchTranscribeModelData,
     { serveStale: true },

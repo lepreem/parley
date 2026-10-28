@@ -19,7 +19,7 @@ vi.mock("@deepgram/sdk", () => ({
 
 vi.mock("../../src/memory/modelLists", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../src/memory/modelLists")>()),
-  cache: { getOrSet: mockGetOrSetCache },
+  modelLists: { getOrSet: mockGetOrSetCache },
 }));
 
 /** Caching itself is covered in modelLists.test.ts; here the fetch always runs. */

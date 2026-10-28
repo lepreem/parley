@@ -157,9 +157,10 @@ Production is one VPS running `servers/cloud/compose.yaml` with
 randomize it.
 
 Running more than one instance needs more than a replica count. Everything
-in `src/memory/` lives in the process that wrote it: the model lists, the
-history text below, and the replies being written, so a stop request or a
-reloaded page has to reach the instance writing the reply. Rate limits and
+in `src/memory/` (`memory.<what>` in the code) lives in the process that
+wrote it: the model lists, the history text below, and the replies being
+written, so a stop request or a reloaded page has to reach the instance
+writing the reply. Rate limits and
 event streams are per process too (see the root TODO.md). The instances
 have to split the transcription concurrency between them (see
 [Message queues](#message-queues)), and each holds its own database

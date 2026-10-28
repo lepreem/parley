@@ -32,7 +32,7 @@ import { logger, messageOf } from "@parley/server-kit/runtime/logger";
 import { files } from "../../../core/files";
 import type { MessageAttachmentInput } from "../schema/messages.schema";
 import { EVERYONE, eventHub } from "../sse/hub";
-import { repliesInProgress } from "../memory/repliesInProgress";
+import { memory } from "../memory";
 
 const log = logger.child({ controller: "messages" });
 
@@ -191,7 +191,7 @@ export async function handleListMessages(c: Context) {
   // Read before the rows: a reply that ends in between is then in both,
   // until the replyFinished it sends has the client read again, rather than
   // in neither, with nothing to say it's missing.
-  const replyInProgress = repliesInProgress.find(conversationId);
+  const replyInProgress = memory.repliesInProgress.find(conversationId);
 
   // The conversation and its rows are independent reads; the rows
   // are simply discarded on the 404 path.
@@ -487,7 +487,7 @@ function streamAndPersistMessageTurn(
       // An entry for this reply while it's being written, so a page reloaded
       // midway can show it and the stop button can reach it. It holds the
       // user's message too, which isn't saved until the turn is.
-      const entry = repliesInProgress.add(
+      const entry = memory.repliesInProgress.add(
         messageInput.conversationId,
         messageInput.content,
       );
@@ -641,7 +641,7 @@ export async function handlePatchMessage(c: Context) {
  * what a dropped connection looks like, and a reply outlives those.
  */
 export function handleStopReply(c: Context) {
-  return repliesInProgress.stop(c.get(CTX_KEYS.conversationId))
+  return memory.repliesInProgress.stop(c.get(CTX_KEYS.conversationId))
     ? c.body(null, 204)
     : c.json({ message: "No reply in progress" }, 404);
 }

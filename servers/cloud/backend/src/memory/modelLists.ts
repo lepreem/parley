@@ -78,6 +78,6 @@ export function resetCacheMemo() {
 }
 
 /** An in-process memo; resetCacheMemo stays out of it, being for tests. */
-export const cache = {
+export const modelLists = {
   getOrSet: getOrSetCache,
 };

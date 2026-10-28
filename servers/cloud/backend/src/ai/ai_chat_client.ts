@@ -1,7 +1,7 @@
 import { getEnv } from "../env";
 import { OpenRouter } from "@openrouter/sdk";
 
-import { CACHE_KEYS, cache } from "../memory/modelLists";
+import { CACHE_KEYS, memory } from "../memory";
 import type {
   ChatContentItems,
   ChatRequest,
@@ -204,9 +204,13 @@ async function fetchChatModels(): Promise<ChatModel[]> {
 // off the network. Serving it stale while it refreshes means no send waits on
 // the catalog once a process has loaded it.
 function listModels(): Promise<ChatModel[]> {
-  return cache.getOrSet(CACHE_KEYS.openRouterModels, fetchChatModels, {
-    serveStale: true,
-  });
+  return memory.modelLists.getOrSet(
+    CACHE_KEYS.openRouterModels,
+    fetchChatModels,
+    {
+      serveStale: true,
+    },
+  );
 }
 
 /**
