@@ -47,10 +47,11 @@ const MAX_CONTEXT_MESSAGES = 50;
 export const MAX_CONTEXT_CHARS = 100_000;
 
 /**
- * Images replayed from history, newest turn first. Attachments outlive the turn
+ * Images in one prompt, the new turn's included. Attachments outlive the turn
  * they arrived on — a follow-up question about an image the user sent three
  * turns ago has to still see it — but they don't consume the character budget,
- * so this is their own ceiling on what one turn costs.
+ * so this is their own ceiling on what one turn costs. The new turn's images
+ * come first; history gets what's left, newest turn first.
  */
 const MAX_CONTEXT_IMAGES = 8;
 const FALLBACK_CONVERSATION_TITLE_CHARS = 80;
@@ -353,7 +354,8 @@ async function prepareMessageTurn(
       transcriptSeparatorCharCount: TRANSCRIPT_SEPARATOR.length,
       maximumContextCharCount: MAX_CONTEXT_CHARS,
       maximumMessageCount: MAX_CONTEXT_MESSAGES - 1,
-      maximumImageCount: MAX_CONTEXT_IMAGES,
+      maximumImageCount:
+        MAX_CONTEXT_IMAGES - messageInput.imageUploadIds.length,
       ...(beforeMessageId === undefined ? {} : { beforeMessageId }),
     }),
   ]);

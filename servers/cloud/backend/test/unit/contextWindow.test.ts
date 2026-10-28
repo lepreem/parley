@@ -25,6 +25,7 @@ describe("admitHistory", () => {
         turn("oldest", 3 * tenth),
       ],
       2 * tenth,
+      0,
     );
 
     expect(admitted.map((t) => t.name)).toEqual(["newest", "middle"]);
@@ -34,19 +35,21 @@ describe("admitHistory", () => {
     const admitted = admitHistory(
       [turn("newest", tenth), turn("huge", 9 * tenth), turn("tiny", 1)],
       tenth,
+      0,
     );
 
     expect(admitted.map((t) => t.name)).toEqual(["newest"]);
   });
 
   it("keeps nothing when the new turn fills the budget", () => {
-    expect(admitHistory([turn("newest", 1)], MAX_CONTEXT_CHARS)).toEqual([]);
+    expect(admitHistory([turn("newest", 1)], MAX_CONTEXT_CHARS, 0)).toEqual([]);
   });
 
   it("caps replayed images newest first", () => {
     const admitted = admitHistory(
       [turn("newest", 1, 5), turn("middle", 1, 5), turn("oldest", 1, 2)],
       1,
+      0,
     );
 
     expect(admitted.map((t) => t.images.length)).toEqual([5, 3, 0]);
@@ -54,6 +57,19 @@ describe("admitHistory", () => {
       "middle-image-0",
       "middle-image-1",
       "middle-image-2",
+    ]);
+  });
+
+  it("counts the new turn's images against the cap", () => {
+    const admitted = admitHistory(
+      [turn("newest", 1, 5), turn("oldest", 1, 2)],
+      1,
+      6,
+    );
+
+    expect(admitted.map((t) => t.images)).toEqual([
+      ["newest-image-0", "newest-image-1"],
+      [],
     ]);
   });
 });
