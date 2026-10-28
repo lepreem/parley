@@ -4,13 +4,13 @@ import {
   validateReqParams,
   validateReqBody,
 } from "../middleware/validate.middleware";
-import { CTX_KEYS } from "../../../shared/keys";
+import { CTX_KEYS } from "../../../core/keys";
 import { conversationReqParamSchema } from "../schema/conversations.schema";
 import {
   messageReqParamSchema,
   messageCreateBodySchema,
 } from "../schema/messages.schema";
-import { httpCache } from "@parley/shared/cache.middleware";
+import { httpCache } from "@parley/server-kit/http/cache.middleware";
 
 export const messagesRouter = new Hono();
 

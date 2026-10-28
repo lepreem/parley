@@ -1,4 +1,4 @@
-import { getApiEnv } from "../../shared/env";
+import { getApiEnv } from "../../core/env";
 
 /** This machine's names, as a URL's hostname spells them. */
 const LOOPBACK_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);

@@ -1,6 +1,6 @@
 import type { Server } from "../../api/server";
 import { ServerContext } from "../../hooks/server/context";
-import { EventsProvider } from "../../hooks/events/EventsProvider";
+import { EventsProvider } from "../../sse/EventsProvider";
 import { AppShell } from "./AppShell";
 
 /**

@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../../shared/db", async () =>
+vi.mock("../../core/db", async () =>
   (await import("../helpers/inMemoryDb")).inMemoryDbModule(),
 );
 
 // Small limits, so the oversized bodies below are kilobytes, not megabytes.
-vi.mock("../../shared/files", async (importActual) => ({
-  ...(await importActual<typeof import("../../shared/files")>()),
+vi.mock("../../core/files", async (importActual) => ({
+  ...(await importActual<typeof import("../../core/files")>()),
   MAX_IMAGE_BYTES: 1024,
 }));
 
@@ -17,8 +17,8 @@ import {
   ChatMessages,
   Conversations,
   db,
-} from "../../shared/db";
-import { files, MAX_IMAGE_BYTES } from "../../shared/files";
+} from "../../core/db";
+import { files, MAX_IMAGE_BYTES } from "../../core/files";
 import { createApp } from "../../api/app";
 import { originHeaders } from "../helpers/headers";
 import { deleteAllRows } from "../helpers/inMemoryDb";

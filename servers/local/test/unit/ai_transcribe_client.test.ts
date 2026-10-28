@@ -12,8 +12,8 @@ import {
   isValidTranscribeModel,
   pingTranscribeAI,
   transcribeAI,
-} from "../../shared/ai/ai_transcribe_client";
-import { getBaseEnv } from "../../shared/env";
+} from "../../core/ai/ai_transcribe_client";
+import { getBaseEnv } from "../../core/env";
 
 /** A segment as whisper.py prints it. */
 const segment = (start: number, end: number, text: string) => ({

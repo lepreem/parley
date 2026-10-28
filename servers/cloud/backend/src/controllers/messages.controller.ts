@@ -1,16 +1,8 @@
 // TODO: stop referring to ONLY images as attachments. attachments means both in one var, seperated by "kind" attr.
 
-import type { Context } from "hono";
-import type {
-  ChatMessage,
-  MessagesResponse,
-  ReplyStreamEvents,
-} from "@parley/shared/contract";
+import type { ChatMessage, MessagesResponse } from "@parley/contract";
 import { randomUUID } from "node:crypto";
-import { streamSSE } from "hono/streaming";
-import { logger } from "@parley/shared/logger";
-import { SSEEventQueue } from "@parley/shared/sse";
-import type { TrackedReply } from "@parley/shared/replies";
+import { logger } from "@parley/server-kit/runtime/logger";
 import {
   data,
   type MessageRow,
@@ -19,14 +11,11 @@ import {
 } from "../data";
 import {
   measurePreparation,
-  msSince,
-  stepsInOrder,
   withPreparationMetrics,
-  type RecordedStep,
 } from "../preparationMetrics";
 import { uploads } from "../uploads";
-import { events as serverEvents } from "../events";
-import { replies, replyKey } from "../replies";
+import { memory, replyKey } from "../memory";
+import { streamTurn, type TurnMetrics } from "../chat/replyStream";
 import { authed } from "../middleware/auth.middleware";
 import { validate } from "../middleware/validate.middleware";
 import { conversationReqParamSchema } from "../schema/conversations.schema";
@@ -35,15 +24,12 @@ import {
   messageReqParamSchema,
 } from "../schema/messages.schema";
 import {
-  answerTurn,
   prepareTurn,
   rewindTo,
   turnRequestFrom,
-  TurnRejected,
-  type PreparedTurn,
   type TurnRequest,
 } from "../chat/turn";
-import { claimTurn, type TurnClaim } from "../chat/turnClaim";
+import { claimTurn } from "../chat/turnClaim";
 
 function toMessageJson(
   row: MessageRow,
@@ -82,7 +68,9 @@ export const handleListMessages = authed.createHandlers(
     // Read before the rows: a reply that ends in between is then in both,
     // until the replyFinished it sends has the client read again, rather than
     // in neither, with nothing to say it's missing.
-    const replyInProgress = replies.find(replyKey(userId, conversationId));
+    const replyInProgress = memory.repliesInProgress.find(
+      replyKey(userId, conversationId),
+    );
 
     // Ownership check and the rows themselves are independent reads; the rows
     // are simply discarded on the 404 path.
@@ -113,128 +101,6 @@ export const handleListMessages = authed.createHandlers(
     } satisfies MessagesResponse);
   },
 );
-
-/**
- * Answers a turn as server-sent events: `delta` ({ delta }) per model chunk,
- * then `done` ({ lastMessageId, stopped, stats }) once the turn is stored, `cancelled`
- * if it was stopped before any reply came, or `error` ({ message }) if the
- * model call fails. A turn rejected before the model is
- * asked gets a plain JSON error instead. The client reads the stream with
- * fetch + response.body.getReader() (EventSource can't POST).
- *
- * The run that produces the reply is decoupled from the response stream, so a
- * client that disconnects mid-stream still has its turn run to completion and
- * saved; GET .../messages is the source of truth.
- *
- * The turn owns its claim throughout: saving the turn releases it in the same
- * transaction, and anything that fails releases it here. `prepare` settles
- * everything the turn needs and throws if it can't run, so nothing it destroys
- * (an edit's rewind) is destroyed for a turn that was never going to happen.
- */
-function streamTurn(
-  c: Context,
-  request: TurnRequest,
-  metrics: TurnMetrics,
-  claim: TurnClaim,
-  prepare: () => Promise<PreparedTurn>,
-) {
-  const responseReady = Promise.withResolvers<Response>();
-
-  // The HTTP response can be ready before the task that owns the claim finishes.
-  void (async () => {
-    const events = new SSEEventQueue<ReplyStreamEvents>();
-    let streamResponse: Response | undefined;
-    let reply: TrackedReply | undefined;
-
-    try {
-      const prepared = await prepare();
-      reply = replies.start(
-        replyKey(request.userId, request.conversationId),
-        request.content,
-      );
-
-      streamResponse = streamSSE(c, (stream) =>
-        events.pipeTo(stream, c.req.raw.signal),
-      );
-      responseReady.resolve(streamResponse);
-
-      const modelStartedAt = performance.now();
-      const modelStartedAfterMs = msSince(metrics.startedAt);
-      let firstTokenAfterMs: number | null = null;
-      let modelFinishedAfterMs = modelStartedAfterMs;
-      const answer = await answerTurn(
-        request,
-        claim,
-        prepared,
-        reply,
-        (delta) => {
-          if (delta.length > 0 && firstTokenAfterMs === null) {
-            firstTokenAfterMs = msSince(metrics.startedAt);
-            metrics.log.info("Message first token generated", {
-              modelStartedAfterMs,
-              modelTimeToFirstTokenMs: msSince(modelStartedAt),
-              firstTokenAfterMs,
-            });
-          }
-          events.push("delta", { delta });
-        },
-        () => {
-          modelFinishedAfterMs = msSince(metrics.startedAt);
-        },
-      );
-
-      if (answer) {
-        events.push("done", {
-          ...answer,
-          stats: {
-            steps: stepsInOrder(metrics.steps),
-            modelStartedAfterMs,
-            firstTokenAfterMs,
-            modelFinishedAfterMs,
-            totalMs: msSince(metrics.startedAt),
-            context: prepared.contextStats,
-          },
-        });
-      } else {
-        await claim.release();
-        events.push("cancelled", {});
-      }
-      return streamResponse;
-    } catch (error) {
-      // Released before answering, so a client that retries at once doesn't
-      // meet its own claim.
-      await claim.release();
-
-      if (!streamResponse) {
-        if (error instanceof TurnRejected) {
-          return c.json(error.body, error.status);
-        }
-        throw error;
-      }
-
-      events.push("error", { message: "Model response failed" });
-      return streamResponse;
-    } finally {
-      events.end();
-      if (reply) {
-        reply.end();
-        // For a page that was reloaded mid-reply: its stream is gone, and
-        // this is how it hears the turn is saved.
-        serverEvents.send(request.userId, "replyFinished", {
-          conversationId: request.conversationId,
-        });
-      }
-    }
-  })().then(responseReady.resolve, responseReady.reject);
-
-  return responseReady.promise;
-}
-
-type TurnMetrics = {
-  log: Pick<typeof logger, "info">;
-  startedAt: number;
-  steps: RecordedStep[];
-};
 
 /**
  * Times every step of a turn from the handler's start (after auth and body
@@ -320,7 +186,7 @@ export const handleStopReply = authed.createHandlers(
   validate("param", conversationReqParamSchema),
   (c) => {
     const { conversationId } = c.req.valid("param");
-    return replies.stop(replyKey(c.var.userId, conversationId))
+    return memory.repliesInProgress.stop(replyKey(c.var.userId, conversationId))
       ? c.body(null, 204)
       : c.json({ message: "No reply in progress" }, 404);
   },

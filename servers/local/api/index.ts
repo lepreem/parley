@@ -1,15 +1,15 @@
 const env = getApiEnv();
 
-import { getApiEnv } from "../shared/env";
-import { EVERYONE, events } from "./src/events";
+import { getApiEnv } from "../core/env";
+import { EVERYONE, eventHub } from "./src/sse/hub";
 
-import { mq } from "../shared/message-queue/messageQueue";
-import { resumeUnfinishedJobs } from "../shared/audioTranscription";
-import { data } from "../shared/data";
-import { closeDb, migrateDb } from "../shared/db";
-import { onShutdown } from "@parley/shared/shutdown";
-import { files } from "../shared/files";
-import { logger } from "@parley/shared/logger";
+import { mq } from "../core/message-queue/messageQueue";
+import { resumeUnfinishedJobs } from "../core/audioTranscription";
+import { data } from "../core/data";
+import { closeDb, migrateDb } from "../core/db";
+import { onShutdown } from "@parley/server-kit/runtime/shutdown";
+import { files } from "../core/files";
+import { logger } from "@parley/server-kit/runtime/logger";
 import { handleTranscribeJob } from "./src/transcribeJob";
 import { handleYoutubeFetch } from "./src/youtubeFetch";
 
@@ -42,7 +42,7 @@ const server = serve({ fetch: app.fetch, port, hostname }, () => {
 mq.consume(
   mq.queues.TRANSCRIBE_DONE,
   ({ audioUploadId }) => {
-    events.send(EVERYONE, "jobUpdated", { audioUploadId });
+    eventHub.send(EVERYONE, "jobUpdated", { audioUploadId });
   },
   { attempts: 1 },
 );
@@ -57,7 +57,7 @@ mq.consume(
       audioUploadId,
       error ?? "Failed to fetch YouTube audio",
     );
-    events.send(EVERYONE, "jobUpdated", { audioUploadId });
+    eventHub.send(EVERYONE, "jobUpdated", { audioUploadId });
   },
   { attempts: 2 },
 );
@@ -93,7 +93,7 @@ onShutdown(
   async () => {
     await mq.stopConsuming();
     // An open event stream would hold the server open until it ended.
-    await events.close();
+    await eventHub.close();
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await closeDb();
   },

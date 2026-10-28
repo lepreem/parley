@@ -1,6 +1,6 @@
 import { z } from "zod";
-import type { SendMessageBody } from "@parley/shared/contract";
-import { takesBody } from "@parley/shared/takesBody";
+import type { SendMessageBody } from "@parley/contract";
+import { takesBody } from "@parley/server-kit/http/takesBody";
 import { chat } from "../ai";
 
 const MAX_MESSAGE_LENGTH = 50_000;

@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { CTX_KEYS, FORM_KEYS } from "../../../shared/keys";
-import { MAX_IMAGE_BYTES } from "../../../shared/files";
+import { CTX_KEYS, FORM_KEYS } from "../../../core/keys";
+import { MAX_IMAGE_BYTES } from "../../../core/files";
 import { displayName, uploadedFileField } from "./upload.schema";
 
 /** POST /upload/image — an image to store, for a message to carry. */

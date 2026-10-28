@@ -5,35 +5,35 @@ const { mockPublish, mockIsValidTranscribeModel } = vi.hoisted(() => ({
   mockIsValidTranscribeModel: vi.fn(),
 }));
 
-vi.mock("../../shared/db", async () =>
+vi.mock("../../core/db", async () =>
   (await import("../helpers/inMemoryDb")).inMemoryDbModule(),
 );
 
 // Small limits, so the oversized bodies below are kilobytes, not megabytes.
-vi.mock("../../shared/files", async (importActual) => ({
-  ...(await importActual<typeof import("../../shared/files")>()),
+vi.mock("../../core/files", async (importActual) => ({
+  ...(await importActual<typeof import("../../core/files")>()),
   MAX_AUDIO_BYTES: 1024,
 }));
 
-vi.mock("../../shared/ai/ai_transcribe_client", async (importActual) => {
+vi.mock("../../core/ai/ai_transcribe_client", async (importActual) => {
   const actual =
-    await importActual<typeof import("../../shared/ai/ai_transcribe_client")>();
+    await importActual<typeof import("../../core/ai/ai_transcribe_client")>();
   return {
     ...actual, // preserves DEFAULT_TRANSCRIBE_MODEL
     isValidTranscribeModel: mockIsValidTranscribeModel,
   };
 });
 
-vi.mock("../../shared/message-queue/messageQueue", async (importActual) => {
+vi.mock("../../core/message-queue/messageQueue", async (importActual) => {
   const { QUEUES } =
     await importActual<
-      typeof import("../../shared/message-queue/messageQueue")
+      typeof import("../../core/message-queue/messageQueue")
     >();
   return { mq: { queues: QUEUES, publish: mockPublish } };
 });
 
-import { Attachments, AudioTranscriptionJobs, db } from "../../shared/db";
-import { files, MAX_AUDIO_BYTES } from "../../shared/files";
+import { Attachments, AudioTranscriptionJobs, db } from "../../core/db";
+import { files, MAX_AUDIO_BYTES } from "../../core/files";
 import { createApp } from "../../api/app";
 import { originHeaders } from "../helpers/headers";
 import { deleteAllRows } from "../helpers/inMemoryDb";

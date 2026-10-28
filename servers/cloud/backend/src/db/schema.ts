@@ -12,7 +12,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { pgEnum } from "drizzle-orm/pg-core";
-import type { TranscriptSegment } from "@parley/shared/transcript";
+import type { TranscriptSegment } from "@parley/server-kit/transcription/transcript";
 
 export const jobStatusEnum = pgEnum("job_status", [
   "queued",
@@ -163,7 +163,7 @@ export const ChatMessages = pgTable(
     // turn roles so history can be replayed to the model as-is.
     role: chatRoleEnum("role").notNull(),
     // Written once: an edit deletes the message and saves a new one. Each API
-    // process caches it by id (src/chat/historyText.cache.ts). A trigger
+    // process caches it by id (src/memory/historyText.ts). A trigger
     // refuses any UPDATE to this table (drizzle/0004_immutable_messages.sql).
     content: text("content").notNull(),
     // Model that produced an assistant message; null for user messages.
@@ -253,7 +253,7 @@ export const AttachmentTurnReservations = pgTable(
  * worker inserts it on completion, so its presence means "ready".
  *
  * - content: the text the model and the user read, with a timestamp at each
- *   paragraph (transcriptText in @parley/shared/transcript).
+ *   paragraph (transcriptText in @parley/server-kit/transcription/transcript).
  * - segments: what the transcriber heard, with when; null for transcripts
  *   made before timestamps were kept.
  * - charCount lets a chat turn be budgeted without reading the body.

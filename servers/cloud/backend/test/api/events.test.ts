@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createApp } from "../../src/app";
-import { events } from "../../src/events";
+import { eventHub } from "../../src/sse/hub";
 import { sessionCookieHeader } from "../helpers/session";
 
 /** Opens /events as `userId` and reads it chunk by chunk, as text. */
@@ -19,7 +19,7 @@ async function open(userId: string) {
 }
 
 afterEach(async () => {
-  await events.close();
+  await eventHub.close();
 });
 
 describe("GET /events", () => {
@@ -33,7 +33,7 @@ describe("GET /events", () => {
     expect(stream.res.status).toBe(200);
     expect(await stream.next()).toBe(": heartbeat\n\n");
 
-    events.send("user_01", "jobUpdated", { audioUploadId: "a1" });
+    eventHub.send("user_01", "jobUpdated", { audioUploadId: "a1" });
 
     expect(await stream.next()).toBe(
       'event: jobUpdated\ndata: {"audioUploadId":"a1"}\n\n',
@@ -44,8 +44,8 @@ describe("GET /events", () => {
     const stream = await open("user_01");
     await stream.next();
 
-    events.send("user_02", "jobUpdated", { audioUploadId: "theirs" });
-    events.send("user_01", "jobUpdated", { audioUploadId: "mine" });
+    eventHub.send("user_02", "jobUpdated", { audioUploadId: "theirs" });
+    eventHub.send("user_01", "jobUpdated", { audioUploadId: "mine" });
 
     expect(await stream.next()).toContain('"audioUploadId":"mine"');
   });

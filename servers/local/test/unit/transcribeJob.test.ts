@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   publish: vi.fn(),
 }));
 
-vi.mock("../../shared/data", () => ({
+vi.mock("../../core/data", () => ({
   data: {
     jobs: {
       claimAudioJob: mocks.claimAudioJob,
@@ -24,16 +24,16 @@ vi.mock("../../shared/data", () => ({
   },
 }));
 
-vi.mock("../../shared/ai/ai_transcribe_client", () => ({
+vi.mock("../../core/ai/ai_transcribe_client", () => ({
   DEFAULT_TRANSCRIBE_MODEL: "small",
   transcribeAI: mocks.transcribeAI,
 }));
 
-vi.mock("../../shared/files", () => ({ files: { path: mocks.filePath } }));
+vi.mock("../../core/files", () => ({ files: { path: mocks.filePath } }));
 
-vi.mock("../../shared/message-queue/messageQueue", async (importActual) => ({
+vi.mock("../../core/message-queue/messageQueue", async (importActual) => ({
   ...(await importActual<
-    typeof import("../../shared/message-queue/messageQueue")
+    typeof import("../../core/message-queue/messageQueue")
   >()),
   mq: {
     queues: { TRANSCRIBE_DONE: "transcribe_done" },
@@ -42,7 +42,7 @@ vi.mock("../../shared/message-queue/messageQueue", async (importActual) => ({
 }));
 
 import { handleTranscribeJob } from "../../api/src/transcribeJob";
-import { DeadLetterError } from "../../shared/message-queue/messageQueue";
+import { DeadLetterError } from "../../core/message-queue/messageQueue";
 
 const audioInput = { audioUploadId } as const;
 const firstAttempt = { attempt: 1, lastAttempt: false };

@@ -31,8 +31,8 @@ vi.mock("../../src/ai/ai_transcribe_client", () => ({
 
 vi.mock("../../src/storage/sign", () => ({ sign: { url: mocks.signUrl } }));
 
-vi.mock("../../src/events", () => ({
-  events: { send: mocks.sendEvent },
+vi.mock("../../src/sse/hub", () => ({
+  eventHub: { send: mocks.sendEvent },
 }));
 
 import { handleTranscribeJob } from "../../src/transcribeJob";

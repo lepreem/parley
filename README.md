@@ -2,11 +2,23 @@
 
 Chat with Claude about audio, video, YouTube videos and images. It comes in
 two parts, sharing one client (`client/`) and a wire contract
-(`packages/shared/`): the hosted app, documented in
+(`packages/contract/`): the hosted app, documented in
 [`servers/cloud/README.md`](servers/cloud/README.md), and a server you run on
 your own machine (`servers/local/`), which this README is about. On your
 machine, chat goes through your own Claude Code and audio is transcribed
 locally with Whisper, so nothing needs an API key.
+
+## Who runs what
+
+An import says whose code it is:
+
+| Import | Lives in | Run by |
+| --- | --- | --- |
+| `@parley/contract` | `packages/contract/` | the client and both servers |
+| `@parley/server-kit/...` | `packages/server-kit/` | both servers, never the client |
+| a relative path | the folder you're in | only that server, or only the client |
+
+The two servers never import from each other.
 
 ## What you need
 

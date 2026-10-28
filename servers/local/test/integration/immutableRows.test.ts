@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../../shared/db", async () =>
+vi.mock("../../core/db", async () =>
   (await import("../helpers/inMemoryDb")).inMemoryDbModule(),
 );
 
@@ -13,10 +13,10 @@ import {
   Conversations,
   db,
   TranscriptContents,
-} from "../../shared/db";
+} from "../../core/db";
 import { deleteAllRows } from "../helpers/inMemoryDb";
-import { jobs } from "../../shared/data/jobs.data";
-import { transcripts } from "../../shared/data/transcripts.data";
+import { jobs } from "../../core/data/jobs.data";
+import { transcripts } from "../../core/data/transcripts.data";
 
 const conversationId = randomUUID();
 

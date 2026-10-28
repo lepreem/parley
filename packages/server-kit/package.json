@@ -1,0 +1,40 @@
+{
+  "name": "@parley/server-kit",
+  "private": true,
+  "type": "module",
+  "description": "Code both servers run and the client never does, so neither server carries its own copy.",
+  "exports": {
+    "./memory/repliesInProgress": "./src/memory/repliesInProgress.ts",
+    "./http/cache.middleware": "./src/http/cache.middleware.ts",
+    "./http/cursor": "./src/http/cursor.ts",
+    "./http/takesBody": "./src/http/takesBody.ts",
+    "./ids": "./src/ids.ts",
+    "./runtime/logger": "./src/runtime/logger.ts",
+    "./runtime/parseEnv": "./src/runtime/parseEnv.ts",
+    "./runtime/preflight": "./src/runtime/preflight.ts",
+    "./runtime/shutdown": "./src/runtime/shutdown.ts",
+    "./runtime/try-catch": "./src/runtime/try-catch.ts",
+    "./runtime/withTimeout": "./src/runtime/withTimeout.ts",
+    "./sse/hub": "./src/sse/hub.ts",
+    "./sse/eventQueue": "./src/sse/eventQueue.ts",
+    "./transcription/transcript": "./src/transcription/transcript.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@parley/contract": "*"
+  },
+  "peerDependencies": {
+    "hono": "^4.12.12",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "25.6.0",
+    "hono": "4.13.13",
+    "typescript": "5.7.3",
+    "vitest": "4.1.12",
+    "zod": "3.25.76"
+  }
+}

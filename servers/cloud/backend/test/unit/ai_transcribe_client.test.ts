@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { CACHE_KEYS } from "../../src/cache/cacheKeys";
+import { CACHE_KEYS } from "../../src/memory/modelLists";
 
 const { mockModelsList, mockGetOrSetCache, mockTranscribeUrl } = vi.hoisted(
   () => ({
@@ -17,11 +17,12 @@ vi.mock("@deepgram/sdk", () => ({
   },
 }));
 
-vi.mock("../../src/cache/cache", () => ({
-  cache: { getOrSet: mockGetOrSetCache },
+vi.mock("../../src/memory/modelLists", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../src/memory/modelLists")>()),
+  modelLists: { getOrSet: mockGetOrSetCache },
 }));
 
-/** Caching itself is covered in cache.test.ts; here the fetch always runs. */
+/** Caching itself is covered in modelLists.test.ts; here the fetch always runs. */
 const runFetch = <T>(_name: unknown, fetch: () => Promise<T>) => fetch();
 
 import {

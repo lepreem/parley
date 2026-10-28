@@ -1,10 +1,10 @@
 import { getEnv } from "./env";
-import { events } from "./events";
+import { eventHub } from "./sse/hub";
 
 import { mq } from "./message-queue/messageQueue";
 import { data } from "./data";
 import { sweeper } from "./sweeper";
-import { onShutdown } from "@parley/shared/shutdown";
+import { onShutdown } from "@parley/server-kit/runtime/shutdown";
 import {
   getTranscriptionConcurrency,
   handleTranscribeJob,
@@ -62,7 +62,7 @@ await mq.consume(
       audioUploadId,
       error ?? "Failed to fetch YouTube audio",
     );
-    events.send(userId, "jobUpdated", { audioUploadId });
+    eventHub.send(userId, "jobUpdated", { audioUploadId });
   },
   { attempts: 2 },
 );
@@ -90,7 +90,7 @@ onShutdown(
   async () => {
     await Promise.all([mq.stopConsuming(), stopSweeper()]);
     // An open event stream would hold the server open until it ended.
-    await events.close();
+    await eventHub.close();
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await mq.close();
   },

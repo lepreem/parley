@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import * as modelsController from "../controllers/models.controller";
-import { httpCache } from "@parley/shared/cache.middleware";
+import { httpCache } from "@parley/server-kit/http/cache.middleware";
 
 export const modelsRouter = new Hono();
 

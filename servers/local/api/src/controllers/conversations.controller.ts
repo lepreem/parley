@@ -1,11 +1,8 @@
 import type { Context } from "hono";
-import type {
-  Conversation,
-  ConversationsResponse,
-} from "@parley/shared/contract";
-import { CTX_KEYS } from "../../../shared/keys";
-import { files } from "../../../shared/files";
-import { data, type ConversationRow } from "../../../shared/data";
+import type { Conversation, ConversationsResponse } from "@parley/contract";
+import { CTX_KEYS } from "../../../core/keys";
+import { files } from "../../../core/files";
+import { data, type ConversationRow } from "../../../core/data";
 
 function toConversationJson(row: ConversationRow): Conversation {
   return {

@@ -2,13 +2,13 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../../shared/db", async () =>
+vi.mock("../../core/db", async () =>
   (await import("../helpers/inMemoryDb")).inMemoryDbModule(),
 );
 
-import { AudioTranscriptionJobs, db } from "../../shared/db";
+import { AudioTranscriptionJobs, db } from "../../core/db";
 import { deleteAllRows } from "../helpers/inMemoryDb";
-import { jobs } from "../../shared/data/jobs.data";
+import { jobs } from "../../core/data/jobs.data";
 
 async function createJob() {
   const audioUploadId = randomUUID();

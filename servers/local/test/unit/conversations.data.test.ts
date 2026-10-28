@@ -7,12 +7,12 @@ const { mockUpdate, mockSet, mockWhere, mockReturning } = vi.hoisted(() => ({
   mockReturning: vi.fn(),
 }));
 
-vi.mock("../../shared/db", async () => ({
+vi.mock("../../core/db", async () => ({
   db: { update: mockUpdate },
   ...(await import("../helpers/dbTableStubs")).tableStubs,
 }));
 
-import { conversations } from "../../shared/data/conversations.data";
+import { conversations } from "../../core/data/conversations.data";
 
 beforeEach(() => {
   vi.clearAllMocks();

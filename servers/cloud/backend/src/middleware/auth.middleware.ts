@@ -2,7 +2,7 @@ import { createFactory, createMiddleware } from "hono/factory";
 import { getCookie } from "hono/cookie";
 
 import { COOKIE_KEYS } from "../cookies/session";
-import { logger } from "@parley/shared/logger";
+import { logger } from "@parley/server-kit/runtime/logger";
 import { verifyAccessToken } from "../auth/accessToken";
 
 /** What requireAuth puts on the context of every route behind it. */

@@ -16,19 +16,19 @@ vi.mock("../../api/src/ytDlp", async (importActual) => ({
   ytDlp: { probe: mockProbe, downloadAudio: mockDownloadAudio },
 }));
 
-vi.mock("../../shared/files", () => ({
+vi.mock("../../core/files", () => ({
   MAX_AUDIO_BYTES: 1_000,
   files: { write: mockWrite },
 }));
 
-vi.mock("../../shared/message-queue/messageQueue", async (importActual) => ({
+vi.mock("../../core/message-queue/messageQueue", async (importActual) => ({
   ...(await importActual<
-    typeof import("../../shared/message-queue/messageQueue")
+    typeof import("../../core/message-queue/messageQueue")
   >()),
   mq: {
     queues: (
       await importActual<
-        typeof import("../../shared/message-queue/messageQueue")
+        typeof import("../../core/message-queue/messageQueue")
       >()
     ).QUEUES,
     publish: mockPublish,

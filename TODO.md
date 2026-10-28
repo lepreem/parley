@@ -44,7 +44,7 @@ to first token (median 1.76 s) far ahead of everything the server does.
 
 Nothing needs this yet. Everything below is per process today:
 
-- **Job updates.** `events.send` (`src/events.ts`) only reaches streams on
+- **Job updates.** `eventHub.send` (`src/sse/hub.ts`) only reaches streams on
   this instance, and a work queue hands each message to one instance. Fix: a
   `job_updates` fanout exchange; each instance binds its own exclusive queue
   and forwards what it hears. Work that must happen once (failing a job) stays

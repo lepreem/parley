@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { QueuedYoutube, UploadedAudio } from "@parley/shared/contract";
+import type { QueuedYoutube, UploadedAudio } from "@parley/contract";
 import { data } from "../data";
 import { audioTranscription } from "../audioTranscription";
 import { uploads } from "../uploads";
@@ -11,7 +11,7 @@ import {
   youtubeUploadSchema,
 } from "../schema/upload.schema";
 import { ALREADY_CONFIRMED, uploadRejection } from "../utils/uploadRejection";
-import type { UploadId } from "@parley/shared/types";
+import type { UploadId } from "@parley/server-kit/ids";
 
 /**
  * POST /upload/audio — a URL the browser PUTs speech audio to, straight into

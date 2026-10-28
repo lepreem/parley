@@ -7,14 +7,14 @@ import { compress } from "hono/compress";
 import { cors } from "hono/cors";
 import { csrf } from "hono/csrf";
 import { HTTPException } from "hono/http-exception";
-import { logger } from "@parley/shared/logger";
+import { logger } from "@parley/server-kit/runtime/logger";
 import { getEnv } from "./env";
 import { jobsRouter } from "./routes/jobs.router";
 import { uploadRouter } from "./routes/upload.router";
 import { authRouter } from "./routes/auth.router";
 import { modelsRouter } from "./routes/models.router";
 import { conversationsRouter } from "./routes/conversations.router";
-import { handleEvents } from "./controllers/events.controller";
+import { handleEvents } from "./sse/events.controller";
 import { requireAuth } from "./middleware/auth.middleware";
 
 import { AUDIO_BUCKET, MAX_AUDIO_BYTES } from "./storage";

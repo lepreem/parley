@@ -1,14 +1,14 @@
 import { DEFAULT_TRANSCRIBE_MODEL, transcription } from "./ai";
 import { sign } from "./storage";
 import { data } from "./data";
-import { logger } from "@parley/shared/logger";
+import { logger } from "@parley/server-kit/runtime/logger";
 import {
   DeadLetterError,
   type DeliveryMetadata,
 } from "./message-queue/messageQueue";
-import type { TranscriptSegment } from "@parley/shared/transcript";
-import type { UploadId } from "@parley/shared/types";
-import { events } from "./events";
+import type { TranscriptSegment } from "@parley/server-kit/transcription/transcript";
+import type { UploadId } from "@parley/server-kit/ids";
+import { eventHub } from "./sse/hub";
 
 const log = logger.child({ component: "transcribe" });
 
@@ -169,10 +169,10 @@ export async function handleTranscribeJob(
     );
     // The client stops polling while its stream is open, so a failure it
     // isn't told about shows as processing until the page reloads.
-    if (failed) events.send(job.userId, "jobUpdated", { audioUploadId });
+    if (failed) eventHub.send(job.userId, "jobUpdated", { audioUploadId });
     return;
   }
 
   // Tells the user's open streams the job is done, so their screen updates.
-  events.send(job.userId, "jobUpdated", { audioUploadId });
+  eventHub.send(job.userId, "jobUpdated", { audioUploadId });
 }

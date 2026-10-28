@@ -1,7 +1,4 @@
-import type {
-  Conversation,
-  ConversationsResponse,
-} from "@parley/shared/contract";
+import type { Conversation, ConversationsResponse } from "@parley/contract";
 import { authed } from "../middleware/auth.middleware";
 import { validate } from "../middleware/validate.middleware";
 import {

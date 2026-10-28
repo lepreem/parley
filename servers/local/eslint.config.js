@@ -5,7 +5,7 @@ import helperImportOwner from "./eslint-rules/helperImportOwner.js";
 import publicModuleEntry from "./eslint-rules/publicModuleEntry.js";
 
 const messageQueueDirectory = fileURLToPath(
-  new URL("./shared/message-queue", import.meta.url),
+  new URL("./core/message-queue", import.meta.url),
 );
 
 /**
@@ -15,7 +15,7 @@ const messageQueueDirectory = fileURLToPath(
 const dbClientRestriction = {
   patterns: [
     {
-      group: ["**/shared/db"],
+      group: ["**/core/db"],
       importNames: ["db"],
       message:
         "Table access belongs in a *.data.ts module — import a function from one instead of the db client. Schema imports (tables, enums) and migrateDb/closeDb are fine.",
@@ -23,7 +23,7 @@ const dbClientRestriction = {
     {
       group: ["**/data/*.data"],
       message:
-        "Import { data } from shared/data and call data.<table>.<operation>(), so the call reads as a database operation.",
+        "Import { data } from core/data and call data.<table>.<operation>(), so the call reads as a database operation.",
     },
   ],
 };
@@ -60,18 +60,18 @@ export default defineConfig([
   },
   {
     // Data modules are where table access lives.
-    files: ["shared/**/*.data.ts"],
+    files: ["core/**/*.data.ts"],
     rules: { "no-restricted-imports": "off" },
   },
   {
     files: ["**/*.data.ts"],
-    ignores: ["shared/**/*.data.ts"],
+    ignores: ["core/**/*.data.ts"],
     rules: {
       "no-restricted-syntax": [
         "error",
         {
           selector: "Program",
-          message: "Data modules must live under backend/shared.",
+          message: "Data modules must live under core/.",
         },
       ],
     },

@@ -162,8 +162,8 @@ vi.mock("../../src/preparationMetrics", async (importActual) => {
 });
 
 import { createApp } from "../../src/app";
-import { events } from "../../src/events";
-import { resetHistoryTextCache } from "../../src/chat/historyText.cache";
+import { eventHub } from "../../src/sse/hub";
+import { resetHistoryTextCache } from "../../src/memory/historyText";
 import { resetRateLimits } from "../../src/middleware/rateLimit.middleware";
 import { measurePreparation } from "../../src/preparationMetrics";
 import {
@@ -174,7 +174,7 @@ import {
 import { MAX_TRANSCRIPTS } from "../../src/schema/messages.schema";
 import { authedHeaders, sessionCookieHeader } from "../helpers/session";
 import { type HistoryCandidate } from "../../src/data/messages.data";
-import type { ReplyStreamEvents } from "@parley/shared/contract";
+import type { ReplyStreamEvents } from "@parley/contract";
 
 const conversationId = "550e8400-e29b-41d4-a716-446655440000";
 const messageId = "650e8400-e29b-41d4-a716-446655440111";
@@ -2058,7 +2058,7 @@ describe("stopping a reply", () => {
 
   it("shows a reloaded page the turn being answered, and stops showing it once saved", async () => {
     mockFindConversationMessages.mockResolvedValue([]);
-    const sendEvent = vi.spyOn(events, "send");
+    const sendEvent = vi.spyOn(eventHub, "send");
     let whileWriting: unknown;
     modelThatWaits(["Hello "], async () => {
       whileWriting = await (await request("")).json();

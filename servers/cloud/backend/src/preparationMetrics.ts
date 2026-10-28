@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
-import type { TurnStep } from "@parley/shared/contract";
-import type { logger } from "@parley/shared/logger";
+import type { TurnStep } from "@parley/contract";
+import type { logger } from "@parley/server-kit/runtime/logger";
 
 export type RecordedStep = TurnStep & {
   operationId: string;

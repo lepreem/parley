@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { logger } from "@parley/shared/logger";
+import { logger } from "@parley/server-kit/runtime/logger";
 import { data } from "../data";
 import { measurePreparation } from "../preparationMetrics";
 

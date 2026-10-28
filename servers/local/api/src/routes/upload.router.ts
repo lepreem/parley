@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import * as uploadController from "../controllers/upload.controller";
-import { MAX_AUDIO_BYTES } from "../../../shared/files";
+import { MAX_AUDIO_BYTES } from "../../../core/files";
 import {
   validateReqBody,
   validateReqForm,

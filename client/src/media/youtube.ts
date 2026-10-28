@@ -1,4 +1,4 @@
-import { isYoutubeUrl } from "@parley/shared/youtube";
+import { isYoutubeUrl } from "@parley/contract/youtube";
 
 /** The last YouTube link in what the user has typed, or null. */
 export function findYoutubeUrl(text: string): string | null {

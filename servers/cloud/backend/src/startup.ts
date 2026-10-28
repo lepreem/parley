@@ -1,4 +1,4 @@
-import { verifyServices } from "@parley/shared/preflight";
+import { verifyServices } from "@parley/server-kit/runtime/preflight";
 import { mq } from "./message-queue/messageQueue";
 import { pingDb } from "./db";
 import { bucket } from "./storage";

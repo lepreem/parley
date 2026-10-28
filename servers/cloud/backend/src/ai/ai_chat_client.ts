@@ -1,14 +1,14 @@
 import { getEnv } from "../env";
 import { OpenRouter } from "@openrouter/sdk";
 
-import { CACHE_KEYS, cache } from "../cache";
+import { CACHE_KEYS, memory } from "../memory";
 import type {
   ChatContentItems,
   ChatRequest,
   PublicPricing,
 } from "@openrouter/sdk/models";
-import { withTimeout } from "@parley/shared/withTimeout";
-import type { ChatModel, ModelPricing } from "@parley/shared/contract";
+import { withTimeout } from "@parley/server-kit/runtime/withTimeout";
+import type { ChatModel, ModelPricing } from "@parley/contract";
 
 const client = new OpenRouter({
   apiKey: getEnv().OPENROUTER_API_KEY,
@@ -204,9 +204,13 @@ async function fetchChatModels(): Promise<ChatModel[]> {
 // off the network. Serving it stale while it refreshes means no send waits on
 // the catalog once a process has loaded it.
 function listModels(): Promise<ChatModel[]> {
-  return cache.getOrSet(CACHE_KEYS.openRouterModels, fetchChatModels, {
-    serveStale: true,
-  });
+  return memory.modelLists.getOrSet(
+    CACHE_KEYS.openRouterModels,
+    fetchChatModels,
+    {
+      serveStale: true,
+    },
+  );
 }
 
 /**

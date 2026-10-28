@@ -9,12 +9,12 @@ import {
 } from "../db";
 
 import { jobs } from "./jobs.data";
-import type { JobSource } from "@parley/shared/contract";
+import type { JobSource } from "@parley/contract";
 import {
   transcriptText,
   type TranscriptSegment,
-} from "@parley/shared/transcript";
-import type { UploadId } from "@parley/shared/types";
+} from "@parley/server-kit/transcription/transcript";
+import type { UploadId } from "@parley/server-kit/ids";
 import { attachments } from "./attachments.data";
 
 /**

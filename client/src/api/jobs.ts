@@ -4,7 +4,7 @@ import type {
   JobStatus,
   JobsPage,
   JobSummary,
-} from "@parley/shared/contract";
+} from "@parley/contract";
 import { apiFetch, apiJson } from "./http";
 import type { Server } from "./server";
 

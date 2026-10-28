@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { fetchMessages } from "../../api/messages";
 import { queryKeys } from "../../lib/queryClient";
-import { useEventsConnected } from "../events/useEventsConnected";
+import { useEventsConnected } from "../../sse/useEventsConnected";
 import { useServer } from "../server/useServer";
 
 /** How often a chat showing someone else's reply is read without pushes. */

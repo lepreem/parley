@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { CTX_KEYS } from "../../../shared/keys";
-import { jobStatuses } from "../../../shared/db";
+import { CTX_KEYS } from "../../../core/keys";
+import { jobStatuses } from "../../../core/db";
 
 export const jobReqParamSchema = z.object({
   [CTX_KEYS.audioUploadId]: z.string().uuid(),

@@ -9,7 +9,7 @@ import {
   type Executor,
 } from "../db";
 import { IMAGE_URL_TTL_SECONDS, sign } from "../storage";
-import type { UploadId } from "@parley/shared/types";
+import type { UploadId } from "@parley/server-kit/ids";
 import { attachments } from "./attachments.data";
 
 /**

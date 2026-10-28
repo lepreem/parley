@@ -6,7 +6,7 @@ import type {
   ConsumeMessage,
 } from "amqplib";
 import { getEnv } from "../env";
-import { logger, messageOf } from "@parley/shared/logger";
+import { logger, messageOf } from "@parley/server-kit/runtime/logger";
 import {
   QUEUE_PAYLOAD_SCHEMAS,
   QUEUES,

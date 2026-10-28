@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { z } from "zod";
-import { parseEnv as parseSharedEnv } from "@parley/shared/parseEnv";
+import { parseEnv as parseSharedEnv } from "@parley/server-kit/runtime/parseEnv";
 
 const ANSI_RED = "\x1b[31m";
 const ANSI_RESET = "\x1b[0m";

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("../../shared/db", async () =>
+vi.mock("../../core/db", async () =>
   (await import("../helpers/inMemoryDb")).inMemoryDbModule(),
 );
 
@@ -12,10 +12,10 @@ import {
   ChatMessages,
   Conversations,
   db,
-} from "../../shared/db";
+} from "../../core/db";
 import { deleteAllRows } from "../helpers/inMemoryDb";
-import { CLAIM_LEASE_MS } from "../../shared/data/conversations.data";
-import { messages } from "../../shared/data/messages.data";
+import { CLAIM_LEASE_MS } from "../../core/data/conversations.data";
+import { messages } from "../../core/data/messages.data";
 
 const conversationId = randomUUID();
 

@@ -6,13 +6,13 @@ import { Hono, type Context } from "hono";
 import { compress } from "hono/compress";
 import { cors } from "hono/cors";
 import { csrf } from "hono/csrf";
-import { getApiEnv } from "../shared/env";
+import { getApiEnv } from "../core/env";
 import { jobsRouter } from "./src/routes/jobs.router";
 import { uploadRouter } from "./src/routes/upload.router";
 import { modelsRouter } from "./src/routes/models.router";
 import { conversationsRouter } from "./src/routes/conversations.router";
 import { isAllowedHostname, isAllowedOrigin } from "./src/allowedHosts";
-import { EVERYONE, events } from "./src/events";
+import { EVERYONE, eventHub } from "./src/sse/hub";
 
 import { verifyApiServices } from "./startup";
 
@@ -65,7 +65,7 @@ export async function createApp() {
 
   app.get("/health", (c) => c.json({ ok: true }));
   // Job updates, pushed to every client for as long as it holds this open.
-  app.get("/events", (c) => events.stream(c, EVERYONE));
+  app.get("/events", (c) => eventHub.stream(c, EVERYONE));
   app.route("/upload", uploadRouter);
   app.route("/jobs", jobsRouter);
   app.route("/models", modelsRouter);

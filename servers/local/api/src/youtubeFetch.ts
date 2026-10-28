@@ -1,13 +1,10 @@
 import { mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { logger, messageOf } from "@parley/shared/logger";
-import {
-  mq,
-  type QueuePayloads,
-} from "../../shared/message-queue/messageQueue";
-import { files, MAX_AUDIO_BYTES } from "../../shared/files";
-import type { TranscriptSegment } from "@parley/shared/transcript";
+import { logger, messageOf } from "@parley/server-kit/runtime/logger";
+import { mq, type QueuePayloads } from "../../core/message-queue/messageQueue";
+import { files, MAX_AUDIO_BYTES } from "../../core/files";
+import type { TranscriptSegment } from "@parley/server-kit/transcription/transcript";
 import { YtDlpError, ytDlp, type VideoInfo } from "./ytDlp";
 
 const log = logger.child({ component: "youtube-fetch" });

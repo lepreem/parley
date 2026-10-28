@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { UploadedImage } from "@parley/shared/contract";
+import type { UploadedImage } from "@parley/contract";
 import { sign } from "../storage";
 import { uploads } from "../uploads";
 import { data } from "../data";
@@ -10,7 +10,7 @@ import {
   imageReqParamSchema,
 } from "../schema/images.schema";
 import { ALREADY_CONFIRMED, uploadRejection } from "../utils/uploadRejection";
-import type { UploadId } from "@parley/shared/types";
+import type { UploadId } from "@parley/server-kit/ids";
 
 /**
  * POST /upload/image — a URL the browser PUTs an image to (dropped into the

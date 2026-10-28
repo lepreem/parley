@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { MAX_TITLE_LENGTH } from "@parley/shared/limits";
+import { MAX_TITLE_LENGTH } from "@parley/contract/limits";
 import { Link } from "react-router-dom";
 import type { Conversation } from "../../api/conversations";
 import { useServer } from "../../hooks/server/useServer";
