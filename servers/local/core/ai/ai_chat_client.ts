@@ -3,12 +3,15 @@ import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { createInterface } from "node:readline";
 import type { ChatModel } from "@parley/contract";
+import { logger, messageOf } from "@parley/server-kit/runtime/logger";
 import { getBaseEnv } from "../env";
 import { withTimeout } from "@parley/server-kit/runtime/withTimeout";
+import { connectCodex, runCodexChat, type CodexModel } from "./codex";
 
 /**
- * Chat runs on the user's own Claude Code: each call is one `claude --print`
- * run, which answers on the user's plan rather than on an API key.
+ * Chat runs on the user's own Claude Code or Codex, whichever is installed
+ * and logged in: each call is one `claude --print` or `codex app-server` run,
+ * which answers on the user's plan rather than on an API key.
  */
 
 /** Claude Code couldn't answer; the message is what it said went wrong. */
@@ -39,17 +42,62 @@ function runCommand(args: readonly string[]): Promise<string> {
   });
 }
 
-/**
- * Startup health check: fails if Claude Code can't be run or isn't logged in,
- * either of which would fail every chat.
- */
-export async function pingChatAI(): Promise<void> {
+/** Fails if Claude Code can't be run or isn't logged in. */
+async function pingClaudeCode(): Promise<void> {
   const status = JSON.parse(await runCommand(["auth", "status"])) as {
     loggedIn?: boolean;
   };
   if (!status.loggedIn) {
     throw new ClaudeCodeError("Claude Code isn't logged in; run `claude`");
   }
+}
+
+/**
+ * What chat can run on, as the startup check found it. Until it runs, as in
+ * tests, that's Claude Code alone.
+ */
+let providers: { claudeCode: boolean; codexModels: CodexModel[] } = {
+  claudeCode: true,
+  codexModels: [],
+};
+
+/**
+ * Startup health check: finds which of Claude Code and Codex can run and are
+ * logged in, and fails only if neither is, which would fail every chat. A
+ * missing one is logged, since signing in to it needs a restart to show.
+ */
+export async function pingChatAI(): Promise<void> {
+  const [claudeCode, codex] = await Promise.allSettled([
+    pingClaudeCode(),
+    connectCodex(),
+  ]);
+  if (claudeCode.status === "rejected" && codex.status === "rejected") {
+    throw new Error(
+      `neither Claude Code nor Codex can chat. Claude Code: ${reasonOf(claudeCode.reason)}. Codex: ${reasonOf(codex.reason)}`,
+    );
+  }
+
+  if (claudeCode.status === "rejected") {
+    logger.warn("Chat runs on Codex only; Claude Code is unavailable", {
+      error: reasonOf(claudeCode.reason),
+    });
+  }
+  if (codex.status === "rejected") {
+    logger.warn("Chat runs on Claude Code only; Codex is unavailable", {
+      error: reasonOf(codex.reason),
+    });
+  }
+  providers = {
+    claudeCode: claudeCode.status === "fulfilled",
+    codexModels: codex.status === "fulfilled" ? codex.value : [],
+  };
+}
+
+/** Why a program couldn't chat, saying so when it isn't installed. */
+function reasonOf(reason: unknown) {
+  return (reason as NodeJS.ErrnoException | null)?.code === "ENOENT"
+    ? "not installed, or not on PATH"
+    : messageOf(reason);
 }
 
 /** An image as a turn carries it: the file's bytes, base64-encoded. */
@@ -111,39 +159,47 @@ type ContentBlock =
 /**
  * The conversation as one message's content: each turn's text inside its
  * role's tags, and its images where they sit in it. Neighbouring text is
- * joined into one block.
+ * joined into one part.
  */
-function promptOf(turns: readonly ChatTurn[]): ContentBlock[] {
-  const blocks: ContentBlock[] = [];
+function promptOf(turns: readonly ChatTurn[]): ChatContentPart[] {
+  const parts: ChatContentPart[] = [];
   const addText = (text: string) => {
-    const last = blocks.at(-1);
+    const last = parts.at(-1);
     if (last?.type === "text") last.text += text;
-    else blocks.push({ type: "text", text });
+    else parts.push({ type: "text", text });
   };
 
   for (const [index, turn] of turns.entries()) {
-    const parts: ChatContentPart[] =
+    const turnParts: ChatContentPart[] =
       typeof turn.content === "string"
         ? [{ type: "text", text: turn.content }]
         : turn.content;
 
     addText(`${index === 0 ? "" : "\n\n"}<${turn.role}>\n`);
-    for (const part of parts) {
+    for (const part of turnParts) {
       if (part.type === "text") addText(part.text);
-      else
-        blocks.push({
+      else parts.push({ ...part });
+    }
+    addText(`\n</${turn.role}>`);
+  }
+
+  return parts;
+}
+
+/** The prompt as Claude Code takes a message's content. */
+function claudeContentOf(prompt: readonly ChatContentPart[]): ContentBlock[] {
+  return prompt.map((part) =>
+    part.type === "text"
+      ? part
+      : {
           type: "image",
           source: {
             type: "base64",
             media_type: part.mimeType,
             data: part.data,
           },
-        });
-    }
-    addText(`\n</${turn.role}>`);
-  }
-
-  return blocks;
+        },
+  );
 }
 
 /**
@@ -186,13 +242,13 @@ type OutputLine =
   | { type: "other" };
 
 /**
- * Runs one turn, passing each piece of the answer's text to `onText` as it
- * arrives, and resolving with the whole answer. Aborting `abortSignal` kills
- * the run and rejects with the signal's reason.
+ * Runs one turn on Claude Code, passing each piece of the answer's text to
+ * `onText` as it arrives, and resolving with the whole answer. Aborting
+ * `abortSignal` kills the run and rejects with the signal's reason.
  */
-async function runChat(
+async function runClaudeChat(
   model: string,
-  turns: readonly ChatTurn[],
+  prompt: readonly ChatContentPart[],
   {
     abortSignal,
     onText,
@@ -227,7 +283,7 @@ async function runChat(
   child.stdin.end(
     `${JSON.stringify({
       type: "user",
-      message: { role: "user", content: promptOf(turns) },
+      message: { role: "user", content: claudeContentOf(prompt) },
     })}\n`,
   );
 
@@ -309,8 +365,11 @@ export async function chatAI(
     signal: opts.signal,
   };
 
+  const codexModel = codexModelOf(model);
+  const run = codexModel === undefined ? runClaudeChat : runCodexChat;
+
   return withTimeout(timeoutOptions, ({ abortSignal, markProgress }) =>
-    runChat(model, messages, {
+    run(codexModel ?? model, promptOf(messages), {
       abortSignal,
       thinking: opts.thinking ?? true,
       instructions: opts.instructions ?? CHAT_INSTRUCTIONS,
@@ -328,34 +387,67 @@ export async function chatAI(
  * The models Claude Code runs, by the aliases it resolves to the newest of
  * each family, so the list doesn't go stale as models are released. Whether
  * the user's plan includes one only shows when it's used. None has a price:
- * the user's Claude subscription covers them.
+ * the user's Claude subscription covers them. The name's prefix is the
+ * provider the picker groups them under.
  */
-const CHAT_MODELS: readonly ChatModel[] = [
+const CLAUDE_CODE_MODELS: readonly ChatModel[] = [
   {
     id: "opus",
-    name: "Claude Opus",
+    name: "Claude Code: Claude Opus",
     contextTokens: 200_000,
     acceptsImages: true,
     pricing: null,
   },
   {
     id: "sonnet",
-    name: "Claude Sonnet",
+    name: "Claude Code: Claude Sonnet",
     contextTokens: 200_000,
     acceptsImages: true,
     pricing: null,
   },
   {
     id: "haiku",
-    name: "Claude Haiku",
+    name: "Claude Code: Claude Haiku",
     contextTokens: 200_000,
     acceptsImages: true,
     pricing: null,
   },
 ];
 
+/**
+ * A Codex model's id in the app: its own, after a prefix that keeps it apart
+ * from Claude Code's aliases.
+ */
+const CODEX_PREFIX = "codex/";
+
+/** The Codex model an app id names, or undefined for a Claude Code one. */
+function codexModelOf(id: string): string | undefined {
+  return id.startsWith(CODEX_PREFIX) ? id.slice(CODEX_PREFIX.length) : undefined;
+}
+
+/**
+ * Whatever the user's Codex plan offers, from its own catalog. Codex doesn't
+ * say how long a prompt each takes, and the ChatGPT plan covers them.
+ */
+function codexChatModels(): ChatModel[] {
+  return providers.codexModels.map((model) => ({
+    id: `${CODEX_PREFIX}${model.id}`,
+    name: `Codex: ${model.name}`,
+    contextTokens: null,
+    acceptsImages: model.acceptsImages,
+    pricing: null,
+  }));
+}
+
+function chatModels(): ChatModel[] {
+  return [
+    ...(providers.claudeCode ? CLAUDE_CODE_MODELS : []),
+    ...codexChatModels(),
+  ];
+}
+
 export async function listChatModels(): Promise<ChatModel[]> {
-  return [...CHAT_MODELS];
+  return chatModels();
 }
 
 /**
@@ -367,11 +459,22 @@ export async function listChatModels(): Promise<ChatModel[]> {
 export async function findChatModel(
   id: string,
 ): Promise<ChatModel | undefined> {
-  return CHAT_MODELS.find((model) => model.id === id);
+  return chatModels().find((model) => model.id === id);
 }
 
 const MAX_TITLE_INPUT_CHARS = 12_000;
-const DEFAULT_TITLE_GENERATION_MODEL = "haiku";
+
+/**
+ * Claude Code's fastest model, or else Codex's default: its catalog changes,
+ * and the default is the one model it always has.
+ */
+function titleModel(): string {
+  if (providers.claudeCode) return "haiku";
+  const codexDefault =
+    providers.codexModels.find((model) => model.isDefault) ??
+    providers.codexModels[0];
+  return `${CODEX_PREFIX}${codexDefault?.id}`;
+}
 
 /**
  * A title for a conversation, from its first message, or for a transcript.
@@ -383,7 +486,7 @@ export async function generateTitle(
   content: string,
 ): Promise<string> {
   const answer = await chatAI(
-    DEFAULT_TITLE_GENERATION_MODEL,
+    titleModel(),
     [
       {
         role: "user",
