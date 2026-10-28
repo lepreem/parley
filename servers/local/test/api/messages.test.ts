@@ -1321,6 +1321,23 @@ describe("POST /conversations/:conversationId/messages", () => {
     );
   });
 
+  it("leaves history the image cap less the new turn's images", async () => {
+    mockResolveImages.mockResolvedValueOnce([resolvedImage]);
+    mockChatAI.mockResolvedValueOnce("Hello world");
+
+    const res = await postMessage({
+      messageContent: "Hi there",
+      chosenModelId: modelId,
+      imageUploadIds: [imageUploadId],
+    });
+    expect(res.status).toBe(200);
+    await res.text();
+
+    expect(mockFindCreateMessageHistory).toHaveBeenCalledWith(
+      expect.objectContaining({ maximumImageCount: 7 }),
+    );
+  });
+
   it("sends attachments as vision input and links them to the user turn", async () => {
     mockResolveImages.mockResolvedValueOnce([resolvedImage]);
     mockChatAI.mockResolvedValueOnce("Hello world");

@@ -118,8 +118,13 @@ async function admitAndSignHistory(
   userId: string,
   candidates: readonly HistoryCandidate[],
   newTurnCharCount: number,
+  newTurnImageCount: number,
 ): Promise<AdmittedTurn[]> {
-  const admitted = admitHistory(measureHistory(candidates), newTurnCharCount);
+  const admitted = admitHistory(
+    measureHistory(candidates),
+    newTurnCharCount,
+    newTurnImageCount,
+  );
   const urlByImageUploadId = await data.images.resolveImageAttachmentUrls(
     userId,
     admitted.flatMap((turn) => turn.images),
@@ -219,6 +224,7 @@ export async function prepareTurn(
     request.userId,
     historyCandidates,
     newTurnContent.length,
+    newTurnResolvedImages.length,
   );
   const prompt = buildPrompt(
     history,
