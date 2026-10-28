@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { CACHE_KEYS } from "../../src/cache/cacheKeys";
+import { CACHE_KEYS } from "../../src/memory/modelLists";
 import { CLAIM_LEASE_MS } from "../../src/data/conversations.data";
 
 const { mockGetOrSetCache, mockModelsList, mockChatSend } = vi.hoisted(() => ({
@@ -8,11 +8,12 @@ const { mockGetOrSetCache, mockModelsList, mockChatSend } = vi.hoisted(() => ({
   mockChatSend: vi.fn(),
 }));
 
-vi.mock("../../src/cache/cache", () => ({
+vi.mock("../../src/memory/modelLists", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../src/memory/modelLists")>()),
   cache: { getOrSet: mockGetOrSetCache },
 }));
 
-/** Caching itself is covered in cache.test.ts; here the fetch always runs. */
+/** Caching itself is covered in modelLists.test.ts; here the fetch always runs. */
 const runFetch = <T>(_name: unknown, fetch: () => Promise<T>) => fetch();
 
 vi.mock("@openrouter/sdk", () => ({

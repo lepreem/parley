@@ -1,7 +1,7 @@
 import type { Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import type { ReplyStreamEvents } from "@parley/contract";
-import type { ReplyInProgressEntry } from "@parley/server-kit/chat/repliesInProgress";
+import type { ReplyInProgressEntry } from "@parley/server-kit/memory/repliesInProgress";
 import type { logger } from "@parley/server-kit/runtime/logger";
 import { SSEEventQueue } from "@parley/server-kit/sse/eventQueue";
 import {
@@ -10,7 +10,7 @@ import {
   type RecordedStep,
 } from "../preparationMetrics";
 import { eventHub } from "../sse/hub";
-import { repliesInProgress, replyKey } from "./repliesInProgress";
+import { repliesInProgress, replyKey } from "../memory/repliesInProgress";
 import {
   answerTurn,
   TurnRejected,

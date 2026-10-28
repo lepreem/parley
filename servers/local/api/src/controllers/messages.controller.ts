@@ -10,7 +10,7 @@ import type {
   ReplyStreamEvents,
 } from "@parley/contract";
 import { SSEEventQueue } from "@parley/server-kit/sse/eventQueue";
-import type { ReplyInProgressEntry } from "@parley/server-kit/chat/repliesInProgress";
+import type { ReplyInProgressEntry } from "@parley/server-kit/memory/repliesInProgress";
 import {
   data,
   type CreateMessageHistory,
@@ -32,7 +32,7 @@ import { logger, messageOf } from "@parley/server-kit/runtime/logger";
 import { files } from "../../../core/files";
 import type { MessageAttachmentInput } from "../schema/messages.schema";
 import { EVERYONE, eventHub } from "../sse/hub";
-import { repliesInProgress } from "../chat/repliesInProgress";
+import { repliesInProgress } from "../memory/repliesInProgress";
 
 const log = logger.child({ controller: "messages" });
 

@@ -1,5 +1,12 @@
 import { logger } from "@parley/server-kit/runtime/logger";
-import { CACHE_KEYS, type CacheKey } from "./cacheKeys";
+
+/** The model lists each provider serves, held in this process's memory. */
+export const CACHE_KEYS = {
+  openRouterModels: "openRouterModels",
+  deepgramTranscribeModels: "deepgramTranscribeModels",
+} as const;
+
+type CacheKey = (typeof CACHE_KEYS)[keyof typeof CACHE_KEYS];
 
 /**
  * How long a process serves each entry before fetching it again. Each process

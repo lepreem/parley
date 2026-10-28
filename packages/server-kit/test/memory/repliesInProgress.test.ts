@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createRepliesInProgress,
   ReplyStopped,
-} from "@parley/server-kit/chat/repliesInProgress";
+} from "@parley/server-kit/memory/repliesInProgress";
 
 describe("createRepliesInProgress", () => {
   it("shows a reply as it's written, until its entry is removed", () => {

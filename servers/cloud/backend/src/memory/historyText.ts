@@ -2,7 +2,7 @@ import type {
   HistoryCandidate,
   HistoryTranscript,
   KnownHistoryText,
-} from "../data";
+} from "../data/index";
 
 /**
  * In-process cache of message and transcript text, per conversation. A turn

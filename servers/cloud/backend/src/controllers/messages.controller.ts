@@ -14,7 +14,7 @@ import {
   withPreparationMetrics,
 } from "../preparationMetrics";
 import { uploads } from "../uploads";
-import { repliesInProgress, replyKey } from "../chat/repliesInProgress";
+import { repliesInProgress, replyKey } from "../memory/repliesInProgress";
 import { streamTurn, type TurnMetrics } from "../chat/replyStream";
 import { authed } from "../middleware/auth.middleware";
 import { validate } from "../middleware/validate.middleware";

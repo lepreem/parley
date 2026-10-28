@@ -138,7 +138,7 @@ There are two kinds of stream, and both are read with fetch, not EventSource
 | What                                       | Where                                                     |
 | ------------------------------------------ | --------------------------------------------------------- |
 | A chat reply's stream                      | `src/chat/replyStream.ts`                                 |
-| Replies being written, for stop and reload | `src/chat/repliesInProgress.ts`                           |
+| Replies being written, for stop and reload | `src/memory/repliesInProgress.ts`                         |
 | The queue between a reply and its stream   | `@parley/server-kit/sse/eventQueue`                       |
 | `GET /events`, one stream per user         | `src/sse/hub.ts`, `src/sse/events.controller.ts`          |
 | The hub behind it                          | `@parley/server-kit/sse/hub`                              |
@@ -156,10 +156,11 @@ Production is one VPS running `servers/cloud/compose.yaml` with
 (`PORT`, which also carries its event stream) because Caddy dials it. Do not
 randomize it.
 
-Running more than one instance needs more than a replica count: rate limits
-and event streams are per process (see the root TODO.md), and so are the
-replies being written (`src/chat/repliesInProgress.ts`), so a stop request or a reloaded
-page has to reach the instance writing the reply. The instances
+Running more than one instance needs more than a replica count. Everything
+in `src/memory/` lives in the process that wrote it: the model lists, the
+history text below, and the replies being written, so a stop request or a
+reloaded page has to reach the instance writing the reply. Rate limits and
+event streams are per process too (see the root TODO.md). The instances
 have to split the transcription concurrency between them (see
 [Message queues](#message-queues)), and each holds its own database
 connections out of the session pooler's fixed budget, so adding one means
@@ -168,7 +169,7 @@ shrinking the pool in `src/db/pool.ts`.
 ### History text cache
 
 Each `api` process keeps the text of the messages and transcripts it has read
-or saved, per conversation (`src/chat/historyText.cache.ts`), and the next
+or saved, per conversation (`src/memory/historyText.ts`), and the next
 turn's history read leaves that text out. Sending it is most of what the read
 costs. The cache needs no shared store, routing or invalidation, because the
 text is written once: nothing updates a message's `content` or a transcript in

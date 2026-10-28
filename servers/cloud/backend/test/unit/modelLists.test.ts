@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { getOrSetCache, resetCacheMemo } from "../../src/cache/cache";
-import { CACHE_KEYS } from "../../src/cache/cacheKeys";
+import {
+  CACHE_KEYS,
+  getOrSetCache,
+  resetCacheMemo,
+} from "../../src/memory/modelLists";
 
 const TTL_MS = 60 * 60 * 1000;
 

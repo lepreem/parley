@@ -163,7 +163,7 @@ vi.mock("../../src/preparationMetrics", async (importActual) => {
 
 import { createApp } from "../../src/app";
 import { eventHub } from "../../src/sse/hub";
-import { resetHistoryTextCache } from "../../src/chat/historyText.cache";
+import { resetHistoryTextCache } from "../../src/memory/historyText";
 import { resetRateLimits } from "../../src/middleware/rateLimit.middleware";
 import { measurePreparation } from "../../src/preparationMetrics";
 import {

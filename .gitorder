@@ -26,7 +26,7 @@ servers/cloud/backend/src/db/*
 servers/cloud/backend/src/data/*
 servers/cloud/backend/src/ai/*
 servers/cloud/backend/src/storage/*
-servers/cloud/backend/src/cache/*
+servers/cloud/backend/src/memory/*
 servers/cloud/backend/src/schema/*
 servers/cloud/backend/src/auth/*
 servers/cloud/backend/src/cookies/*

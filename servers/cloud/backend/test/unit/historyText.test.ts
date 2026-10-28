@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   historyTextCache,
   resetHistoryTextCache,
-} from "../../src/chat/historyText.cache";
-import type { HistoryCandidate } from "../../src/data";
+} from "../../src/memory/historyText";
+import type { HistoryCandidate } from "../../src/data/index";
 
 function turn(
   id: string,

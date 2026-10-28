@@ -1,4 +1,4 @@
-import { createRepliesInProgress } from "@parley/server-kit/chat/repliesInProgress";
+import { createRepliesInProgress } from "@parley/server-kit/memory/repliesInProgress";
 
 /** The replies this instance is writing, by owner and conversation. */
 export const repliesInProgress = createRepliesInProgress();

@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import type { TurnStats } from "@parley/contract";
-import type { ReplyInProgressEntry } from "@parley/server-kit/chat/repliesInProgress";
+import type { ReplyInProgressEntry } from "@parley/server-kit/memory/repliesInProgress";
 import { logger, messageOf } from "@parley/server-kit/runtime/logger";
 import { data, type HistoryCandidate, type HistoryTranscript } from "../data";
 import { buildUserTurn, chat, type ChatTurn } from "../ai";
@@ -14,7 +14,7 @@ import {
   admitHistory,
   countMessagesInContextWindow,
 } from "./contextWindow";
-import { historyTextCache } from "./historyText.cache";
+import { historyTextCache } from "../memory/historyText";
 import { buildPrompt, containsImageInput, withTranscripts } from "./prompt";
 import type { TurnClaim } from "./turnClaim";
 

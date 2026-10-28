@@ -4,7 +4,7 @@
   "type": "module",
   "description": "Code both servers run and the client never does, so neither server carries its own copy.",
   "exports": {
-    "./chat/repliesInProgress": "./src/chat/repliesInProgress.ts",
+    "./memory/repliesInProgress": "./src/memory/repliesInProgress.ts",
     "./http/cache.middleware": "./src/http/cache.middleware.ts",
     "./http/cursor": "./src/http/cursor.ts",
     "./http/takesBody": "./src/http/takesBody.ts",
