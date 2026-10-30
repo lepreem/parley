@@ -22,7 +22,7 @@ permissions:
   packages: write
 
 env:
-  REGISTRY: ghcr.io/abdelrahman-qazzaz
+  REGISTRY: ghcr.io/lepreem
 
 jobs:
   build:
