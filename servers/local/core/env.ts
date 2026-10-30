@@ -17,8 +17,6 @@ export const baseEnvSchema = z.object({
   DATA_DIR: z.string().min(1).default(path.join(homedir(), ".parley")),
   /** The Claude Code program chat runs on; found on PATH by default. */
   CLAUDE_PATH: z.string().min(1).default("claude"),
-  /** The uv program that runs transcription; found on PATH by default. */
-  UV_PATH: z.string().min(1).default("uv"),
   NODE_ENV: nodeEnvSchema,
 });
 

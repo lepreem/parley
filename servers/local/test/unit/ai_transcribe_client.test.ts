@@ -1,110 +1,194 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fakeProcess, spawned, valueOf } from "../helpers/fakeProcess";
 
-const { mockSpawn } = vi.hoisted(() => ({ mockSpawn: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  decodeAudio: vi.fn(),
+  pingFfmpeg: vi.fn(),
+  modelFile: vi.fn(),
+  loadWhisperModule: vi.fn(),
+  initWhisper: vi.fn(),
+  initWhisperVad: vi.fn(),
+}));
 
-vi.mock("node:child_process", () => ({ spawn: mockSpawn }));
+vi.mock("../../core/ai/decodeAudio", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  decodeAudio: mocks.decodeAudio,
+  pingFfmpeg: mocks.pingFfmpeg,
+}));
+vi.mock("../../core/ai/modelFiles", () => ({ modelFile: mocks.modelFile }));
+vi.mock("@fugood/whisper.node", () => ({
+  loadWhisperModule: mocks.loadWhisperModule,
+  initWhisper: mocks.initWhisper,
+  initWhisperVad: mocks.initWhisperVad,
+  addNativeLogListener: vi.fn(),
+  toggleNativeLog: vi.fn(async () => {}),
+}));
 
-import path from "node:path";
 import {
   DEFAULT_TRANSCRIBE_MODEL,
-  listTranscribeModels,
   isValidTranscribeModel,
+  listTranscribeModels,
   pingTranscribeAI,
   transcribeAI,
 } from "../../core/ai/ai_transcribe_client";
-import { getBaseEnv } from "../../core/env";
 
-/** A segment as whisper.py prints it. */
-const segment = (start: number, end: number, text: string) => ({
-  line: { start, end, text },
-});
+/** 16kHz 16-bit PCM, `seconds` long. */
+const pcmOf = (seconds: number) => Buffer.alloc(seconds * 16_000 * 2);
 
-const transcribe = () => transcribeAI("small", "/data/audios/talk");
+type Segment = { t0: number; t1: number; text: string };
+type Step = { afterMs?: number; segment: Segment };
+
+/**
+ * A whisper.cpp context that finishes each step's segment after its delay,
+ * then resolves with them all (or, with `end: false`, stalls until stopped).
+ */
+function fakeWhisper(steps: Step[], { end = true } = {}) {
+  const context = {
+    transcribeData: vi.fn(
+      (_pcm: ArrayBuffer, options: { onNewSegments?: () => void }) => {
+        let stopped: () => void = () => {};
+        const promise = new Promise((resolve) => {
+          const done: Segment[] = [];
+          stopped = () => resolve({ segments: done, isAborted: true });
+          void (async () => {
+            for (const step of steps) {
+              if (step.afterMs) {
+                await new Promise((r) => setTimeout(r, step.afterMs));
+              }
+              done.push(step.segment);
+              options.onNewSegments?.();
+            }
+            if (end) resolve({ segments: done, isAborted: false });
+          })();
+        });
+        context.stop.mockImplementation(async () => stopped());
+        return { stop: context.stop, promise };
+      },
+    ),
+    stop: vi.fn(),
+    release: vi.fn(async () => {}),
+  };
+  return context;
+}
+
+/** A voice detection context that finds speech where `spans` say, in cs. */
+function fakeVad(spans: { t0: number; t1: number }[]) {
+  return {
+    detectSpeechData: vi.fn(async () => spans),
+    release: vi.fn(async () => {}),
+  };
+}
+
+const transcribe = (model = "small") =>
+  transcribeAI(model, "/data/audios/talk");
 
 beforeEach(() => {
-  mockSpawn.mockReset();
+  vi.clearAllMocks();
+  mocks.decodeAudio.mockResolvedValue(pcmOf(20));
+  mocks.modelFile.mockImplementation(async (name: string) => `/models/${name}`);
+  mocks.loadWhisperModule.mockResolvedValue({});
+  mocks.initWhisperVad.mockResolvedValue(fakeVad([{ t0: 0, t1: 2000 }]));
 });
 
 describe("pingTranscribeAI", () => {
-  it("has uv run the script's check", async () => {
-    mockSpawn.mockImplementation(fakeProcess([]));
-
+  it("loads the binding and runs ffmpeg", async () => {
     await pingTranscribeAI();
 
-    const { command, args } = spawned(mockSpawn);
-    expect(command).toBe("uv");
-    expect(args.slice(0, 3)).toEqual(["run", "--quiet", "--script"]);
-    expect(path.basename(args[3] as string)).toBe("whisper.py");
-    expect(args.slice(4)).toEqual(["--check"]);
-  });
-
-  it("fails with the exception Python ended on", async () => {
-    mockSpawn.mockImplementation(
-      fakeProcess([], {
-        code: 1,
-        stderr: "Traceback (most recent call last):\n  ...\nImportError: no\n",
-      }),
-    );
-
-    await expect(pingTranscribeAI()).rejects.toThrow("ImportError: no");
+    expect(mocks.loadWhisperModule).toHaveBeenCalled();
+    expect(mocks.pingFfmpeg).toHaveBeenCalled();
   });
 });
 
 describe("transcribeAI", () => {
-  it("transcribes the file with the model, keeping models in DATA_DIR", async () => {
-    mockSpawn.mockImplementation(fakeProcess([segment(0, 2, " Hello.")]));
+  it("transcribes the decoded audio with the model's ggml file", async () => {
+    const whisper = fakeWhisper([
+      { segment: { t0: 0, t1: 2000, text: " Hello." } },
+    ]);
+    mocks.initWhisper.mockResolvedValue(whisper);
 
-    expect(await transcribe()).toEqual([{ start: 0, end: 2, text: " Hello." }]);
+    expect(await transcribe("large-v3-turbo")).toEqual([
+      { start: 0, end: 2, text: " Hello." },
+    ]);
 
-    const { args } = spawned(mockSpawn);
-    expect(valueOf(args, "--model")).toBe("small");
-    expect(valueOf(args, "--models-dir")).toBe(
-      path.join(getBaseEnv().DATA_DIR, "models"),
+    expect(mocks.decodeAudio).toHaveBeenCalledWith(
+      "/data/audios/talk",
+      expect.any(AbortSignal),
     );
-    expect(args.at(-1)).toBe("/data/audios/talk");
+    expect(mocks.modelFile).toHaveBeenCalledWith(
+      "ggml-large-v3-turbo.bin",
+      "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin",
+      expect.any(AbortSignal),
+    );
+    expect(mocks.initWhisper).toHaveBeenCalledWith({
+      filePath: "/models/ggml-large-v3-turbo.bin",
+      useGpu: true,
+    });
+    expect(whisper.release).toHaveBeenCalled();
   });
 
-  it("answers every segment Whisper printed, in order", async () => {
-    mockSpawn.mockImplementation(
-      fakeProcess([segment(0, 2, " First."), segment(7, 9, " After a pause.")]),
+  it("detects the language rather than assuming English", async () => {
+    const whisper = fakeWhisper([]);
+    mocks.initWhisper.mockResolvedValue(whisper);
+
+    await transcribe();
+
+    expect(whisper.transcribeData.mock.calls[0]?.[1]).toMatchObject({
+      language: "auto",
+    });
+  });
+
+  it("transcribes only the speech, timed against the original audio", async () => {
+    // Speech from 5s to 7s and from 12s to 13s, in hundredths of a second.
+    mocks.initWhisperVad.mockResolvedValue(
+      fakeVad([
+        { t0: 500, t1: 700 },
+        { t0: 1200, t1: 1300 },
+      ]),
     );
+    // In the shortened audio the second stretch starts at 2.1s, after the
+    // first's 2s and a 0.1s gap.
+    const whisper = fakeWhisper([
+      { segment: { t0: 0, t1: 2000, text: " First." } },
+      { segment: { t0: 2100, t1: 3100, text: " After a pause." } },
+    ]);
+    mocks.initWhisper.mockResolvedValue(whisper);
 
     expect(await transcribe()).toEqual([
-      { start: 0, end: 2, text: " First." },
-      { start: 7, end: 9, text: " After a pause." },
+      { start: 5, end: 7, text: " First." },
+      { start: 12, end: 13, text: " After a pause." },
     ]);
+    const [pcm] = whisper.transcribeData.mock.calls[0]!;
+    expect(pcm.byteLength).toBe(3.1 * 16_000 * 2);
   });
 
-  it("is empty for audio with no speech", async () => {
-    mockSpawn.mockImplementation(fakeProcess([]));
+  it("is empty for audio with no speech, without loading Whisper", async () => {
+    mocks.initWhisperVad.mockResolvedValue(fakeVad([]));
 
     expect(await transcribe()).toEqual([]);
+    expect(mocks.initWhisper).not.toHaveBeenCalled();
   });
 
-  it("fails with the whole exception, when its message runs over lines", async () => {
-    mockSpawn.mockImplementation(
-      fakeProcess([segment(0, 2, " Hello.")], {
-        code: 1,
-        stderr:
-          "Traceback (most recent call last):\n  ...\nRuntimeError: Download failed:\nBlocked by network policy\n  detail: no matching allow rule\n",
-      }),
-    );
+  it("fails when the file can't be decoded", async () => {
+    mocks.decodeAudio.mockRejectedValue(new Error("Invalid data"));
 
-    await expect(transcribe()).rejects.toThrow(
-      "RuntimeError: Download failed:\nBlocked by network policy\n  detail: no matching allow rule",
-    );
+    await expect(transcribe()).rejects.toThrow("Invalid data");
   });
 
-  it("fails with the last line of anything else it printed", async () => {
-    mockSpawn.mockImplementation(
-      fakeProcess([], {
-        code: 2,
-        stderr: "error: No such file\nhint: check it\n",
-      }),
-    );
+  it("fails when a model can't be downloaded", async () => {
+    mocks.modelFile.mockRejectedValue(new Error("HTTP 404"));
 
-    await expect(transcribe()).rejects.toThrow(/^hint: check it$/);
+    await expect(transcribe()).rejects.toThrow("HTTP 404");
+  });
+
+  it("releases the model when transcription fails", async () => {
+    const whisper = fakeWhisper([]);
+    whisper.transcribeData.mockReturnValue({
+      stop: vi.fn(),
+      promise: Promise.reject(new Error("native failure")),
+    });
+    mocks.initWhisper.mockResolvedValue(whisper);
+
+    await expect(transcribe()).rejects.toThrow("native failure");
+    expect(whisper.release).toHaveBeenCalled();
   });
 });
 
@@ -119,8 +203,10 @@ describe("transcribeAI timeouts", () => {
   const MINUTE = 60_000;
 
   it("waits for the model to download before the first segment", async () => {
-    mockSpawn.mockImplementation(
-      fakeProcess([{ afterMs: 29 * MINUTE, ...segment(0, 1, " Hi.") }]),
+    mocks.initWhisper.mockResolvedValue(
+      fakeWhisper([
+        { afterMs: 29 * MINUTE, segment: { t0: 0, t1: 1000, text: " Hi." } },
+      ]),
     );
     const result = transcribe();
 
@@ -128,10 +214,12 @@ describe("transcribeAI timeouts", () => {
     expect(await result).toEqual([{ start: 0, end: 1, text: " Hi." }]);
   });
 
-  it("gives up on a run that stalls between segments, and kills it", async () => {
-    mockSpawn.mockImplementation(
-      fakeProcess([segment(0, 1, " Hi.")], { end: false }),
+  it("gives up on a run that stalls between segments, and stops it", async () => {
+    const whisper = fakeWhisper(
+      [{ segment: { t0: 0, t1: 1000, text: " Hi." } }],
+      { end: false },
     );
+    mocks.initWhisper.mockResolvedValue(whisper);
     const result = transcribe();
     const failed = expect(result).rejects.toMatchObject({
       name: "TimeoutError",
@@ -140,7 +228,8 @@ describe("transcribeAI timeouts", () => {
 
     await vi.advanceTimersByTimeAsync(10 * MINUTE);
     await failed;
-    expect(spawned(mockSpawn).options.signal?.aborted).toBe(true);
+    expect(whisper.stop).toHaveBeenCalled();
+    expect(whisper.release).toHaveBeenCalled();
   });
 });
 
