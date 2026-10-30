@@ -1,0 +1,11 @@
+{
+  // The repo with the local app hidden, so Cmd+P and search only show the
+  // website side: client, cloud server and shared packages.
+  "folders": [{ "path": "." }],
+  "settings": {
+    "files.exclude": {
+      "servers/local": true,
+      "desktop": true
+    }
+  }
+}
