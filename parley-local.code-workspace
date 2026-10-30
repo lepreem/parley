@@ -1,0 +1,10 @@
+{
+  // The repo with the cloud server hidden, so Cmd+P and search only show the
+  // local side: client, local server, desktop app and shared packages.
+  "folders": [{ "path": "." }],
+  "settings": {
+    "files.exclude": {
+      "servers/cloud": true
+    }
+  }
+}
