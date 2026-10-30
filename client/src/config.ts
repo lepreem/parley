@@ -77,6 +77,10 @@ export function authRefreshEndpoint(): string {
   return `${cloudServer.baseUrl}/auth/refresh`;
 }
 
+export function authGuestEndpoint(): string {
+  return `${cloudServer.baseUrl}/auth/guest`;
+}
+
 export function authLogoutEndpoint(): string {
   return `${cloudServer.baseUrl}/auth/logout`;
 }

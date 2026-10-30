@@ -4,7 +4,11 @@ import {
   uploadConfirmRateLimiter,
   uploadRateLimiter,
 } from "../middleware/rateLimit.middleware";
-import { requireAuth, type AuthEnv } from "../middleware/auth.middleware";
+import {
+  refuseGuests,
+  requireAuth,
+  type AuthEnv,
+} from "../middleware/auth.middleware";
 import { imagesRouter } from "./images.router";
 
 export const uploadRouter = new Hono<AuthEnv>();
@@ -15,7 +19,7 @@ uploadRouter.route("/image", imagesRouter);
 
 // Budgets are per route: one upload is a mint and a confirm, and only the
 // mint stands for the upload.
-uploadRouter.use("*", requireAuth);
+uploadRouter.use("*", requireAuth, refuseGuests);
 
 uploadRouter.post(
   "/audio",

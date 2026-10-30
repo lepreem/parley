@@ -2,11 +2,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { CACHE_KEYS } from "../../src/memory/modelLists";
 import { CLAIM_LEASE_MS } from "../../src/data/conversations.data";
 
-const { mockGetOrSetCache, mockModelsList, mockChatSend } = vi.hoisted(() => ({
-  mockGetOrSetCache: vi.fn(),
-  mockModelsList: vi.fn(),
-  mockChatSend: vi.fn(),
-}));
+const { mockGetOrSetCache, mockModelsList, mockChatSend, sentWithKeys } =
+  vi.hoisted(() => ({
+    mockGetOrSetCache: vi.fn(),
+    mockModelsList: vi.fn(),
+    mockChatSend: vi.fn(),
+    /** The API key of the client each chat request went through. */
+    sentWithKeys: [] as string[],
+  }));
 
 vi.mock("../../src/memory/modelLists", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../src/memory/modelLists")>()),
@@ -18,8 +21,14 @@ const runFetch = <T>(_name: unknown, fetch: () => Promise<T>) => fetch();
 
 vi.mock("@openrouter/sdk", () => ({
   OpenRouter: class {
+    constructor(private readonly options: { apiKey: string }) {}
     models = { list: mockModelsList };
-    chat = { send: mockChatSend };
+    chat = {
+      send: (...args: unknown[]) => {
+        sentWithKeys.push(this.options.apiKey);
+        return mockChatSend(...args);
+      },
+    };
   },
 }));
 
@@ -132,6 +141,43 @@ describe("listChatModels", () => {
   });
 });
 
+describe("listGuestModels", () => {
+  const priced = (id: string, input: number, output: number) => ({
+    ...sampleModel,
+    id,
+    pricing: { inputPerMillionTokens: input, outputPerMillionTokens: output },
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("offers gpt-4o-mini and what costs no more, for input and output both", async () => {
+    mockGetOrSetCache.mockResolvedValue([
+      priced(MODEL_ID, 0.15, 0.6),
+      priced("cheap/model", 0.1, 0.4),
+      priced("free/model:free", 0, 0),
+      priced("dear-input/model", 0.2, 0.4),
+      priced("dear-output/model", 0.1, 0.8),
+      { ...sampleModel, id: "openrouter/auto", pricing: null },
+    ]);
+
+    expect((await chat.listGuestModels()).map((model) => model.id)).toEqual([
+      MODEL_ID,
+      "cheap/model",
+      "free/model:free",
+    ]);
+    expect(await chat.isGuestModel("cheap/model")).toBe(true);
+    expect(await chat.isGuestModel("dear-output/model")).toBe(false);
+  });
+
+  it("offers nothing while gpt-4o-mini is missing from the catalog", async () => {
+    mockGetOrSetCache.mockResolvedValue([priced("cheap/model", 0.1, 0.4)]);
+
+    expect(await chat.listGuestModels()).toEqual([]);
+  });
+});
+
 describe("findChatModel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -174,6 +220,25 @@ describe("buildUserTurn", () => {
 describe("chatAI", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sentWithKeys.length = 0;
+  });
+
+  it("bills a guest's call to the guest key, and anyone else's to the main one", async () => {
+    mockChatSend.mockResolvedValue({
+      choices: [{ message: { content: "hi" } }],
+    });
+
+    await chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
+      guest: true,
+    });
+    await chat.complete(MODEL_ID, [{ role: "user", content: "yo" }]);
+    await chat.generateTitle("conversation", "yo", { guest: true });
+
+    expect(sentWithKeys).toEqual([
+      process.env.OPENROUTER_GUEST_API_KEY,
+      process.env.OPENROUTER_API_KEY,
+      process.env.OPENROUTER_GUEST_API_KEY,
+    ]);
   });
 
   it("routes for low latency and pins the session for prompt-cache hits", async () => {

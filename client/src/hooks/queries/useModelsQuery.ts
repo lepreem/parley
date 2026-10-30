@@ -7,6 +7,7 @@ import {
 } from "../../api/models";
 import { queryKeys } from "../../lib/queryClient";
 import { useServer } from "../server/useServer";
+import { useIsGuest } from "../auth/useIsGuest";
 
 /** The catalogs only change when the app does. */
 const MODEL_CATALOG_STALE_MS = 60 * 60_000;
@@ -14,8 +15,9 @@ const MODEL_CATALOG_STALE_MS = 60 * 60_000;
 /** The chat models, in the order the API lists them. */
 export function useChatModelsQuery(enabled: boolean) {
   const server = useServer();
+  const guest = useIsGuest();
   const query = useQuery({
-    queryKey: queryKeys.chatModels(server.id),
+    queryKey: queryKeys.chatModels(server.id, guest),
     queryFn: () => fetchChatModels(server),
     enabled,
     staleTime: MODEL_CATALOG_STALE_MS,

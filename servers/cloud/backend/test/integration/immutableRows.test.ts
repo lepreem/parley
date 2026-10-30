@@ -44,6 +44,7 @@ import {
   db,
   users,
 } from "../../src/db";
+import { users as usersData } from "../../src/data/users.data";
 
 const userId = "immutable-owner";
 const conversationId = randomUUID();
@@ -118,6 +119,82 @@ describe.skipIf(!testState.databaseUrl)("written once, in PostgreSQL", () => {
     ).rejects.toMatchObject(immutable("chat_messages"));
     const [message] = await db.select().from(ChatMessages);
     expect(message?.content).toBe("Summarize this");
+  });
+
+  it("lets a message change owner", async () => {
+    await db.insert(users).values({ id: "new-owner" });
+    await db
+      .update(ChatMessages)
+      .set({ userId: "new-owner", updatedAt: sql`${ChatMessages.updatedAt}` })
+      .where(eq(ChatMessages.id, messageId));
+    const [message] = await db.select().from(ChatMessages);
+    expect(message?.userId).toBe("new-owner");
+  });
+
+  it("refuses an owner change that bumps updated_at with it", async () => {
+    await db.insert(users).values({ id: "new-owner" });
+    await expect(
+      db
+        .update(ChatMessages)
+        .set({ userId: "new-owner" })
+        .where(eq(ChatMessages.id, messageId)),
+    ).rejects.toMatchObject(immutable("chat_messages"));
+  });
+
+  it("refuses an owner change that changes anything else", async () => {
+    await db.insert(users).values({ id: "new-owner" });
+    await expect(
+      db
+        .update(ChatMessages)
+        .set({ userId: "new-owner", content: "Rewritten" })
+        .where(eq(ChatMessages.id, messageId)),
+    ).rejects.toMatchObject(immutable("chat_messages"));
+    const [message] = await db.select().from(ChatMessages);
+    expect(message).toMatchObject({ userId, content: "Summarize this" });
+  });
+
+  it("refuses an update that changes nothing, where nothing is tolerated", async () => {
+    await expect(
+      db
+        .update(TranscriptContents)
+        .set({ content: sql`${TranscriptContents.content}` })
+        .where(eq(TranscriptContents.audioUploadId, audioUploadId)),
+    ).rejects.toMatchObject(immutable("transcript_contents"));
+  });
+
+  it("moves a guest's chats to an account and deletes the guest", async () => {
+    const guestId = "guest_moving";
+    const guestConversationId = randomUUID();
+    const updatedAt = new Date("2026-01-02T03:04:05Z");
+    await db.insert(users).values({ id: guestId });
+    await db.insert(Conversations).values({
+      id: guestConversationId,
+      userId: guestId,
+      updatedAt,
+    });
+    await db.insert(ChatMessages).values({
+      id: randomUUID(),
+      role: "user",
+      content: "Hello",
+      conversationId: guestConversationId,
+      userId: guestId,
+    });
+
+    await usersData.adoptGuest(guestId, userId);
+
+    const conversations = await db
+      .select()
+      .from(Conversations)
+      .where(eq(Conversations.id, guestConversationId));
+    expect(conversations).toMatchObject([{ userId, updatedAt }]);
+    const messages = await db
+      .select()
+      .from(ChatMessages)
+      .where(eq(ChatMessages.conversationId, guestConversationId));
+    expect(messages).toMatchObject([{ userId, content: "Hello" }]);
+    expect(await db.select().from(users).where(eq(users.id, guestId))).toEqual(
+      [],
+    );
   });
 
   it("refuses to update a message's attachment link", async () => {

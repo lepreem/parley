@@ -67,7 +67,10 @@ const stores: MemoryStore[] = [];
  * RATE_LIMIT_MULTIPLIER raises every budget for the load test, which would
  * otherwise measure mostly 429s; production refuses to start with it set.
  */
-function createLimiter(name: RateLimitName) {
+function createLimiter(
+  name: RateLimitName,
+  { onlyGuests = false }: { onlyGuests?: boolean } = {},
+) {
   const { windowMs, key } = RATE_LIMIT_POLICIES[name];
   const limit =
     RATE_LIMIT_POLICIES[name].limit * (getEnv().RATE_LIMIT_MULTIPLIER ?? 1);
@@ -81,6 +84,8 @@ function createLimiter(name: RateLimitName) {
     keyGenerator: keyOf[key],
     store,
     message: rateLimitMessage,
+    // Behind requireAuth, which says who's a guest.
+    ...(onlyGuests ? { skip: (c: Context) => c.get("isGuest") !== true } : {}),
   });
 }
 
@@ -89,10 +94,15 @@ export const authCallbackRateLimiter = createLimiter("authCallback");
 export const authLogoutRateLimiter = createLimiter("authLogout");
 export const authMeRateLimiter = createLimiter("authMe");
 export const authRefreshRateLimiter = createLimiter("authRefresh");
+export const authGuestRateLimiter = createLimiter("authGuest");
 
 export const jobRateLimiter = createLimiter("job");
 export const conversationRateLimiter = createLimiter("conversation");
 export const chatTurnRateLimiter = createLimiter("chatTurn");
+/** Counts guests' turns only; anyone else passes. */
+export const guestChatTurnRateLimiter = createLimiter("guestChatTurn", {
+  onlyGuests: true,
+});
 export const modelRateLimiter = createLimiter("model");
 export const imageReadRateLimiter = createLimiter("imageRead");
 export const uploadRateLimiter = createLimiter("upload");

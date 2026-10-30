@@ -71,6 +71,9 @@ services:
       - SUPABASE_URL
       - SUPABASE_SERVICE_ROLE_KEY
       - OPENROUTER_API_KEY
+      # Guest chat is on only with both of these (backend/src/env.ts).
+      - GUEST_SESSION_SECRET
+      - OPENROUTER_GUEST_API_KEY
       - DEEPGRAM_API_KEY
       - WORKOS_API_KEY
       - WORKOS_CLIENT_ID

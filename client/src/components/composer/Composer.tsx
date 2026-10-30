@@ -7,6 +7,7 @@ import {
 } from "react";
 import type { ChatModel, MessageRequirements } from "../../api/models";
 import { useShell } from "../app/shellContext";
+import { useIsGuest } from "../../hooks/auth/useIsGuest";
 import { findYoutubeUrl } from "../../media/youtube";
 import { useSources } from "../../sources/useSources";
 import { Icon } from "../ui/Icon";
@@ -57,6 +58,8 @@ export function Composer({
   onSend,
 }: ComposerProps) {
   const { setSourcesOpen } = useShell();
+  // Guests chat in text only; the server refuses their uploads.
+  const guest = useIsGuest();
   const {
     sources,
     addFiles,
@@ -84,6 +87,7 @@ export function Composer({
 
   const candidateUrl = findYoutubeUrl(text);
   const offeredUrl =
+    !guest &&
     candidateUrl &&
     !dismissedUrls.includes(candidateUrl) &&
     !sources.some((source) => source.youtubeUrl === candidateUrl)
@@ -99,7 +103,7 @@ export function Composer({
 
   const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
     const files = Array.from(event.clipboardData.files);
-    if (files.length === 0) return;
+    if (guest || files.length === 0) return;
     event.preventDefault();
     addFiles(files);
   };
@@ -149,17 +153,19 @@ export function Composer({
             onChange={(event) => onTextChange(event.target.value)}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
-            placeholder="Ask about your sources…"
+            placeholder={guest ? "Ask anything…" : "Ask about your sources…"}
             className="block max-h-60 w-full resize-none bg-transparent px-4 pt-3.5 text-[15px] leading-relaxed outline-none placeholder:text-faint"
           />
 
           <div className="flex items-center gap-1 px-2.5 pb-2.5 pt-1">
-            <AttachMenu
-              onAddFiles={addFiles}
-              onBrowseSources={() => setSourcesOpen(true)}
-              transcriptModelId={transcriptModelId}
-              onTranscriptModelChange={setTranscriptModelId}
-            />
+            {!guest && (
+              <AttachMenu
+                onAddFiles={addFiles}
+                onBrowseSources={() => setSourcesOpen(true)}
+                transcriptModelId={transcriptModelId}
+                onTranscriptModelChange={setTranscriptModelId}
+              />
+            )}
             <ModelPicker
               models={models}
               value={modelId}

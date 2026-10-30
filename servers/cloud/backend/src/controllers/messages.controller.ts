@@ -131,7 +131,7 @@ export const handleCreateMessage = authed.createHandlers(
   validate("json", messageCreateBodySchema),
   async (c) => {
     const request = turnRequestFrom(
-      c.var.userId,
+      c.var,
       c.req.valid("param").conversationId,
       c.req.valid("json"),
     );
@@ -156,11 +156,7 @@ export const handlePatchMessage = authed.createHandlers(
   validate("json", messageCreateBodySchema),
   async (c) => {
     const { conversationId, messageId } = c.req.valid("param");
-    const request = turnRequestFrom(
-      c.var.userId,
-      conversationId,
-      c.req.valid("json"),
-    );
+    const request = turnRequestFrom(c.var, conversationId, c.req.valid("json"));
     return withTurnMetrics(request, (metrics) => {
       const claim = claimTurn(request);
       return streamTurn(c, request, metrics, claim, async () => {

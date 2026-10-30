@@ -5,7 +5,11 @@ import {
   uploadConfirmRateLimiter,
   uploadRateLimiter,
 } from "../middleware/rateLimit.middleware";
-import { requireAuth, type AuthEnv } from "../middleware/auth.middleware";
+import {
+  refuseGuests,
+  requireAuth,
+  type AuthEnv,
+} from "../middleware/auth.middleware";
 
 /**
  * Mounted under /upload/image, ahead of the parent's middleware, so nothing
@@ -16,7 +20,7 @@ import { requireAuth, type AuthEnv } from "../middleware/auth.middleware";
  */
 export const imagesRouter = new Hono<AuthEnv>();
 
-imagesRouter.use("*", requireAuth);
+imagesRouter.use("*", requireAuth, refuseGuests);
 
 imagesRouter.post(
   "/",
