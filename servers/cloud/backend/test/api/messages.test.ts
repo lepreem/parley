@@ -17,6 +17,7 @@ const {
   mockFindChatModel,
   mockChatAI,
   mockGenerateTitle,
+  mockIsGuestModel,
   mockClaimAttachments,
   mockUnclaimAttachments,
 } = vi.hoisted(() => ({
@@ -36,6 +37,7 @@ const {
   mockFindChatModel: vi.fn(),
   mockChatAI: vi.fn(),
   mockGenerateTitle: vi.fn(),
+  mockIsGuestModel: vi.fn(),
   mockClaimAttachments: vi.fn(),
   mockUnclaimAttachments: vi.fn(),
 }));
@@ -150,6 +152,7 @@ vi.mock("../../src/ai/ai_chat_client", async (importActual) => {
       findModel: mockFindChatModel,
       complete: mockChatAI,
       generateTitle: mockGenerateTitle,
+      isGuestModel: mockIsGuestModel,
     },
   };
 });
@@ -172,7 +175,11 @@ import {
   MAX_RESPONSE_TOKENS,
 } from "../../src/chat/contextWindow";
 import { MAX_TRANSCRIPTS } from "../../src/schema/messages.schema";
-import { authedHeaders, sessionCookieHeader } from "../helpers/session";
+import {
+  authedHeaders,
+  guestCookieHeader,
+  sessionCookieHeader,
+} from "../helpers/session";
 import { type HistoryCandidate } from "../../src/data/messages.data";
 import type { ReplyStreamEvents } from "@parley/contract";
 
@@ -330,7 +337,130 @@ beforeEach(() => {
     acceptsImages: true,
   });
   mockGenerateTitle.mockResolvedValue("Friendly greeting");
+  mockIsGuestModel.mockResolvedValue(true);
   mockDeleteObjects.mockResolvedValue([]);
+});
+
+describe("a guest's turn", () => {
+  const guestId = "guest_00000000-0000-4000-8000-000000000001";
+
+  async function postAsGuest(
+    body: Record<string, unknown>,
+    clientIp = "203.0.113.10",
+  ) {
+    return (await createApp()).request(
+      `http://localhost/conversations/${conversationId}/messages`,
+      {
+        method: "POST",
+        headers: {
+          Cookie: await guestCookieHeader(guestId),
+          "Content-Type": "application/json",
+          "X-Real-IP": clientIp,
+        },
+        body: JSON.stringify(
+          messageRequestBody({ lastMessageId: null, ...body }),
+        ),
+      },
+    );
+  }
+
+  beforeEach(() => {
+    mockChatAI.mockImplementation(
+      async (
+        _model: string,
+        _turns: unknown,
+        opts: { onDelta: (d: string) => Promise<void> },
+      ) => {
+        await opts.onDelta("Hello");
+        return "Hello";
+      },
+    );
+  });
+
+  it("is billed to the guest key, title included", async () => {
+    const res = await postAsGuest({
+      messageContent: "Hi there",
+      chosenModelId: modelId,
+    });
+    await res.text();
+
+    expect(res.status).toBe(200);
+    expect(mockChatAI).toHaveBeenCalledWith(
+      modelId,
+      expect.anything(),
+      expect.objectContaining({ guest: true }),
+    );
+    expect(mockGenerateTitle).toHaveBeenCalledWith("conversation", "Hi there", {
+      guest: true,
+    });
+    expect(mockPersistAndUnclaimChatTurn).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: guestId }),
+    );
+  });
+
+  it("is refused a model that costs more than the guest ones", async () => {
+    mockIsGuestModel.mockResolvedValue(false);
+
+    const res = await postAsGuest({
+      messageContent: "Hi there",
+      chosenModelId: "anthropic/claude-sonnet-5",
+    });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      message: "Invalid model: sign in to use this model",
+    });
+    expect(mockChatAI).not.toHaveBeenCalled();
+    expect(mockUnclaimConversationTurn).toHaveBeenCalled();
+  });
+
+  it("gets ten turns a day from one address, across guests", async () => {
+    for (let i = 0; i < 10; i++) {
+      const res = await postAsGuest({
+        messageContent: "Hi there",
+        chosenModelId: modelId,
+      });
+      await res.text();
+      expect(res.status).not.toBe(429);
+    }
+
+    const limited = await postAsGuest({
+      messageContent: "Hi there",
+      chosenModelId: modelId,
+    });
+    expect(limited.status).toBe(429);
+    const elsewhere = await postAsGuest(
+      { messageContent: "Hi there", chosenModelId: modelId },
+      "203.0.113.11",
+    );
+    await elsewhere.text();
+    expect(elsewhere.status).toBe(200);
+  });
+
+  it("doesn't count a signed-in user's turns against the address", async () => {
+    for (let i = 0; i < 11; i++) {
+      const res = await (
+        await createApp()
+      ).request(`http://localhost/conversations/${conversationId}/messages`, {
+        method: "POST",
+        headers: {
+          Cookie: await sessionCookieHeader(userId),
+          "Content-Type": "application/json",
+          "X-Real-IP": "203.0.113.10",
+        },
+        body: JSON.stringify(
+          messageRequestBody({
+            lastMessageId: null,
+            messageContent: "Hi there",
+            chosenModelId: modelId,
+          }),
+        ),
+      });
+      await res.text();
+      expect(res.status).toBe(200);
+    }
+    expect(mockIsGuestModel).not.toHaveBeenCalled();
+  });
 });
 
 describe("GET /conversations/:conversationId/messages", () => {
@@ -977,7 +1107,9 @@ describe("POST /conversations/:conversationId/messages", () => {
         claimToken: requestClaimToken(),
       }),
     );
-    expect(mockGenerateTitle).toHaveBeenCalledWith("conversation", "Hi there");
+    expect(mockGenerateTitle).toHaveBeenCalledWith("conversation", "Hi there", {
+      guest: false,
+    });
   });
 
   it("ends with the turn's stats: its steps, the model's times and its context", async () => {

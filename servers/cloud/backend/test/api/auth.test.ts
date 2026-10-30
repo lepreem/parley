@@ -76,6 +76,7 @@ describe("GET /auth/me", () => {
     expect(await res.json()).toEqual({
       userId: "user_01TEST",
       expiresAt: new Date(expiresAtEpochSeconds * 1000).toISOString(),
+      isGuest: false,
     });
   });
 });

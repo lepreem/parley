@@ -1,6 +1,7 @@
 import { data } from "./data";
 import { logger } from "@parley/server-kit/runtime/logger";
 import { UPLOAD_CONFIRM_WINDOW_MS, uploads } from "./uploads";
+import { GUEST_SESSION_SECONDS } from "./auth/guestToken";
 
 const log = logger.child({ component: "sweeper" });
 
@@ -63,6 +64,25 @@ async function sweepUnusedObjects() {
 }
 
 /**
+ * A day past the longest a guest session lasts, so a guest still signed in
+ * is never swept, whatever the clocks.
+ */
+const GUEST_LIFETIME_MS = (GUEST_SESSION_SECONDS + 24 * 60 * 60) * 1000;
+
+/**
+ * Deletes guests whose sessions have all ended, and what they made. They
+ * own nothing in storage (guests chat in text only), so there's nothing to
+ * remove there first. Returns how many were deleted.
+ */
+async function sweepExpiredGuests() {
+  const deleted = await data.users.deleteGuestsCreatedBefore(
+    new Date(Date.now() - GUEST_LIFETIME_MS),
+  );
+  if (deleted > 0) log.info("Swept expired guests", { deleted });
+  return deleted;
+}
+
+/**
  * Sweeps now and then every interval. The returned function stops the
  * schedule and waits for a sweep in progress. A run still going when the next
  * is due is left to finish rather than joined by a second one.
@@ -72,9 +92,13 @@ function schedule(intervalMs = INTERVAL_MS) {
 
   const run = () => {
     if (inFlight) return;
-    inFlight = sweepUnusedObjects()
+    inFlight = Promise.all([
+      sweepUnusedObjects().catch((error) => log.error("Sweep failed", error)),
+      sweepExpiredGuests().catch((error) =>
+        log.error("Guest sweep failed", error),
+      ),
+    ])
       .then(() => undefined)
-      .catch((error) => log.error("Sweep failed", error))
       .finally(() => {
         inFlight = undefined;
       });
@@ -92,4 +116,5 @@ function schedule(intervalMs = INTERVAL_MS) {
 export const sweeper = {
   schedule,
   sweepUnusedObjects,
+  sweepExpiredGuests,
 };

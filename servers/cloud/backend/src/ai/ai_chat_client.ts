@@ -16,6 +16,26 @@ const client = new OpenRouter({
   serverURL: getEnv().OPENROUTER_BASE_URL,
 });
 
+/**
+ * Guests' turns go through a key of their own, whose credit limit is the cap
+ * on what guests can spend. There is no guest client without that key, so a
+ * guest turn can never fall back to the main one.
+ */
+const guestApiKey = getEnv().OPENROUTER_GUEST_API_KEY;
+const guestClient =
+  guestApiKey === undefined
+    ? undefined
+    : new OpenRouter({
+        apiKey: guestApiKey,
+        serverURL: getEnv().OPENROUTER_BASE_URL,
+      });
+
+function clientFor(guest: boolean) {
+  if (!guest) return client;
+  if (!guestClient) throw new Error("Guest chat isn't enabled");
+  return guestClient;
+}
+
 /** Startup health check: fails if OpenRouter is unreachable or rejects the API key. */
 async function ping(): Promise<void> {
   await client.models.list();
@@ -61,10 +81,11 @@ const CHAT_BETWEEN_CHUNKS_TIMEOUT_MS = 30 * 1000; // 30 seconds
 const TITLE_TIMEOUT_MS = 15 * 1000; // 15 seconds
 
 async function nonStreamChatAI(
+  sender: OpenRouter,
   chatRequest: ChatRequest,
   abortSignal: AbortSignal,
 ) {
-  const completion = await client.chat.send(
+  const completion = await sender.chat.send(
     { chatRequest },
     { signal: abortSignal },
   );
@@ -77,6 +98,7 @@ async function nonStreamChatAI(
 }
 
 async function streamChatAI(
+  sender: OpenRouter,
   chatRequest: ChatRequest,
   onDelta: (delta: string) => void | Promise<void>,
   {
@@ -84,7 +106,7 @@ async function streamChatAI(
     markProgress,
   }: { abortSignal: AbortSignal; markProgress: () => void },
 ) {
-  const stream = await client.chat.send(
+  const stream = await sender.chat.send(
     { chatRequest: { ...chatRequest, stream: true } },
     { signal: abortSignal },
   );
@@ -125,6 +147,8 @@ type ChatOptions = {
   timeoutMs?: number | undefined;
   /** Ends the call early: the stop button, through the reply registry. */
   signal?: AbortSignal | undefined;
+  /** Bills the call to the guest key. */
+  guest?: boolean | undefined;
 };
 
 async function complete(
@@ -154,10 +178,11 @@ async function complete(
     signal: opts.signal,
   };
 
+  const sender = clientFor(opts.guest ?? false);
   return withTimeout(timeoutOptions, (ctx) =>
     opts.onDelta
-      ? streamChatAI(chatRequest, opts.onDelta, ctx)
-      : nonStreamChatAI(chatRequest, ctx.abortSignal),
+      ? streamChatAI(sender, chatRequest, opts.onDelta, ctx)
+      : nonStreamChatAI(sender, chatRequest, ctx.abortSignal),
   );
 }
 
@@ -223,12 +248,42 @@ async function findModel(id: string): Promise<ChatModel | undefined> {
   return (await listModels()).find((model) => model.id === id);
 }
 
+/**
+ * Guests get this model and any that cost no more, for input and output
+ * both. A model without a fixed price (a router's) isn't one of them, and
+ * nor is anything while this one is missing from the catalog.
+ */
+const GUEST_PRICE_CEILING_MODEL = "openai/gpt-4o-mini";
+
+function guestModelsOf(models: readonly ChatModel[]): ChatModel[] {
+  const ceiling = models.find(
+    (model) => model.id === GUEST_PRICE_CEILING_MODEL,
+  )?.pricing;
+  if (!ceiling) return [];
+  return models.filter(
+    ({ pricing }) =>
+      pricing !== null &&
+      pricing.inputPerMillionTokens <= ceiling.inputPerMillionTokens &&
+      pricing.outputPerMillionTokens <= ceiling.outputPerMillionTokens,
+  );
+}
+
+/** The models a guest can chat with. */
+async function listGuestModels(): Promise<ChatModel[]> {
+  return guestModelsOf(await listModels());
+}
+
+async function isGuestModel(id: string): Promise<boolean> {
+  return (await listGuestModels()).some((model) => model.id === id);
+}
+
 const MAX_TITLE_INPUT_CHARS = 12_000;
 const DEFAULT_TITLE_GENERATION_MODEL = "openai/gpt-4o-mini";
 
 async function generateTitle(
   kind: "conversation" | "transcript",
   content: string,
+  { guest = false }: { guest?: boolean } = {},
 ): Promise<string> {
   const title = await complete(
     DEFAULT_TITLE_GENERATION_MODEL,
@@ -238,7 +293,7 @@ async function generateTitle(
         content: `Generate a concise, descriptive title of at most eight words for this ${kind}. Return only the title.\n\n${content.slice(0, MAX_TITLE_INPUT_CHARS)}`,
       },
     ],
-    { maxOutputTokens: 24, timeoutMs: TITLE_TIMEOUT_MS },
+    { maxOutputTokens: 24, timeoutMs: TITLE_TIMEOUT_MS, guest },
   );
 
   return title.trim();
@@ -248,7 +303,9 @@ async function generateTitle(
 export const chat = {
   complete,
   listModels,
+  listGuestModels,
   findModel,
+  isGuestModel,
   generateTitle,
   ping,
 };

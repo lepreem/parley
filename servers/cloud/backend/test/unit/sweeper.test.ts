@@ -1,11 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockWithAdvisoryLock, mockFindLedgerEntries, mockDeleteObjects } =
-  vi.hoisted(() => ({
-    mockWithAdvisoryLock: vi.fn(),
-    mockFindLedgerEntries: vi.fn(),
-    mockDeleteObjects: vi.fn(),
-  }));
+const {
+  mockWithAdvisoryLock,
+  mockFindLedgerEntries,
+  mockDeleteObjects,
+  mockDeleteGuestsCreatedBefore,
+} = vi.hoisted(() => ({
+  mockWithAdvisoryLock: vi.fn(),
+  mockFindLedgerEntries: vi.fn(),
+  mockDeleteObjects: vi.fn(),
+  mockDeleteGuestsCreatedBefore: vi.fn(),
+}));
 
 vi.mock("../../src/data/advisoryLock.data", () => ({
   advisoryLock: {
@@ -17,6 +22,9 @@ vi.mock("../../src/data/storageLedger.data", () => ({
     findLedgerEntries: mockFindLedgerEntries,
   },
 }));
+vi.mock("../../src/data/users.data", () => ({
+  users: { deleteGuestsCreatedBefore: mockDeleteGuestsCreatedBefore },
+}));
 vi.mock("../../src/uploads", () => ({
   UPLOAD_CONFIRM_WINDOW_MS: 2 * 60 * 60 * 1000,
   uploads: { deleteObjects: mockDeleteObjects },
@@ -25,6 +33,7 @@ vi.mock("../../src/uploads", () => ({
 import { sweeper } from "../../src/sweeper";
 
 const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -33,6 +42,26 @@ beforeEach(() => {
   );
   mockFindLedgerEntries.mockResolvedValue([]);
   mockDeleteObjects.mockResolvedValue(undefined);
+  mockDeleteGuestsCreatedBefore.mockResolvedValue(0);
+});
+
+describe("sweeper.sweepExpiredGuests", () => {
+  it("deletes guests a day older than the longest guest session", async () => {
+    mockDeleteGuestsCreatedBefore.mockResolvedValue(3);
+    const before = Date.now();
+
+    expect(await sweeper.sweepExpiredGuests()).toBe(3);
+
+    const [createdBefore] = mockDeleteGuestsCreatedBefore.mock.calls[0] as [
+      Date,
+    ];
+    expect(createdBefore.getTime()).toBeGreaterThanOrEqual(
+      before - 31 * DAY_MS,
+    );
+    expect(createdBefore.getTime()).toBeLessThanOrEqual(
+      Date.now() - 31 * DAY_MS,
+    );
+  });
 });
 
 describe("sweeper.sweepUnusedObjects", () => {
@@ -143,6 +172,15 @@ describe("sweeper.schedule", () => {
     finish();
     await vi.advanceTimersByTimeAsync(0);
     expect(stopped).toBe(true);
+  });
+
+  it("sweeps guests on each run, apart from the objects", async () => {
+    mockWithAdvisoryLock.mockRejectedValueOnce(new Error("db down"));
+
+    const stop = sweeper.schedule(HOUR_MS);
+    await vi.advanceTimersByTimeAsync(HOUR_MS);
+    expect(mockDeleteGuestsCreatedBefore).toHaveBeenCalledTimes(2);
+    await stop();
   });
 
   it("survives a failed run", async () => {

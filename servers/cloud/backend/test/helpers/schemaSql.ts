@@ -8,7 +8,10 @@ import { MIGRATIONS_FOLDER } from "../../scripts/migrations";
  * Migrations written by hand for what schema.ts can't express, so `drizzle-kit
  * export` leaves them out.
  */
-export const HANDWRITTEN_MIGRATIONS = ["0004_immutable_messages"];
+export const HANDWRITTEN_MIGRATIONS = [
+  "0004_immutable_messages",
+  "0005_tolerate_owner_change",
+];
 
 /**
  * The SQL that creates src/db/schema.ts's tables, from `drizzle-kit

@@ -29,6 +29,35 @@ describe("envSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("accepts guest chat's settings together", () => {
+    const result = envSchema.safeParse({
+      ...validEnv,
+      GUEST_SESSION_SECRET: "a".repeat(32),
+      OPENROUTER_GUEST_API_KEY: "guest-key",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it.each([
+    [{ GUEST_SESSION_SECRET: "a".repeat(32) }, "OPENROUTER_GUEST_API_KEY"],
+    [{ OPENROUTER_GUEST_API_KEY: "guest-key" }, "GUEST_SESSION_SECRET"],
+  ])("refuses one guest chat setting without the other", (set, missing) => {
+    const result = envSchema.safeParse({ ...validEnv, ...set });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => issue.path)).toEqual([
+      [missing],
+    ]);
+  });
+
+  it("refuses a short guest session secret", () => {
+    const result = envSchema.safeParse({
+      ...validEnv,
+      GUEST_SESSION_SECRET: "too-short",
+      OPENROUTER_GUEST_API_KEY: "guest-key",
+    });
+    expect(result.success).toBe(false);
+  });
+
   const loadtestOverrides = {
     OPENROUTER_BASE_URL: "http://mocks:4000/openrouter",
     DEEPGRAM_BASE_URL: "http://mocks:4000/deepgram",

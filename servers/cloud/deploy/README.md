@@ -39,6 +39,10 @@ Once per server. Steps 1 to 3 happen on your own machine.
 4. **Secrets.** In Doppler, project `parley`, fill in the `prd` config with
    the production values, plus `RABBITMQ_PASSWORD`, from `openssl rand -hex 24`. Leave out `MQ_URL`,
    `PORT`, `CLIENT_URL` and `API_BASE_URL`: the compose files set those.
+   For guest chat (chatting without an account), add `GUEST_SESSION_SECRET`,
+   from `openssl rand -base64 32`, and `OPENROUTER_GUEST_API_KEY`, an
+   OpenRouter key of its own with a credit limit: that limit is the cap on
+   what guests can spend. Without both, there's no guest chat.
    Then create a service token for `prd` (Access → Service Tokens) and paste
    it into this, followed by Enter and Ctrl-D:
 

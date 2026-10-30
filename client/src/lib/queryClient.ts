@@ -20,7 +20,9 @@ type ServerId = Server["id"];
  * catalogs are unrelated.
  */
 export const queryKeys = {
-  chatModels: (server: ServerId) => [server, "models", "chat"] as const,
+  /** A guest is offered fewer models, so their catalog is kept apart. */
+  chatModels: (server: ServerId, guest: boolean) =>
+    [server, "models", "chat", guest ? "guest" : "member"] as const,
   transcriptionModels: (server: ServerId) =>
     [server, "models", "transcription"] as const,
   jobLists: (server: ServerId) => [server, "jobs"] as const,
@@ -31,6 +33,7 @@ export const queryKeys = {
   messages: (server: ServerId, conversationId: string) =>
     [server, "conversations", conversationId, "messages"] as const,
   health: (server: ServerId) => [server, "health"] as const,
+  guestChat: (server: ServerId) => [server, "guestChat"] as const,
 };
 
 /**
