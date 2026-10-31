@@ -152,29 +152,23 @@ describe("listGuestModels", () => {
     vi.clearAllMocks();
   });
 
-  it("offers gpt-4o-mini and what costs no more, for input and output both", async () => {
+  it("offers what costs no more than $0.10/$0.50, for input and output both", async () => {
     mockGetOrSetCache.mockResolvedValue([
-      priced(MODEL_ID, 0.15, 0.6),
-      priced("cheap/model", 0.1, 0.4),
+      priced("at-ceiling/model", 0.1, 0.5),
+      priced("cheap/model", 0.05, 0.2),
       priced("free/model:free", 0, 0),
-      priced("dear-input/model", 0.2, 0.4),
-      priced("dear-output/model", 0.1, 0.8),
+      priced("dear-input/model", 0.15, 0.4),
+      priced("dear-output/model", 0.05, 0.6),
       { ...sampleModel, id: "openrouter/auto", pricing: null },
     ]);
 
     expect((await chat.listGuestModels()).map((model) => model.id)).toEqual([
-      MODEL_ID,
+      "at-ceiling/model",
       "cheap/model",
       "free/model:free",
     ]);
     expect(await chat.isGuestModel("cheap/model")).toBe(true);
     expect(await chat.isGuestModel("dear-output/model")).toBe(false);
-  });
-
-  it("offers nothing while gpt-4o-mini is missing from the catalog", async () => {
-    mockGetOrSetCache.mockResolvedValue([priced("cheap/model", 0.1, 0.4)]);
-
-    expect(await chat.listGuestModels()).toEqual([]);
   });
 });
 

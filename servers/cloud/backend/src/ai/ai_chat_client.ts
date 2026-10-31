@@ -258,22 +258,24 @@ async function findModel(id: string): Promise<ChatModel | undefined> {
 }
 
 /**
- * Guests get this model and any that cost no more, for input and output
- * both. A model without a fixed price (a router's) isn't one of them, and
- * nor is anything while this one is missing from the catalog.
+ * Guests get models that cost no more than this, for input and output both:
+ * GPT-6 Luna's price. A price rather than a model, so guest chat doesn't end
+ * when one model leaves the catalog. A model without a fixed price (a
+ * router's) isn't one of them.
  */
-const GUEST_PRICE_CEILING_MODEL = "openai/gpt-4o-mini";
+const GUEST_PRICE_CEILING: ModelPricing = {
+  inputPerMillionTokens: 0.1,
+  outputPerMillionTokens: 0.5,
+};
 
 function guestModelsOf(models: readonly ChatModel[]): ChatModel[] {
-  const ceiling = models.find(
-    (model) => model.id === GUEST_PRICE_CEILING_MODEL,
-  )?.pricing;
-  if (!ceiling) return [];
   return models.filter(
     ({ pricing }) =>
       pricing !== null &&
-      pricing.inputPerMillionTokens <= ceiling.inputPerMillionTokens &&
-      pricing.outputPerMillionTokens <= ceiling.outputPerMillionTokens,
+      pricing.inputPerMillionTokens <=
+        GUEST_PRICE_CEILING.inputPerMillionTokens &&
+      pricing.outputPerMillionTokens <=
+        GUEST_PRICE_CEILING.outputPerMillionTokens,
   );
 }
 
