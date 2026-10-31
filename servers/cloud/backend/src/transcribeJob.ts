@@ -1,4 +1,4 @@
-import { DEFAULT_TRANSCRIBE_MODEL, transcription } from "./ai";
+import { transcription } from "./ai";
 import { sign } from "./storage";
 import { data } from "./data";
 import { logger } from "@parley/server-kit/runtime/logger";
@@ -63,10 +63,9 @@ async function transcribeAudio(job: ClaimedJob) {
     kind: "audio",
     uploadId: job.audioUploadId,
   });
-  return transcription.transcribe(
-    job.transcriptModelId ?? DEFAULT_TRANSCRIBE_MODEL,
-    audioUrl,
-  );
+  const model = job.transcriptModelId ?? (await transcription.defaultModel());
+  if (!model) throw new Error("Deepgram offers no transcription model");
+  return transcription.transcribe(model, audioUrl);
 }
 
 /**

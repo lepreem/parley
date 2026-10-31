@@ -46,9 +46,11 @@ vi.mock("../../src/data/transcripts.data", async (importActual) => {
 });
 
 vi.mock("../../src/ai/ai_transcribe_client/ai_transcribe_client", () => ({
-  DEFAULT_TRANSCRIBE_MODEL: "nova-3",
   getTranscribeModelData: vi.fn(),
-  transcription: { isValidModel: vi.fn() },
+  transcription: {
+    isValidModel: vi.fn(),
+    defaultModel: async () => "nova-3-general",
+  },
 }));
 
 vi.mock("../../src/message-queue/messageQueue", () => {

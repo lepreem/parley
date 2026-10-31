@@ -36,9 +36,10 @@ export function findChatModel(
 /** Fall back to the first available model when the preferred one isn't offered. */
 export function resolveDefaultModel(
   modelIds: string[],
-  preferredModelId: string,
+  preferredModelId: string | null,
 ): string | null {
-  if (modelIds.includes(preferredModelId)) return preferredModelId;
+  if (preferredModelId && modelIds.includes(preferredModelId))
+    return preferredModelId;
   return modelIds[0] ?? null;
 }
 

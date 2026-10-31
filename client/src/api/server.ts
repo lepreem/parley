@@ -28,7 +28,8 @@ export type Server = {
    * chat model may be named by alias.
    */
   defaultChatModelId: string;
-  defaultTranscribeModelId: string;
+  /** Null for the first one the server lists, which it orders by default. */
+  defaultTranscribeModelId: string | null;
   /**
    * Chat models listed first in the picker, in this order, ahead of the full
    * catalog, by id or alias. Ones the catalog doesn't offer are skipped.

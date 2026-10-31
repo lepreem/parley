@@ -3,7 +3,7 @@ import type { QueueYoutubeBody } from "@parley/contract";
 import { takesBody } from "@parley/server-kit/http/takesBody";
 import { isYoutubeUrl } from "@parley/contract/youtube";
 import type { UploadId } from "@parley/server-kit/ids";
-import { DEFAULT_TRANSCRIBE_MODEL, transcription } from "../ai";
+import { transcription } from "../ai";
 
 /** Treat a blank ("" or null) optional field as unset. */
 const blankToUndefined = (v: unknown) =>
@@ -11,12 +11,19 @@ const blankToUndefined = (v: unknown) =>
 
 /**
  * The transcription model is optional on every route that has one — omit it
- * (or send blank) to get the default.
+ * (or send blank) to get the default, which follows Deepgram's catalog.
  */
-const transcriptionModelField = z.preprocess(
-  blankToUndefined,
-  z.string().min(1).optional().default(DEFAULT_TRANSCRIBE_MODEL),
-);
+const transcriptionModelField = z
+  .preprocess(blankToUndefined, z.string().min(1).optional())
+  .transform(async (modelId, ctx) => {
+    const resolved = modelId ?? (await transcription.defaultModel());
+    if (resolved) return resolved;
+    ctx.addIssue({
+      code: "custom",
+      message: "No transcription model is available",
+    });
+    return z.NEVER;
+  });
 
 /**
  * Shared by the audio and youtube routes so the two reject an unusable model

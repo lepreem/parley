@@ -51,10 +51,11 @@ vi.mock(
         typeof import("../../src/ai/ai_transcribe_client/ai_transcribe_client")
       >();
     return {
-      ...actual, // preserves DEFAULT_TRANSCRIBE_MODEL
+      ...actual,
       transcription: {
         ...actual.transcription,
         isValidModel: mockIsValidTranscribeModel,
+        defaultModel: async () => "nova-3-general",
       },
     };
   },

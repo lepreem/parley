@@ -3,6 +3,11 @@ import type { TranscribeModel } from "@parley/contract";
 import type { TranscriptSegment } from "@parley/server-kit/transcription/transcript";
 import { getEnv } from "../../env";
 import { CACHE_KEYS, memory } from "../../memory";
+import {
+  newestVersions,
+  offeredModels,
+  type TranscribeModelData,
+} from "./model_catalog";
 
 const deepgram = new DeepgramClient({
   apiKey: getEnv().DEEPGRAM_API_KEY,
@@ -58,44 +63,25 @@ async function transcribe(
   }));
 }
 
-type DeepgramModel = {
-  name: string;
-  canonicalName: string;
-  architecture: string | undefined;
-  languages: string[] | undefined;
-  version: string | undefined;
-  uuid: string | undefined;
-  batch: boolean | undefined;
-  streaming: boolean | undefined;
-  formattedOutput: boolean | undefined;
-};
-
-type TranscribeModelData = {
-  [modelId: string]: DeepgramModel;
-};
-
 async function fetchTranscribeModelData(): Promise<TranscribeModelData> {
   const response = await deepgram.manage.v1.models.list();
 
-  return Object.fromEntries(
+  return newestVersions(
     (response.stt ?? []).flatMap((model) => {
       const id = model.canonical_name ?? model.name;
       if (!id) return [];
       return [
-        [
-          id,
-          {
-            name: model.name ?? id,
-            canonicalName: model.canonical_name ?? id,
-            architecture: model.architecture,
-            languages: model.languages,
-            version: model.version,
-            uuid: model.uuid,
-            batch: model.batch,
-            streaming: model.streaming,
-            formattedOutput: model.formatted_output,
-          },
-        ],
+        {
+          name: model.name ?? id,
+          canonicalName: id,
+          architecture: model.architecture,
+          languages: model.languages,
+          version: model.version,
+          uuid: model.uuid,
+          batch: model.batch,
+          streaming: model.streaming,
+          formattedOutput: model.formatted_output,
+        },
       ];
     }),
   );
@@ -113,24 +99,20 @@ export function getTranscribeModelData(): Promise<TranscribeModelData> {
 }
 
 /**
- * The models offered, in the order shown, with the names they're shown by.
- * Deepgram's catalog lists about forty: older generations, industry variants
- * (drive-thru, voicemail, ATC) and models private to an account, which only
- * made the list harder to choose from. Ids are canonical names, since
+ * The models offered, the default first. Ids are canonical names, since
  * Deepgram's own names repeat across generations ("general" is both nova-2
  * and nova-3).
  */
-const OFFERED_MODELS: readonly TranscribeModel[] = [
-  { id: "nova-3-general", name: "Nova 3" },
-  { id: "nova-3-medical", name: "Nova 3 Medical" },
-  { id: "nova-2-general", name: "Nova 2" },
-  { id: "whisper-large", name: "Whisper Large" },
-];
-
-/** The offered models Deepgram's catalog currently has. */
 async function listModels(): Promise<TranscribeModel[]> {
-  const modelData = await getTranscribeModelData();
-  return OFFERED_MODELS.filter((model) => Object.hasOwn(modelData, model.id));
+  return offeredModels(await getTranscribeModelData());
+}
+
+/**
+ * The model a job runs on when it names none: the current generation's
+ * general model. Undefined only while Deepgram offers nothing.
+ */
+async function defaultModel(): Promise<string | undefined> {
+  return (await listModels())[0]?.id;
 }
 
 /**
@@ -142,12 +124,11 @@ async function isValidModel(modelId: string): Promise<boolean> {
   return (await listModels()).some((model) => model.id === modelId);
 }
 
-export const DEFAULT_TRANSCRIBE_MODEL = "nova-3-general";
-
 /** Speech-to-text and its model catalog, from Deepgram. */
 export const transcription = {
   transcribe,
   listModels,
+  defaultModel,
   isValidModel,
   ping,
 };
