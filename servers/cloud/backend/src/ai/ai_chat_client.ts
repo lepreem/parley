@@ -5,6 +5,7 @@ import { CACHE_KEYS, memory } from "../memory";
 import type {
   ChatContentItems,
   ChatRequest,
+  ChatRequestEffort,
   PublicPricing,
 } from "@openrouter/sdk/models";
 import { withTimeout } from "@parley/server-kit/runtime/withTimeout";
@@ -138,6 +139,11 @@ type ChatOptions = {
   /** Ceiling on the completion, so one call can't run up an unbounded bill. */
   maxOutputTokens?: number | undefined;
   /**
+   * How hard a reasoning model thinks. Its thinking counts against
+   * maxOutputTokens, so a small ceiling needs "none" or the reply is empty.
+   */
+  reasoningEffort?: ChatRequestEffort | undefined;
+  /**
    * Groups a conversation's turns so OpenRouter routes them all to the same
    * provider (sticky), keeping that provider's prompt cache warm across the
    * turn's stable history prefix — the biggest lever on time-to-first-token.
@@ -160,6 +166,9 @@ async function complete(
     model,
     messages,
     maxCompletionTokens: opts.maxOutputTokens,
+    reasoning: opts.reasoningEffort
+      ? { effort: opts.reasoningEffort }
+      : undefined,
     // `sort: "latency"` routes to the lowest time-to-first-token endpoint (no
     // load balancing); paired with the sticky sessionId, turns stay on one fast,
     // warm provider.
@@ -278,7 +287,7 @@ async function isGuestModel(id: string): Promise<boolean> {
 }
 
 const MAX_TITLE_INPUT_CHARS = 12_000;
-const DEFAULT_TITLE_GENERATION_MODEL = "openai/gpt-4o-mini";
+const DEFAULT_TITLE_GENERATION_MODEL = "openai/gpt-6-luna";
 
 async function generateTitle(
   kind: "conversation" | "transcript",
@@ -293,7 +302,12 @@ async function generateTitle(
         content: `Generate a concise, descriptive title of at most eight words for this ${kind}. Return only the title.\n\n${content.slice(0, MAX_TITLE_INPUT_CHARS)}`,
       },
     ],
-    { maxOutputTokens: 24, timeoutMs: TITLE_TIMEOUT_MS, guest },
+    {
+      maxOutputTokens: 24,
+      reasoningEffort: "none",
+      timeoutMs: TITLE_TIMEOUT_MS,
+      guest,
+    },
   );
 
   return title.trim();

@@ -439,7 +439,7 @@ describe("generateTitle", () => {
     vi.clearAllMocks();
   });
 
-  it("uses the default model and returns a trimmed title", async () => {
+  it("uses the title model, without reasoning, and returns a trimmed title", async () => {
     mockChatSend.mockResolvedValueOnce({
       choices: [{ message: { content: "  Quarterly planning  " } }],
     });
@@ -453,7 +453,7 @@ describe("generateTitle", () => {
     expect(mockChatSend).toHaveBeenCalledWith(
       {
         chatRequest: expect.objectContaining({
-          model: MODEL_ID,
+          model: "openai/gpt-6-luna",
           messages: [
             {
               role: "user",
@@ -463,6 +463,7 @@ describe("generateTitle", () => {
             },
           ],
           maxCompletionTokens: 24,
+          reasoning: { effort: "none" },
         }),
       },
       { signal: expect.any(AbortSignal) },
