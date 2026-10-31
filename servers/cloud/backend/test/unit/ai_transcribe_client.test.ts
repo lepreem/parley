@@ -29,7 +29,7 @@ import {
   DEFAULT_TRANSCRIBE_MODEL,
   getTranscribeModelData,
   transcription,
-} from "../../src/ai/ai_transcribe_client";
+} from "../../src/ai/ai_transcribe_client/ai_transcribe_client";
 
 const sttResponse = {
   stt: [

@@ -1,8 +1,8 @@
 import { DeepgramClient } from "@deepgram/sdk";
 import type { TranscribeModel } from "@parley/contract";
 import type { TranscriptSegment } from "@parley/server-kit/transcription/transcript";
-import { getEnv } from "../env";
-import { CACHE_KEYS, memory } from "../memory";
+import { getEnv } from "../../env";
+import { CACHE_KEYS, memory } from "../../memory";
 
 const deepgram = new DeepgramClient({
   apiKey: getEnv().DEEPGRAM_API_KEY,

@@ -24,7 +24,7 @@ vi.mock("../../src/data", () => ({
   },
 }));
 
-vi.mock("../../src/ai/ai_transcribe_client", () => ({
+vi.mock("../../src/ai/ai_transcribe_client/ai_transcribe_client", () => ({
   DEFAULT_TRANSCRIBE_MODEL: "nova-3-general",
   transcription: { transcribe: mocks.transcribeAI },
 }));

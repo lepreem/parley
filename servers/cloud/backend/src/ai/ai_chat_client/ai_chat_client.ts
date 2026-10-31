@@ -1,7 +1,7 @@
-import { getEnv } from "../env";
+import { getEnv } from "../../env";
 import { OpenRouter } from "@openrouter/sdk";
 
-import { CACHE_KEYS, memory } from "../memory";
+import { CACHE_KEYS, memory } from "../../memory";
 import type {
   ChatContentItems,
   ChatRequest,
