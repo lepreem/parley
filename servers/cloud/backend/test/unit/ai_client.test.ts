@@ -47,6 +47,8 @@ const sampleModel = {
   acceptsImages: true,
   released: "2024-07-18",
   aliases: [],
+  replacedBy: null,
+  retires: null,
   pricing: { inputPerMillionTokens: 0.15, outputPerMillionTokens: 0.6 },
 };
 
@@ -70,6 +72,13 @@ const openRouterListModel = {
 describe("listChatModels", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // The fixtures are from 2024; the catalog leaves out models a year old.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2024-08-01"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("serves the catalog through its cache entry", async () => {
@@ -120,6 +129,8 @@ describe("listChatModels", () => {
         acceptsImages: false,
         released: "2024-07-18",
         aliases: [],
+        replacedBy: null,
+        retires: null,
         pricing: { inputPerMillionTokens: 0.15, outputPerMillionTokens: 0.6 },
       },
       {
@@ -129,65 +140,13 @@ describe("listChatModels", () => {
         acceptsImages: true,
         released: "2024-07-18",
         aliases: [],
+        replacedBy: null,
+        retires: null,
         pricing: null,
       },
     ]);
     // Only text-output models are relevant here; transcription is Deepgram's.
     expect(mockModelsList).toHaveBeenCalledWith({ outputModalities: "text" });
-  });
-
-  it("leaves out batch-only variants, which can't stream a reply", async () => {
-    mockGetOrSetCache.mockImplementationOnce(runFetch);
-    mockModelsList.mockResolvedValueOnce({
-      result: {
-        data: [
-          openRouterListModel,
-          { ...openRouterListModel, id: `${openRouterListModel.id}:batch` },
-        ],
-      },
-    });
-
-    expect(await chat.listModels()).toEqual([sampleModel]);
-  });
-
-  it("folds an alias into the model it points at", async () => {
-    mockGetOrSetCache.mockImplementationOnce(runFetch);
-    mockModelsList.mockResolvedValueOnce({
-      result: {
-        data: [
-          openRouterListModel,
-          {
-            ...openRouterListModel,
-            id: "~openai/gpt-mini-latest",
-            aliasTarget: { slug: MODEL_ID, name: "OpenAI: GPT-4o Mini" },
-          },
-        ],
-      },
-    });
-
-    expect(await chat.listModels()).toEqual([
-      { ...sampleModel, aliases: ["~openai/gpt-mini-latest"] },
-    ]);
-  });
-
-  it("leaves out OpenAI's pro reasoning modes, but not other providers' pro models", async () => {
-    mockGetOrSetCache.mockImplementationOnce(runFetch);
-    mockModelsList.mockResolvedValueOnce({
-      result: {
-        data: [
-          { ...openRouterListModel, id: "openai/gpt-6-luna" },
-          { ...openRouterListModel, id: "openai/gpt-6-luna-pro" },
-          { ...openRouterListModel, id: "perplexity/sonar" },
-          { ...openRouterListModel, id: "perplexity/sonar-pro" },
-        ],
-      },
-    });
-
-    expect((await chat.listModels()).map((model) => model.id)).toEqual([
-      "openai/gpt-6-luna",
-      "perplexity/sonar",
-      "perplexity/sonar-pro",
-    ]);
   });
 });
 

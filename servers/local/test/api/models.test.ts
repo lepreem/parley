@@ -45,6 +45,8 @@ const sampleModel = {
   acceptsImages: true,
   released: null,
   aliases: [],
+  replacedBy: null,
+  retires: null,
 };
 
 describe("GET /models/chat", () => {

@@ -95,7 +95,8 @@ function catalogModel(id: string, name: string, inputModalities: string[]) {
     id,
     canonical_slug: id,
     name,
-    created: 1_700_000_000,
+    // Today: the backend leaves out models past an age.
+    created: Math.floor(Date.now() / 1000),
     context_length: 128_000,
     architecture: {
       input_modalities: inputModalities,
@@ -112,9 +113,19 @@ function catalogModel(id: string, name: string, inputModalities: string[]) {
   };
 }
 
-/** Includes the model titles are generated with (ai_chat_client.ts). */
+/**
+ * Includes the model titles are generated with, and the alias they name it by
+ * (ai_chat_client/ai_chat_client.ts).
+ */
 const CHAT_MODELS = [
-  catalogModel("openai/gpt-4o-mini", "GPT-4o mini", ["text", "image"]),
+  catalogModel("openai/gpt-6-luna", "GPT-6 Luna", ["text", "image"]),
+  {
+    ...catalogModel("~openai/gpt-luna-latest", "GPT Luna Latest", [
+      "text",
+      "image",
+    ]),
+    alias_target: { slug: "openai/gpt-6-luna", name: "OpenAI: GPT-6 Luna" },
+  },
   catalogModel("loadtest/text-model", "Load test text model", ["text"]),
 ];
 

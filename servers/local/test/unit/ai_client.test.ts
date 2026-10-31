@@ -103,6 +103,8 @@ describe("listChatModels", () => {
         acceptsImages: true,
         released: null,
         aliases: [],
+        replacedBy: null,
+        retires: null,
         pricing: null,
       },
       {
@@ -112,6 +114,8 @@ describe("listChatModels", () => {
         acceptsImages: true,
         released: null,
         aliases: [],
+        replacedBy: null,
+        retires: null,
         pricing: null,
       },
       {
@@ -121,6 +125,8 @@ describe("listChatModels", () => {
         acceptsImages: true,
         released: null,
         aliases: [],
+        replacedBy: null,
+        retires: null,
         pricing: null,
       },
     ]);

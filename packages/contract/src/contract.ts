@@ -182,6 +182,13 @@ export type ChatModel = {
    */
   aliases: string[];
   /**
+   * When it's archived for a newer model from its provider that costs no
+   * more and does as much, that model's id.
+   */
+  replacedBy: string | null;
+  /** The day the provider may retire it, as YYYY-MM-DD, if it's announced. */
+  retires: string | null;
+  /**
    * What it charges, or null when that isn't a price per token: a router
    * whose price depends on the model it picks, or a subscription.
    */

@@ -338,6 +338,8 @@ const CHAT_MODELS: readonly ChatModel[] = [
     acceptsImages: true,
     released: null,
     aliases: [],
+    replacedBy: null,
+    retires: null,
     pricing: null,
   },
   {
@@ -347,6 +349,8 @@ const CHAT_MODELS: readonly ChatModel[] = [
     acceptsImages: true,
     released: null,
     aliases: [],
+    replacedBy: null,
+    retires: null,
     pricing: null,
   },
   {
@@ -356,6 +360,8 @@ const CHAT_MODELS: readonly ChatModel[] = [
     acceptsImages: true,
     released: null,
     aliases: [],
+    replacedBy: null,
+    retires: null,
     pricing: null,
   },
 ];

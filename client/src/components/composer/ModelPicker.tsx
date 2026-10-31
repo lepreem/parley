@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import {
-  archivedModels,
   describeModel,
   findChatModel,
   describePricing,
@@ -31,8 +30,8 @@ type Entry = {
   provider: string;
   name: string;
   score: number;
-  /** The current model that archives this one, if one does. */
-  replacedBy: ChatModel | null;
+  /** Why it's folded away with the archived models, if it is. */
+  archived: { text: string; title: string } | null;
 };
 
 /** A provider's models while browsing, the archived ones folded away. */
@@ -44,6 +43,38 @@ function byRelease(a: Entry, b: Entry): number {
     (b.model.released ?? "").localeCompare(a.model.released ?? "") ||
     a.name.localeCompare(b.name)
   );
+}
+
+/** "2026-11-03" as "3 Nov 2026". */
+function formatDay(day: string): string {
+  return new Date(`${day}T00:00:00Z`).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+/**
+ * Why the server archived it: a newer model from its provider replaces it,
+ * or the provider has said when it goes.
+ */
+function archivedBecause(
+  model: ChatModel,
+  byId: ReadonlyMap<string, ChatModel>,
+): Entry["archived"] {
+  const replacement = model.replacedBy && byId.get(model.replacedBy);
+  if (replacement)
+    return {
+      text: `Replaced by ${describeModel(replacement).name}`,
+      title: "Newer, from the same provider, and costs no more",
+    };
+  if (model.retires)
+    return {
+      text: `Retires ${formatDay(model.retires)}`,
+      title: "The provider has said it will stop serving it",
+    };
+  return null;
 }
 
 /** "2026-10-07" as "Oct 2026". */
@@ -117,9 +148,10 @@ export function ModelPicker({
   const recommendedIds = useServer().recommendedChatModelIds;
   const menuRef = useDismissable<HTMLDivElement>(open, () => setOpen(false));
 
-  // Over the whole catalog, so what's archived doesn't change with the
-  // message: a replacement does everything the model it replaces does.
-  const archived = useMemo(() => archivedModels(models), [models]);
+  const byId = useMemo(
+    () => new Map(models.map((model) => [model.id, model])),
+    [models],
+  );
 
   // Requirement filtering happens before anything the user drives, so the
   // provider counts and the search both describe what is actually selectable.
@@ -135,10 +167,10 @@ export function ModelPicker({
             provider: label,
             name,
             score: 0,
-            replacedBy: archived.get(model.id) ?? null,
+            archived: archivedBecause(model, byId),
           } satisfies Entry;
         }),
-    [models, requirements, archived],
+    [models, requirements, byId],
   );
 
   // Keyed by the display label, as the list's groups are: one provider can
@@ -150,7 +182,7 @@ export function ModelPicker({
     for (const entry of eligible) {
       counts.set(
         entry.provider,
-        (counts.get(entry.provider) ?? 0) + (entry.replacedBy ? 0 : 1),
+        (counts.get(entry.provider) ?? 0) + (entry.archived ? 0 : 1),
       );
     }
     return [...counts.entries()]
@@ -173,7 +205,7 @@ export function ModelPicker({
     scored.sort(
       (a, b) =>
         b.score - a.score ||
-        Number(!!a.replacedBy) - Number(!!b.replacedBy) ||
+        Number(!!a.archived) - Number(!!b.archived) ||
         byRelease(a, b),
     );
     return scored;
@@ -192,7 +224,7 @@ export function ModelPicker({
         current: [],
         archived: [],
       };
-      (entry.replacedBy ? group.archived : group.current).push(entry);
+      (entry.archived ? group.archived : group.current).push(entry);
       groups.set(entry.provider, group);
     }
     for (const group of groups.values()) {
@@ -231,7 +263,7 @@ export function ModelPicker({
   const selected = eligible.find((entry) => entry.id === value);
   // Only worth saying when it actually cost the user options.
   const excluded = models.length - eligible.length;
-  const currentCount = eligible.filter((entry) => !entry.replacedBy).length;
+  const currentCount = eligible.filter((entry) => !entry.archived).length;
 
   if (error) {
     return (
@@ -267,12 +299,12 @@ export function ModelPicker({
             {limit && <span className="shrink-0">· {limit}</span>}
             {released && <span className="shrink-0">· {released}</span>}
           </span>
-          {entry.replacedBy && (
+          {entry.archived && (
             <span
-              title="Newer, from the same provider, and costs no more"
+              title={entry.archived.title}
               className="mt-0.5 block truncate text-[11px] text-faint"
             >
-              Replaced by {describeModel(entry.replacedBy).name}
+              {entry.archived.text}
             </span>
           )}
         </span>
