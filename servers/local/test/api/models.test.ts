@@ -43,6 +43,7 @@ const sampleModel = {
   name: "Claude Sonnet",
   contextTokens: 200_000,
   acceptsImages: true,
+  released: null,
 };
 
 describe("GET /models/chat", () => {

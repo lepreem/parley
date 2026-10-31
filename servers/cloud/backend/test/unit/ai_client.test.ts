@@ -42,6 +42,7 @@ const sampleModel = {
   name: "GPT-4o Mini",
   contextTokens: 128000,
   acceptsImages: true,
+  released: "2024-07-18",
   pricing: { inputPerMillionTokens: 0.15, outputPerMillionTokens: 0.6 },
 };
 
@@ -49,6 +50,7 @@ const openRouterListModel = {
   id: MODEL_ID,
   name: "GPT-4o Mini",
   description: "Fast chat model",
+  created: 1721260800,
   contextLength: 128000,
   knowledgeCutoff: null,
   topProvider: { contextLength: 128000, isModerated: true },
@@ -112,6 +114,7 @@ describe("listChatModels", () => {
         name: "Text only",
         contextTokens: null,
         acceptsImages: false,
+        released: "2024-07-18",
         pricing: { inputPerMillionTokens: 0.15, outputPerMillionTokens: 0.6 },
       },
       {
@@ -119,6 +122,7 @@ describe("listChatModels", () => {
         name: "Auto Router",
         contextTokens: 128000,
         acceptsImages: true,
+        released: "2024-07-18",
         pricing: null,
       },
     ]);

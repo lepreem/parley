@@ -167,3 +167,180 @@ export function describePricing(pricing: ModelPricing): string {
     pricing.outputPerMillionTokens,
   )} out per 1M tokens`;
 }
+
+/* ----------------------------------------------------------------- archive */
+
+/** Launches closer together than this are siblings, not one replacing another. */
+const SAME_LAUNCH_DAYS = 14;
+
+/**
+ * How much cheaper a replacement from another family may be. Further below,
+ * it's a smaller tier (Haiku, not a new Sonnet), not the same tier renamed
+ * (GPT-4o mini to GPT-6 Luna).
+ */
+const RENAMED_TIER_PRICE_RATIO = 0.7;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+function isAlias(model: ChatModel): boolean {
+  return model.id.startsWith("~");
+}
+
+/**
+ * The model's id after the provider, split into words: "gpt-6-luna" is
+ * ["gpt", "6", "luna"].
+ */
+function words(model: ChatModel): string[] {
+  const name = model.id.slice(model.id.indexOf("/") + 1).split(":")[0] ?? "";
+  return name.split("-");
+}
+
+/** A size ("72b", "a3b") tells models apart; a version or date doesn't. */
+const SIZE = /^a?\d+(\.\d+)?[bmt]$/;
+
+/**
+ * The model's line without its versions and dates: "claude-sonnet" for both
+ * "anthropic/claude-sonnet-4.5" and "anthropic/claude-3.5-sonnet", "gpt-luna"
+ * for "openai/gpt-6-luna", but "qwen-72b-instruct" and "qwen-7b-instruct"
+ * apart.
+ */
+function family(model: ChatModel): string {
+  return words(model)
+    .filter(
+      (word) => SIZE.test(word) || (!/^\d/.test(word) && word !== "preview"),
+    )
+    .join("-");
+}
+
+const UNSTABLE = new Set(["preview", "exp", "experimental", "beta", "alpha"]);
+
+/** Previews and experiments, which tend to vanish. */
+function isUnstable(model: ChatModel): boolean {
+  return words(model).some((word) => UNSTABLE.has(word));
+}
+
+const SPECIALIZED = new Set([
+  "codex",
+  "coder",
+  "image",
+  "audio",
+  "search",
+  "guard",
+  "safeguard",
+  "ocr",
+]);
+
+/** Made for one job, so no stand-in for a general model. */
+function isSpecialized(model: ChatModel): boolean {
+  return words(model).some((word) => SPECIALIZED.has(word));
+}
+
+/** Cheaper first, for a tie between two replacements. */
+function cheaper(a: ChatModel, b: ChatModel): boolean {
+  return (
+    !!a.pricing &&
+    !!b.pricing &&
+    blendedPrice(a.pricing) < blendedPrice(b.pricing)
+  );
+}
+
+/**
+ * Whether `newer` replaces `older`: released at least SAME_LAUNCH_DAYS later,
+ * costing no more for input or output, and doing everything `older` does.
+ * Newer at the same price is taken to be better, unless it's a preview
+ * replacing a release. From another family it must also cost about the
+ * same, or a cheap new small model would archive last season's flagship,
+ * and be a general model rather than one made for code or images.
+ */
+function replaces(newer: ChatModel, older: ChatModel): boolean {
+  if (
+    !newer.pricing ||
+    !older.pricing ||
+    !newer.released ||
+    !older.released ||
+    isAlias(newer) ||
+    // Free variants are rate-limited and come and go.
+    newer.id.endsWith(":free") ||
+    (isUnstable(newer) && !isUnstable(older))
+  )
+    return false;
+  if (
+    Date.parse(newer.released) - Date.parse(older.released) <
+    SAME_LAUNCH_DAYS * DAY_MS
+  )
+    return false;
+  if (
+    newer.pricing.inputPerMillionTokens > older.pricing.inputPerMillionTokens ||
+    newer.pricing.outputPerMillionTokens > older.pricing.outputPerMillionTokens
+  )
+    return false;
+  if (older.acceptsImages && !newer.acceptsImages) return false;
+  if (
+    older.contextTokens !== null &&
+    (newer.contextTokens ?? 0) < older.contextTokens
+  )
+    return false;
+  if (family(newer) === family(older)) return true;
+  return (
+    !isSpecialized(newer) &&
+    blendedPrice(newer.pricing) >=
+      RENAMED_TIER_PRICE_RATIO * blendedPrice(older.pricing)
+  );
+}
+
+/**
+ * The models a newer one from the same provider replaces, each with the
+ * current model that replaces it: the newest of its own family if there is
+ * one, else the newest of any, the cheaper of two released together. Aliases, models without a price and models without a date
+ * are never archived.
+ */
+export function archivedModels(
+  models: readonly ChatModel[],
+): Map<string, ChatModel> {
+  const byProvider = new Map<string, ChatModel[]>();
+  for (const model of models) {
+    const { provider } = describeModel(model);
+    const list = byProvider.get(provider) ?? [];
+    list.push(model);
+    byProvider.set(provider, list);
+  }
+
+  const archived = new Map<string, ChatModel>();
+  for (const list of byProvider.values()) {
+    for (const older of list) {
+      if (isAlias(older)) continue;
+      let best: ChatModel | null = null;
+      for (const newer of list) {
+        if (!replaces(newer, older)) continue;
+        if (!best) {
+          best = newer;
+          continue;
+        }
+        const ownFamily = family(newer) === family(older);
+        const bestOwnFamily = family(best) === family(older);
+        if (
+          (ownFamily && !bestOwnFamily) ||
+          (ownFamily === bestOwnFamily &&
+            ((newer.released ?? "") > (best.released ?? "") ||
+              (newer.released === best.released && cheaper(newer, best))))
+        )
+          best = newer;
+      }
+      if (best) archived.set(older.id, best);
+    }
+  }
+
+  // Point past a replacement that is archived itself. Each step is to a
+  // newer model, so this ends.
+  for (const [id, replacement] of archived) {
+    let current = replacement;
+    for (
+      let next = archived.get(current.id);
+      next;
+      next = archived.get(current.id)
+    )
+      current = next;
+    archived.set(id, current);
+  }
+  return archived;
+}

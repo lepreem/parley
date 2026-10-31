@@ -230,6 +230,7 @@ async function fetchChatModels(): Promise<ChatModel[]> {
       name: model.name,
       contextTokens: model.contextLength,
       acceptsImages: model.architecture.inputModalities.includes("image"),
+      released: new Date(model.created * 1000).toISOString().slice(0, 10),
       pricing: toPricing(model.pricing),
     }));
 }

@@ -173,6 +173,8 @@ export type ChatModel = {
   contextTokens: number | null;
   /** Whether a turn may carry images. */
   acceptsImages: boolean;
+  /** The day the provider listed it, as YYYY-MM-DD, when known. */
+  released: string | null;
   /**
    * What it charges, or null when that isn't a price per token: a router
    * whose price depends on the model it picks, or a subscription.

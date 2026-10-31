@@ -101,6 +101,7 @@ describe("listChatModels", () => {
         name: "Claude Opus",
         contextTokens: 200_000,
         acceptsImages: true,
+        released: null,
         pricing: null,
       },
       {
@@ -108,6 +109,7 @@ describe("listChatModels", () => {
         name: "Claude Sonnet",
         contextTokens: 200_000,
         acceptsImages: true,
+        released: null,
         pricing: null,
       },
       {
@@ -115,6 +117,7 @@ describe("listChatModels", () => {
         name: "Claude Haiku",
         contextTokens: 200_000,
         acceptsImages: true,
+        released: null,
         pricing: null,
       },
     ]);

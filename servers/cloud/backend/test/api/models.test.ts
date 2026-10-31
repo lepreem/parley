@@ -40,6 +40,7 @@ const sampleModel = {
   name: "GPT-4o Mini",
   contextTokens: 128000,
   acceptsImages: true,
+  released: null,
 };
 
 describe("GET /models/chat", () => {
