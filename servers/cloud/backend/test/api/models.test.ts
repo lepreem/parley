@@ -41,6 +41,7 @@ const sampleModel = {
   contextTokens: 128000,
   acceptsImages: true,
   released: null,
+  aliases: [],
 };
 
 describe("GET /models/chat", () => {

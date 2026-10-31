@@ -215,22 +215,51 @@ function toPricing(pricing: PublicPricing): ModelPricing | null {
   return { inputPerMillionTokens, outputPerMillionTokens };
 }
 
+/**
+ * OpenAI's "-pro" ids are the model beside them run in its pro reasoning
+ * mode, which thinks far longer at the same per-token price. ChatGPT's own
+ * default is the plain one, so that is the one offered. Other providers'
+ * "-pro" models are models of their own (Perplexity's Sonar Pro).
+ */
+function isOpenAIProMode(id: string, ids: ReadonlySet<string>): boolean {
+  return (
+    id.startsWith("openai/") && id.endsWith("-pro") && ids.has(id.slice(0, -4))
+  );
+}
+
 async function fetchChatModels(): Promise<ChatModel[]> {
   // Only models that answer in text: every one listed is a chat model.
   // Transcription is served by Deepgram.
   const models = (await client.models.list({ outputModalities: "text" })).result
     .data;
+  const ids = new Set(models.map((model) => model.id));
+
+  // An alias ("~…-latest") is another name for the model it points at, so it
+  // becomes one of that model's aliases rather than a second listing.
+  const aliases = new Map<string, string[]>();
+  for (const model of models) {
+    if (!model.aliasTarget) continue;
+    const list = aliases.get(model.aliasTarget.slug) ?? [];
+    list.push(model.id);
+    aliases.set(model.aliasTarget.slug, list);
+  }
 
   // ":batch" variants are for OpenRouter's batch API, which doesn't stream, so
   // none of them can hold a chat.
   return models
-    .filter((model) => !model.id.endsWith(":batch"))
+    .filter(
+      (model) =>
+        !model.id.endsWith(":batch") &&
+        !model.aliasTarget &&
+        !isOpenAIProMode(model.id, ids),
+    )
     .map((model) => ({
       id: model.id,
       name: model.name,
       contextTokens: model.contextLength,
       acceptsImages: model.architecture.inputModalities.includes("image"),
       released: new Date(model.created * 1000).toISOString().slice(0, 10),
+      aliases: aliases.get(model.id) ?? [],
       pricing: toPricing(model.pricing),
     }));
 }
@@ -290,7 +319,8 @@ async function isGuestModel(id: string): Promise<boolean> {
 }
 
 const MAX_TITLE_INPUT_CHARS = 12_000;
-const DEFAULT_TITLE_GENERATION_MODEL = "openai/gpt-6-luna";
+// The alias follows OpenAI's newest Luna.
+const DEFAULT_TITLE_GENERATION_MODEL = "~openai/gpt-luna-latest";
 
 async function generateTitle(
   kind: "conversation" | "transcript",

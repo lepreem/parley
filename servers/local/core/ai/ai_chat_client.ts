@@ -337,6 +337,7 @@ const CHAT_MODELS: readonly ChatModel[] = [
     contextTokens: 200_000,
     acceptsImages: true,
     released: null,
+    aliases: [],
     pricing: null,
   },
   {
@@ -345,6 +346,7 @@ const CHAT_MODELS: readonly ChatModel[] = [
     contextTokens: 200_000,
     acceptsImages: true,
     released: null,
+    aliases: [],
     pricing: null,
   },
   {
@@ -353,6 +355,7 @@ const CHAT_MODELS: readonly ChatModel[] = [
     contextTokens: 200_000,
     acceptsImages: true,
     released: null,
+    aliases: [],
     pricing: null,
   },
 ];

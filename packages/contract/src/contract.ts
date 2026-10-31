@@ -176,6 +176,12 @@ export type ChatModel = {
   /** The day the provider listed it, as YYYY-MM-DD, when known. */
   released: string | null;
   /**
+   * Other ids that name it: OpenRouter's "~anthropic/claude-sonnet-latest"
+   * follows the family's newest model, so config can name a model without
+   * naming a version.
+   */
+  aliases: string[];
+  /**
    * What it charges, or null when that isn't a price per token: a router
    * whose price depends on the model it picks, or a subscription.
    */

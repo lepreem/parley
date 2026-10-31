@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import {
   archivedModels,
   describeModel,
+  findChatModel,
   describePricing,
   meetsRequirements,
   priceTier,
@@ -37,17 +38,8 @@ type Entry = {
 /** A provider's models while browsing, the archived ones folded away. */
 type Group = { label: string; current: Entry[]; archived: Entry[] };
 
-/** OpenRouter's "~…-latest" ids, which follow a family's newest model. */
-function isAlias(entry: Entry): boolean {
-  return entry.id.startsWith("~");
-}
-
-/**
- * Newest first. An alias has no release of its own, only the day it was
- * made, so aliases go after the dated models.
- */
+/** Newest first. */
 function byRelease(a: Entry, b: Entry): number {
-  if (isAlias(a) !== isAlias(b)) return isAlias(a) ? 1 : -1;
   return (
     (b.model.released ?? "").localeCompare(a.model.released ?? "") ||
     a.name.localeCompare(b.name)
@@ -212,8 +204,13 @@ export function ModelPicker({
         b.current.length - a.current.length || a.label.localeCompare(b.label),
     );
     if (provider) return byProvider;
+    // Recommendations may name a model by alias, to follow its newest.
     const recommended = recommendedIds.flatMap((id) => {
-      const entry = matches.find((match) => match.id === id);
+      const model = findChatModel(
+        matches.map((match) => match.model),
+        id,
+      );
+      const entry = model && matches.find((match) => match.id === model.id);
       return entry ? [entry] : [];
     });
     return recommended.length > 0
@@ -248,9 +245,7 @@ export function ModelPicker({
   const row = (entry: Entry) => {
     const limit = formatContext(entry.model.contextTokens);
     const released =
-      entry.model.released && !isAlias(entry)
-        ? formatReleased(entry.model.released)
-        : null;
+      entry.model.released && formatReleased(entry.model.released);
     return (
       <button
         key={entry.id}

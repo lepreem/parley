@@ -25,6 +25,14 @@ export function fetchTranscriptionModels(
   return fetchModels<TranscribeModel>(server, "/models/transcription");
 }
 
+/** The model with this id or alias, if it's one of these. */
+export function findChatModel(
+  models: readonly ChatModel[],
+  id: string,
+): ChatModel | undefined {
+  return models.find((model) => model.id === id || model.aliases.includes(id));
+}
+
 /** Fall back to the first available model when the preferred one isn't offered. */
 export function resolveDefaultModel(
   modelIds: string[],
@@ -182,10 +190,6 @@ const RENAMED_TIER_PRICE_RATIO = 0.7;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-function isAlias(model: ChatModel): boolean {
-  return model.id.startsWith("~");
-}
-
 /**
  * The model's id after the provider, split into words: "gpt-6-luna" is
  * ["gpt", "6", "luna"].
@@ -258,7 +262,6 @@ function replaces(newer: ChatModel, older: ChatModel): boolean {
     !older.pricing ||
     !newer.released ||
     !older.released ||
-    isAlias(newer) ||
     // Free variants are rate-limited and come and go.
     newer.id.endsWith(":free") ||
     (isUnstable(newer) && !isUnstable(older))
@@ -291,8 +294,8 @@ function replaces(newer: ChatModel, older: ChatModel): boolean {
 /**
  * The models a newer one from the same provider replaces, each with the
  * current model that replaces it: the newest of its own family if there is
- * one, else the newest of any, the cheaper of two released together. Aliases, models without a price and models without a date
- * are never archived.
+ * one, else the newest of any, the cheaper of two released together.
+ * Models without a price or a date are never archived.
  */
 export function archivedModels(
   models: readonly ChatModel[],
@@ -308,7 +311,6 @@ export function archivedModels(
   const archived = new Map<string, ChatModel>();
   for (const list of byProvider.values()) {
     for (const older of list) {
-      if (isAlias(older)) continue;
       let best: ChatModel | null = null;
       for (const newer of list) {
         if (!replaces(newer, older)) continue;

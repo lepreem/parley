@@ -336,6 +336,7 @@ beforeEach(() => {
     contextTokens: null,
     acceptsImages: true,
     released: null,
+    aliases: [],
   });
   mockGenerateTitle.mockResolvedValue("Friendly greeting");
   mockIsGuestModel.mockResolvedValue(true);
@@ -1424,6 +1425,7 @@ describe("POST /conversations/:conversationId/messages", () => {
       contextTokens: null,
       acceptsImages: false,
       released: null,
+      aliases: [],
     });
 
     const response = await postMessage({
@@ -1768,6 +1770,7 @@ describe("POST /conversations/:conversationId/messages", () => {
       contextTokens: null,
       acceptsImages: false,
       released: null,
+      aliases: [],
     });
 
     const res = await postMessage({
@@ -2077,6 +2080,7 @@ describe("PATCH /conversations/:conversationId/messages/:messageId", () => {
       contextTokens: null,
       acceptsImages: false,
       released: null,
+      aliases: [],
     });
 
     const response = await patchMessage(edit);

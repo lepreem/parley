@@ -18,6 +18,7 @@ function model(
     contextTokens: 200_000,
     acceptsImages: true,
     released,
+    aliases: [],
     pricing: price && {
       inputPerMillionTokens: price[0],
       outputPerMillionTokens: price[1],
@@ -103,13 +104,12 @@ describe("archivedModels", () => {
     ).toEqual({});
   });
 
-  it("doesn't let a preview, a free variant or an alias replace anything", () => {
+  it("doesn't let a preview or a free variant replace anything", () => {
     expect(
       archive(
         model("vendor/chat-1", "2025-01-01", [1, 1]),
         model("vendor/chat-2-preview", "2026-01-01", [1, 1]),
         model("vendor/chat-3:free", "2026-02-01", [0, 0]),
-        model("~vendor/chat-latest", "2026-03-01", [1, 1]),
       ),
     ).toEqual({});
   });

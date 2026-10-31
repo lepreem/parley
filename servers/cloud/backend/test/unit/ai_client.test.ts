@@ -43,6 +43,7 @@ const sampleModel = {
   contextTokens: 128000,
   acceptsImages: true,
   released: "2024-07-18",
+  aliases: [],
   pricing: { inputPerMillionTokens: 0.15, outputPerMillionTokens: 0.6 },
 };
 
@@ -115,6 +116,7 @@ describe("listChatModels", () => {
         contextTokens: null,
         acceptsImages: false,
         released: "2024-07-18",
+        aliases: [],
         pricing: { inputPerMillionTokens: 0.15, outputPerMillionTokens: 0.6 },
       },
       {
@@ -123,6 +125,7 @@ describe("listChatModels", () => {
         contextTokens: 128000,
         acceptsImages: true,
         released: "2024-07-18",
+        aliases: [],
         pricing: null,
       },
     ]);
@@ -142,6 +145,46 @@ describe("listChatModels", () => {
     });
 
     expect(await chat.listModels()).toEqual([sampleModel]);
+  });
+
+  it("folds an alias into the model it points at", async () => {
+    mockGetOrSetCache.mockImplementationOnce(runFetch);
+    mockModelsList.mockResolvedValueOnce({
+      result: {
+        data: [
+          openRouterListModel,
+          {
+            ...openRouterListModel,
+            id: "~openai/gpt-mini-latest",
+            aliasTarget: { slug: MODEL_ID, name: "OpenAI: GPT-4o Mini" },
+          },
+        ],
+      },
+    });
+
+    expect(await chat.listModels()).toEqual([
+      { ...sampleModel, aliases: ["~openai/gpt-mini-latest"] },
+    ]);
+  });
+
+  it("leaves out OpenAI's pro reasoning modes, but not other providers' pro models", async () => {
+    mockGetOrSetCache.mockImplementationOnce(runFetch);
+    mockModelsList.mockResolvedValueOnce({
+      result: {
+        data: [
+          { ...openRouterListModel, id: "openai/gpt-6-luna" },
+          { ...openRouterListModel, id: "openai/gpt-6-luna-pro" },
+          { ...openRouterListModel, id: "perplexity/sonar" },
+          { ...openRouterListModel, id: "perplexity/sonar-pro" },
+        ],
+      },
+    });
+
+    expect((await chat.listModels()).map((model) => model.id)).toEqual([
+      "openai/gpt-6-luna",
+      "perplexity/sonar",
+      "perplexity/sonar-pro",
+    ]);
   });
 });
 
@@ -451,7 +494,7 @@ describe("generateTitle", () => {
     expect(mockChatSend).toHaveBeenCalledWith(
       {
         chatRequest: expect.objectContaining({
-          model: "openai/gpt-6-luna",
+          model: "~openai/gpt-luna-latest",
           messages: [
             {
               role: "user",

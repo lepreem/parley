@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, type DragEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   CHARS_PER_TOKEN,
+  findChatModel,
   meetsRequirements,
   resolveDefaultModel,
   type MessageRequirements,
@@ -122,17 +123,22 @@ export function ChatView() {
   }, [history, sources, text]);
 
   // Requirements narrow the list, so a pick made earlier can fall out of it.
-  const eligibleIds = useMemo(
+  const eligible = useMemo(
     () =>
-      chatModels.models
-        .filter((model) => meetsRequirements(model, requirements))
-        .map((model) => model.id),
+      chatModels.models.filter((model) =>
+        meetsRequirements(model, requirements),
+      ),
     [chatModels.models, requirements],
   );
+  const eligibleIds = eligible.map((model) => model.id);
+  // The default may name a model by alias, to follow its newest.
+  const defaultId =
+    findChatModel(eligible, server.defaultChatModelId)?.id ??
+    server.defaultChatModelId;
   const modelId =
     modelPick && eligibleIds.includes(modelPick)
       ? modelPick
-      : resolveDefaultModel(eligibleIds, server.defaultChatModelId);
+      : resolveDefaultModel(eligibleIds, defaultId);
 
   const replyInProgress = messagesQuery.data?.replyInProgress ?? null;
   const pending = conversationId

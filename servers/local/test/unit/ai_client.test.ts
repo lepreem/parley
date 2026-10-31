@@ -102,6 +102,7 @@ describe("listChatModels", () => {
         contextTokens: 200_000,
         acceptsImages: true,
         released: null,
+        aliases: [],
         pricing: null,
       },
       {
@@ -110,6 +111,7 @@ describe("listChatModels", () => {
         contextTokens: 200_000,
         acceptsImages: true,
         released: null,
+        aliases: [],
         pricing: null,
       },
       {
@@ -118,6 +120,7 @@ describe("listChatModels", () => {
         contextTokens: 200_000,
         acceptsImages: true,
         released: null,
+        aliases: [],
         pricing: null,
       },
     ]);
