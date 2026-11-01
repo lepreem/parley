@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  currentModel,
   newestVersions,
-  offeredModels,
   type DeepgramModel,
 } from "../../src/ai/ai_transcribe_client/model_catalog";
 
@@ -26,8 +26,8 @@ function listed(
   };
 }
 
-function offered(...models: DeepgramModel[]) {
-  return offeredModels(newestVersions(models));
+function current(...models: DeepgramModel[]) {
+  return currentModel(newestVersions(models));
 }
 
 describe("newestVersions", () => {
@@ -50,54 +50,49 @@ describe("newestVersions", () => {
   });
 });
 
-describe("offeredModels", () => {
-  it("offers the current generation, general first, named from its id", () => {
+describe("currentModel", () => {
+  it("is the newest generation's general model, not a domain one", () => {
     expect(
-      offered(
+      current(
         listed("nova-3-pharma", "nova-3", "2026-06-05.1"),
-        listed("nova-3-medical", "nova-3", "2026-10-06.1"),
+        listed("nova-3-medical", "nova-3", "2026-10-30.1"),
         listed("nova-3-general", "nova-3", "2026-10-21.1"),
         listed("nova-2-general", "nova-2", "2025-03-31.1"),
-        listed("nova-2-drivethru", "nova-2", "2024-02-07.1"),
         listed("whisper-large", "whisper", "2022-12-08.0"),
       ),
-    ).toEqual([
-      { id: "nova-3-general", name: "Nova 3" },
-      { id: "nova-3-medical", name: "Nova 3 Medical" },
-      { id: "nova-3-pharma", name: "Nova 3 Pharma" },
-    ]);
+    ).toBe("nova-3-general");
   });
 
   it("moves to a new generation once its general model is out", () => {
     expect(
-      offered(
+      current(
         listed("nova-3-general", "nova-3", "2026-10-21.1"),
         listed("nova-4-general", "nova-4", "2027-03-01.1"),
-      ).map((model) => model.id),
-    ).toEqual(["nova-4-general"]);
+      ),
+    ).toBe("nova-4-general");
   });
 
   it("goes by general models, not a newer build of something else", () => {
     expect(
-      offered(
+      current(
         listed("nova-3-general", "nova-3", "2026-10-21.1"),
         listed("whisper-large", "whisper", "2027-01-01.1"),
-      ).map((model) => model.id),
-    ).toEqual(["nova-3-general"]);
+      ),
+    ).toBe("nova-3-general");
   });
 
-  it("leaves out models that only stream", () => {
+  it("isn't one that only streams", () => {
     expect(
-      offered(
+      current(
         listed("nova-3-general", "nova-3", "2026-10-21.1"),
-        listed("nova-3-live", "nova-3", "2026-10-21.1", { batch: false }),
-      ).map((model) => model.id),
-    ).toEqual(["nova-3-general"]);
+        listed("nova-4-general", "nova-4", "2027-03-01.1", { batch: false }),
+      ),
+    ).toBe("nova-3-general");
   });
 
-  it("offers nothing while the catalog has no general model", () => {
-    expect(offered(listed("nova-3-medical", "nova-3", "2026-10-06.1"))).toEqual(
-      [],
-    );
+  it("is none while the catalog has no general model", () => {
+    expect(
+      current(listed("nova-3-medical", "nova-3", "2026-10-06.1")),
+    ).toBeUndefined();
   });
 });

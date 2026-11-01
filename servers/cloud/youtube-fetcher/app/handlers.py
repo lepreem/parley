@@ -82,12 +82,13 @@ def _fetch_with_retries(audio_upload_id: str, url: str, user_id: str) -> None:
             time.sleep(backoff)
 
 
-def _fetch_captions(url: str) -> list[dict] | None:
-    """The video's first caption track, one segment per caption line in the
-    shape the API's TranscriptSegment takes ({"start", "end", "text"}, in
-    seconds), or None when it has none worth using. The segments travel in the
-    yt_save_captions message itself: even a many-hour video's captions are a
-    few hundred KB."""
+def _fetch_captions(url: str) -> dict | None:
+    """The video's first caption track as the yt_save_captions message carries
+    it, or None when it has none worth using: "segments", one per caption line
+    in the shape the API's TranscriptSegment takes ({"start", "end", "text"},
+    in seconds), and "language", the track's language code. The segments
+    travel in the message itself: even a many-hour video's captions are a few
+    hundred KB."""
     video_id = YoutubeIE.extract_id(url)
 
     try:
@@ -119,7 +120,7 @@ def _fetch_captions(url: str) -> list[dict] | None:
         video_id,
         len(segments),
     )
-    return segments
+    return {"segments": segments, "language": selected_transcript.language_code}
 
 
 def _fails_the_job(handler: Callable[[dict], None]) -> Callable[[dict], None]:
@@ -154,11 +155,11 @@ def handle_yt_fetch_captions(event: dict) -> None:
     url: str = event["url"]
     user_id: str = event["userId"]
 
-    segments = _fetch_captions(url)
-    if segments:
+    captions = _fetch_captions(url)
+    if captions:
         mq.publish_threadsafe(
             contract.queues.YT_SAVE_CAPTIONS,
-            {"audioUploadId": audio_upload_id, "segments": segments},
+            {"audioUploadId": audio_upload_id, **captions},
         )
         log.info("Fetched captions for %s, queued yt_save_captions", audio_upload_id)
         return

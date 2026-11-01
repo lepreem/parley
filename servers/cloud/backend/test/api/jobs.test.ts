@@ -55,10 +55,7 @@ vi.mock("../../src/data/storageLedger.data", () => ({
 
 vi.mock("../../src/ai/ai_transcribe_client/ai_transcribe_client", () => ({
   getTranscribeModelData: vi.fn(),
-  transcription: {
-    isValidModel: vi.fn(),
-    defaultModel: async () => "nova-3-general",
-  },
+  transcription: { model: async () => "nova-3-general" },
 }));
 
 vi.mock("../../src/message-queue/messageQueue", () => {

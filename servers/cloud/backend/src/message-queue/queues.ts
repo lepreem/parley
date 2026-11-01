@@ -44,6 +44,8 @@ export const QUEUE_PAYLOAD_SCHEMAS = {
     audioUploadId: uploadId,
     /** The video's captions, used as the transcript instead of its audio. */
     segments: z.array(transcriptSegmentSchema),
+    /** The captions' language as YouTube labels it ("en", "de"). */
+    language: z.string().min(1).optional(),
   }),
 
   [QUEUES.TRANSCRIBE_AUDIO]: z.object({

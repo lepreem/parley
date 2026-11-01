@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, or } from "drizzle-orm";
 import {
   Attachments,
   AudioTranscriptionJobs,
@@ -24,9 +24,16 @@ import { attachments } from "./attachments.data";
  * of a row means a valid transcript is ready.
  */
 
+/** A transcript as it's stored: what was said, with when, and in what language. */
+type TranscriptToSave = {
+  segments: readonly TranscriptSegment[];
+  /** A BCP-47 tag ("de", "ar-JO"); null when the transcriber named none. */
+  language: string | null;
+};
+
 async function insertTranscript(
   audioUploadId: UploadId,
-  segments: readonly TranscriptSegment[],
+  { segments, language }: TranscriptToSave,
   executor: Executor = db,
 ) {
   const content = transcriptText(segments);
@@ -34,6 +41,7 @@ async function insertTranscript(
     audioUploadId,
     content,
     segments: [...segments],
+    language,
     charCount: content.length,
   });
 }
@@ -45,7 +53,7 @@ async function insertTranscript(
  */
 async function saveCompletedTranscript(
   audioUploadId: UploadId,
-  segments: readonly TranscriptSegment[],
+  transcript: TranscriptToSave,
   transcriptModelId: string | null,
   claimToken: string,
 ) {
@@ -58,7 +66,7 @@ async function saveCompletedTranscript(
     );
     if (!ownsJob) return false;
 
-    await insertTranscript(audioUploadId, segments, tx);
+    await insertTranscript(audioUploadId, transcript, tx);
     return true;
   });
 }
@@ -69,25 +77,40 @@ async function saveCompletedTranscript(
  * matches YouTube transcripts, the text of a public video, and the caller
  * copies it into a job of its own rather than linking anyone to this one.
  *
- * Only a transcript the request would have made itself: one by its model, or
- * when it takes captions, the video's captions too.
+ * Only a transcript the request would have made itself: one by the model the
+ * server transcribes with now, or when it takes captions, the video's
+ * captions too. A transcript by a model must have its language: one without
+ * was made before Deepgram was asked to detect it, and may be English that
+ * was never said.
  */
 async function findYoutubeTranscript(
   youtubeVideoId: string,
   {
     transcriptModelId,
     useCaptionsIfAvailable,
-  }: { transcriptModelId: string; useCaptionsIfAvailable: boolean },
+  }: { transcriptModelId: string | undefined; useCaptionsIfAvailable: boolean },
 ) {
-  const madeBy = eq(
-    AudioTranscriptionJobs.transcriptModelId,
-    transcriptModelId,
-  );
+  const madeByModel = transcriptModelId
+    ? and(
+        eq(AudioTranscriptionJobs.transcriptModelId, transcriptModelId),
+        isNotNull(TranscriptContents.language),
+      )
+    : undefined;
+  const madeFromCaptions = useCaptionsIfAvailable
+    ? isNull(AudioTranscriptionJobs.transcriptModelId)
+    : undefined;
+  const madeAsAsked =
+    madeByModel && madeFromCaptions
+      ? or(madeByModel, madeFromCaptions)
+      : (madeByModel ?? madeFromCaptions);
+  if (!madeAsAsked) return null;
+
   const [row] = await db
     .select({
       transcriptModelId: AudioTranscriptionJobs.transcriptModelId,
       content: TranscriptContents.content,
       segments: TranscriptContents.segments,
+      language: TranscriptContents.language,
       charCount: TranscriptContents.charCount,
     })
     .from(AudioTranscriptionJobs)
@@ -102,9 +125,7 @@ async function findYoutubeTranscript(
       and(
         eq(AudioTranscriptionJobs.youtubeVideoId, youtubeVideoId),
         eq(AudioTranscriptionJobs.status, "completed"),
-        useCaptionsIfAvailable
-          ? or(madeBy, isNull(AudioTranscriptionJobs.transcriptModelId))
-          : madeBy,
+        madeAsAsked,
       ),
     )
     .limit(1);

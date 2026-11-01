@@ -265,13 +265,17 @@ export type UploadedAudio = {
   source: "audio" | "video";
 };
 
-/** POST /upload/youtube */
+/** POST /upload/youtube. The cloud picks the transcription model itself. */
 export type QueueYoutubeBody = {
   youtubeUrl: string;
-  /** The server's default when absent. */
-  transcriptModelId?: string;
   /** Use the video's own captions instead of transcribing, when it has them. */
   useCaptionsIfAvailable?: boolean;
+};
+
+/** The local server's POST /upload/youtube, where the user picks the model. */
+export type LocalQueueYoutubeBody = QueueYoutubeBody & {
+  /** The local server's default when absent. */
+  transcriptModelId?: string;
 };
 
 /** What POST /upload/youtube answers with, once the fetch is queued. */

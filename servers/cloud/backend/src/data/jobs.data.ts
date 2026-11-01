@@ -152,8 +152,12 @@ async function createAudioJob(
     fileName: string;
     mimeType: string | null;
     sizeBytes: number;
-    /** Null only for a copy of a video's captions. */
-    transcriptModelId: string | null;
+    /**
+     * What made the transcript, for a job created completed with one: the
+     * model, or null for a copy of a video's captions. A queued job has none
+     * until it's transcribed.
+     */
+    transcriptModelId?: string | null;
     youtubeVideoId?: string;
     /** Only for a job whose transcript is written with it. */
     status?: "completed";
@@ -167,7 +171,7 @@ async function createAudioJob(
     fileName,
     mimeType,
     sizeBytes,
-    transcriptModelId,
+    transcriptModelId = null,
     youtubeVideoId,
     status,
   } = job;

@@ -1,6 +1,6 @@
 import type {
   QueuedYoutube,
-  QueueYoutubeBody,
+  LocalQueueYoutubeBody,
   UploadedAudio,
   UploadedImage,
 } from "@parley/contract";
@@ -103,7 +103,10 @@ export async function deleteImage(
   });
 }
 
-/** A transcription model to send, if one was chosen; the server's default otherwise. */
+/**
+ * A transcription model to send, if the user picked one: the local server's
+ * default otherwise. The cloud picks its own and is sent none.
+ */
 function modelField(transcriptModelId: string | null): Record<string, string> {
   return transcriptModelId
     ? { [FORM_KEYS.transcriptModelId]: transcriptModelId }
@@ -162,6 +165,6 @@ export async function requestYoutubeTranscript(
       youtubeUrl,
       ...modelField(transcriptModelId),
       useCaptionsIfAvailable,
-    } satisfies QueueYoutubeBody),
+    } satisfies LocalQueueYoutubeBody),
   );
 }

@@ -1,9 +1,6 @@
-import type { TranscribeModel } from "@parley/contract";
-
 /**
- * Which of Deepgram's speech-to-text models the app offers. Everything that
- * decides what reaches the transcription picker is here, private to
- * ai_transcribe_client.ts.
+ * Which of Deepgram's speech-to-text models the app transcribes with.
+ * Everything that decides it is here, private to ai_transcribe_client.ts.
  */
 
 /** One of Deepgram's speech-to-text models, as of its newest version. */
@@ -45,30 +42,20 @@ export function newestVersions(
   return newest;
 }
 
-/** "nova-3-medical" as "Nova 3 Medical"; "general" goes unsaid. */
-function displayName(id: string): string {
-  return id
-    .split("-")
-    .filter((word) => word !== "general")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
-
 function isGeneral(model: DeepgramModel): boolean {
   return model.canonicalName === `${model.architecture}-general`;
 }
 
 /**
- * The models of Deepgram's current generation: the architecture whose
- * general model was built most recently (nova-3, until a nova-4 comes),
- * from newestVersions' batch builds. The general model comes
- * first, as the default, then the domain ones (medical, pharma). Older
- * generations, Whisper and Deepgram's older industry models are left out:
- * the current generation transcribes better and in more languages.
+ * The model every file is transcribed with: the general model built most
+ * recently (nova-3-general, until a nova-4-general comes), from
+ * newestVersions' batch builds. Its domain siblings (medical, pharma) only add
+ * specialist vocabulary, which nobody uploading a file knows to ask for, and
+ * Deepgram detects the language whichever it is. Undefined while the catalog
+ * has no general model.
  */
-export function offeredModels(data: TranscribeModelData): TranscribeModel[] {
-  const models = Object.values(data);
-  const current = models
+export function currentModel(data: TranscribeModelData): string | undefined {
+  return Object.values(data)
     .filter(isGeneral)
     .reduce<DeepgramModel | undefined>(
       (newest, model) =>
@@ -76,18 +63,5 @@ export function offeredModels(data: TranscribeModelData): TranscribeModel[] {
           ? model
           : newest,
       undefined,
-    )?.architecture;
-  if (!current) return [];
-
-  return models
-    .filter((model) => model.architecture === current)
-    .sort(
-      (a, b) =>
-        Number(isGeneral(b)) - Number(isGeneral(a)) ||
-        a.canonicalName.localeCompare(b.canonicalName),
-    )
-    .map((model) => ({
-      id: model.canonicalName,
-      name: displayName(model.canonicalName),
-    }));
+    )?.canonicalName;
 }

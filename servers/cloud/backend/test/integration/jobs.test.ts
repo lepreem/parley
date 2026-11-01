@@ -37,7 +37,12 @@ vi.mock("../../src/db", async () => {
   return { ...schema, db: drizzle(client, { schema }) };
 });
 
-import { AudioTranscriptionJobs, db, users } from "../../src/db";
+import {
+  AudioTranscriptionJobs,
+  TranscriptContents,
+  db,
+  users,
+} from "../../src/db";
 import { jobs } from "../../src/data/jobs.data";
 import { transcripts } from "../../src/data/transcripts.data";
 
@@ -65,18 +70,19 @@ async function createJob() {
 }
 
 /**
- * A YouTube job for the video, taken through to completed with `text`, made
- * by `transcriptModelId` (null: the video's captions).
+ * A YouTube job for the video, taken through to completed with `text` in
+ * `language`, made by `transcriptModelId` (null: the video's captions).
  */
 async function transcribeVideo(
   text: string,
   transcriptModelId: string | null = "nova-3-general",
+  language: string | null = "en",
 ) {
   const audioUploadId = await createJob();
   const claimed = await jobs.claimAudioJob(audioUploadId);
   await transcripts.saveCompletedTranscript(
     audioUploadId,
-    [{ start: 0, end: 2, text }],
+    { segments: [{ start: 0, end: 2, text }], language },
     transcriptModelId,
     claimed!.claimToken,
   );
@@ -132,8 +138,37 @@ describe.skipIf(!testState.databaseUrl)("audio jobs in PostgreSQL", () => {
         transcriptModelId: "nova-3-general",
         content: expect.stringContaining("Never gonna give you up"),
         segments: [{ start: 0, end: 2, text: "Never gonna give you up" }],
+        language: "en",
         charCount: expect.any(Number),
       });
+    });
+
+    it("finds nothing a model made before the language was detected", async () => {
+      // It may be English that was never said.
+      await transcribeVideo("Never gonna give you up", "nova-3-general", null);
+
+      expect(
+        await transcripts.findYoutubeTranscript(videoId, nova3OrCaptions),
+      ).toBeNull();
+    });
+
+    it("finds captions without a language", async () => {
+      await transcribeVideo("Never gonna give you up", null, null);
+
+      expect(
+        await transcripts.findYoutubeTranscript(videoId, nova3OrCaptions),
+      ).toMatchObject({ transcriptModelId: null, language: null });
+    });
+
+    it("finds only captions while there's no model to match", async () => {
+      await transcribeVideo("Never gonna give you up");
+
+      expect(
+        await transcripts.findYoutubeTranscript(videoId, {
+          transcriptModelId: undefined,
+          useCaptionsIfAvailable: true,
+        }),
+      ).toBeNull();
     });
 
     it("finds nothing for a video no job has finished", async () => {
@@ -210,6 +245,22 @@ describe.skipIf(!testState.databaseUrl)("audio jobs in PostgreSQL", () => {
         job.audioUploadId,
       ]);
       expect(theirs.get(job.audioUploadId)).toBe(found!.content);
+    });
+
+    it("copies the transcript's language", async () => {
+      await transcribeVideo("Guten Morgen", "nova-3-general", "de");
+      const job = youtubeJob(otherUserId);
+
+      await transcripts.createReusedYoutubeJob(
+        job,
+        (await transcripts.findYoutubeTranscript(videoId, nova3))!,
+      );
+
+      const [copy] = await db
+        .select({ language: TranscriptContents.language })
+        .from(TranscriptContents)
+        .where(eq(TranscriptContents.audioUploadId, job.audioUploadId));
+      expect(copy).toEqual({ language: "de" });
     });
 
     it("keeps the copy when the original's owner deletes theirs", async () => {

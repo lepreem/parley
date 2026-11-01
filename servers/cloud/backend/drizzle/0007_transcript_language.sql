@@ -1,0 +1,1 @@
+ALTER TABLE "transcript_contents" ADD COLUMN "language" text;

@@ -207,7 +207,6 @@ describe.skipIf(!testState.databaseUrl)("storage ledger in PostgreSQL", () => {
               fileName: "a.webm",
               mimeType: "audio/webm",
               sizeBytes: 1,
-              transcriptModelId: "nova-3",
             },
             executor,
           ),
@@ -253,7 +252,6 @@ describe.skipIf(!testState.databaseUrl)("storage ledger in PostgreSQL", () => {
               fileName: "a.webm",
               mimeType: "audio/webm",
               sizeBytes: 1,
-              transcriptModelId: "nova-3",
             },
             executor,
           ),
@@ -426,7 +424,6 @@ describe.skipIf(!testState.databaseUrl)("storage ledger in PostgreSQL", () => {
         fileName: "yt",
         mimeType: null,
         sizeBytes: 0,
-        transcriptModelId: "nova-3",
       });
       await storageLedger.recordConfirmedObjects(userId, [
         { kind: "audio", uploadId: audioUploadId },
@@ -500,7 +497,6 @@ describe.skipIf(!testState.databaseUrl)("storage ledger in PostgreSQL", () => {
         fileName: "clip.webm",
         mimeType: "audio/webm",
         sizeBytes: 1,
-        transcriptModelId: "nova-3",
       });
       await storageLedger.recordConfirmedObjects(userId, [
         { kind: "audio", uploadId: audioUploadId },
@@ -569,7 +565,6 @@ describe.skipIf(!testState.databaseUrl)("storage ledger in PostgreSQL", () => {
       fileName: "YouTube audio",
       mimeType: null,
       sizeBytes: 0,
-      transcriptModelId: "nova-3",
     });
 
     it("records the job's audio as referenced", async () => {

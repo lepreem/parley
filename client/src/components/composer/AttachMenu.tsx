@@ -1,4 +1,5 @@
 import { useRef, useState, type ChangeEvent } from "react";
+import { useServer } from "../../hooks/server/useServer";
 import { useServerReady } from "../../hooks/server/useServerReady";
 import { useTranscriptionModelsQuery } from "../../hooks/queries/useModelsQuery";
 import { IMAGE_ACCEPT, MEDIA_ACCEPT } from "../../media/fileKind";
@@ -23,7 +24,12 @@ export function AttachMenu({
   onUseCaptionsChange,
 }: AttachMenuProps) {
   const ready = useServerReady();
-  const { models: transcriptionModels } = useTranscriptionModelsQuery(ready);
+  // Offered only where the user picks the model: the local server's Whisper
+  // sizes trade speed for accuracy on their own machine.
+  const choosesModel = useServer().transcribeModelChoice !== null;
+  const { models: transcriptionModels } = useTranscriptionModelsQuery(
+    ready && choosesModel,
+  );
   const [open, setOpen] = useState(false);
   const menuRef = useDismissable<HTMLDivElement>(open, () => setOpen(false));
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -100,29 +106,37 @@ export function AttachMenu({
           </button>
 
           <div className="border-t border-line px-3 py-2.5">
+            {choosesModel && (
+              <>
+                <label
+                  htmlFor="transcription-model"
+                  className="eyebrow block pb-1.5 text-faint"
+                >
+                  Transcribe with
+                </label>
+                <select
+                  id="transcription-model"
+                  value={transcriptModelId ?? ""}
+                  onChange={(event) =>
+                    onTranscriptModelChange(event.target.value)
+                  }
+                  className="w-full rounded-md border border-line bg-canvas px-2 py-1.5 font-mono text-[11px] text-ink outline-none"
+                >
+                  {transcriptionModels.length === 0 ? (
+                    <option value="">Loading…</option>
+                  ) : (
+                    transcriptionModels.map((model) => (
+                      <option key={model.id} value={model.id}>
+                        {model.name}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </>
+            )}
             <label
-              htmlFor="transcription-model"
-              className="eyebrow block pb-1.5 text-faint"
+              className={`flex items-start gap-2 text-xs text-ink ${choosesModel ? "pt-2" : ""}`}
             >
-              Transcribe with
-            </label>
-            <select
-              id="transcription-model"
-              value={transcriptModelId ?? ""}
-              onChange={(event) => onTranscriptModelChange(event.target.value)}
-              className="w-full rounded-md border border-line bg-canvas px-2 py-1.5 font-mono text-[11px] text-ink outline-none"
-            >
-              {transcriptionModels.length === 0 ? (
-                <option value="">Loading…</option>
-              ) : (
-                transcriptionModels.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.name}
-                  </option>
-                ))
-              )}
-            </select>
-            <label className="flex items-start gap-2 pt-2 text-xs text-ink">
               <input
                 type="checkbox"
                 checked={useCaptionsIfAvailable}

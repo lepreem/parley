@@ -9,7 +9,6 @@ const {
   mockSendEvent,
   mockCreateUploadUrl,
   mockInspectUploadedObject,
-  mockIsValidTranscribeModel,
   mockSelectRows,
   ledger,
 } = vi.hoisted(() => ({
@@ -19,7 +18,6 @@ const {
   mockSendEvent: vi.fn(),
   mockCreateUploadUrl: vi.fn(),
   mockInspectUploadedObject: vi.fn(),
-  mockIsValidTranscribeModel: vi.fn(),
   // What any select resolves to: the rows a lookup finds.
   mockSelectRows: vi.fn((): unknown[] => []),
   ledger: {
@@ -46,6 +44,7 @@ vi.mock("../../src/ai/ai_chat_client/ai_chat_client", async (importActual) => {
   };
 });
 
+// The model a YouTube transcript is reused by, without asking Deepgram.
 vi.mock(
   "../../src/ai/ai_transcribe_client/ai_transcribe_client",
   async (importActual) => {
@@ -57,8 +56,7 @@ vi.mock(
       ...actual,
       transcription: {
         ...actual.transcription,
-        isValidModel: mockIsValidTranscribeModel,
-        defaultModel: async () => "nova-3-general",
+        model: async () => "nova-3-general",
       },
     };
   },
@@ -249,7 +247,6 @@ describe("POST /upload/audio/confirm", () => {
     mockUpdateSet.mockReturnValue({ where: vi.fn().mockResolvedValue([]) });
     mockUpdate.mockReturnValue({ set: mockUpdateSet });
     mockSendEvent.mockResolvedValue(undefined);
-    mockIsValidTranscribeModel.mockResolvedValue(true);
     ledger.findLedgerEntry.mockResolvedValue({
       status: "pending",
       createdAt: new Date(),
@@ -541,7 +538,6 @@ describe("POST /upload/youtube", () => {
     mockUpdateSet.mockReturnValue({ where: vi.fn().mockResolvedValue([]) });
     mockUpdate.mockReturnValue({ set: mockUpdateSet });
     mockSendEvent.mockResolvedValue(undefined);
-    mockIsValidTranscribeModel.mockResolvedValue(true);
     mockSelectRows.mockReturnValue([]);
   });
 
@@ -701,6 +697,7 @@ describe("POST /upload/youtube", () => {
     const transcript = {
       content: "[00:00] Never gonna give you up",
       segments: [{ start: 0, end: 2, text: "Never gonna give you up" }],
+      language: "en",
       charCount: 31,
     };
     // Made from the video's captions, which this request takes.
@@ -722,7 +719,7 @@ describe("POST /upload/youtube", () => {
         source: "youtube",
         youtubeVideoId: VIDEO_ID,
         status: "completed",
-        // What made the copy, not the model the request named.
+        // What made the copy, not the model the server transcribes with.
         transcriptModelId: null,
       }),
     );

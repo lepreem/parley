@@ -27,7 +27,7 @@ vi.mock("../../src/data", () => ({
 vi.mock("../../src/ai/ai_transcribe_client/ai_transcribe_client", () => ({
   transcription: {
     transcribe: mocks.transcribeAI,
-    defaultModel: async () => "nova-3-general",
+    model: async () => "nova-3-general",
   },
 }));
 
@@ -64,13 +64,16 @@ describe("handleTranscribeJob", () => {
     const captions = [{ start: 0, end: 2, text: "the captions" }];
 
     beforeEach(() => {
-      mocks.transcribeAI.mockResolvedValue(transcribed);
+      mocks.transcribeAI.mockResolvedValue({
+        segments: transcribed,
+        language: "de",
+      });
       mocks.saveCompletedTranscript.mockResolvedValue(true);
     });
 
     it("stores the captions the message carries, without transcribing audio", async () => {
       await handleTranscribeJob(
-        { audioUploadId, segments: captions },
+        { audioUploadId, segments: captions, language: "ar" },
         firstAttempt,
       );
 
@@ -78,7 +81,21 @@ describe("handleTranscribeJob", () => {
       expect(mocks.transcribeAI).not.toHaveBeenCalled();
       expect(mocks.saveCompletedTranscript).toHaveBeenCalledWith(
         audioUploadId,
-        captions,
+        { segments: captions, language: "ar" },
+        null,
+        claimToken,
+      );
+    });
+
+    it("stores captions from a message without a language as in none", async () => {
+      await handleTranscribeJob(
+        { audioUploadId, segments: captions },
+        firstAttempt,
+      );
+
+      expect(mocks.saveCompletedTranscript).toHaveBeenCalledWith(
+        audioUploadId,
+        { segments: captions, language: null },
         null,
         claimToken,
       );
@@ -97,7 +114,7 @@ describe("handleTranscribeJob", () => {
       );
       expect(mocks.saveCompletedTranscript).toHaveBeenCalledWith(
         audioUploadId,
-        transcribed,
+        { segments: transcribed, language: "de" },
         "nova-3-general",
         claimToken,
       );
@@ -145,7 +162,10 @@ describe("handleTranscribeJob", () => {
 
   describe("before the last attempt", () => {
     it("treats an empty transcript as a failure", async () => {
-      mocks.transcribeAI.mockResolvedValue([{ start: 0, end: 1, text: "   " }]);
+      mocks.transcribeAI.mockResolvedValue({
+        segments: [{ start: 0, end: 1, text: "   " }],
+        language: null,
+      });
 
       await expect(
         handleTranscribeJob(audioInput, firstAttempt),
@@ -223,7 +243,10 @@ describe("handleTranscribeJob", () => {
     });
 
     it("says so when the audio had no speech in it", async () => {
-      mocks.transcribeAI.mockResolvedValue([{ start: 0, end: 1, text: "   " }]);
+      mocks.transcribeAI.mockResolvedValue({
+        segments: [{ start: 0, end: 1, text: "   " }],
+        language: null,
+      });
 
       await handleTranscribeJob(audioInput, lastAttempt);
 

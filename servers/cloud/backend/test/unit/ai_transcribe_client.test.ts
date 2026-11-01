@@ -48,10 +48,10 @@ const sttResponse = {
 };
 
 describe("transcribe", () => {
-  it("answers Deepgram's utterances as segments", async () => {
+  it("answers Deepgram's utterances as segments, in the language it detected", async () => {
     mockTranscribeUrl.mockResolvedValue({
       results: {
-        channels: [],
+        channels: [{ detected_language: "de" }],
         utterances: [
           { start: 0.5, end: 2, transcript: "Hello there." },
           { start: 4, end: 5.25, transcript: "Next." },
@@ -61,26 +61,30 @@ describe("transcribe", () => {
 
     expect(
       await transcription.transcribe("nova-3-general", "https://audio"),
-    ).toEqual([
-      { start: 0.5, end: 2, text: "Hello there." },
-      { start: 4, end: 5.25, text: "Next." },
-    ]);
+    ).toEqual({
+      segments: [
+        { start: 0.5, end: 2, text: "Hello there." },
+        { start: 4, end: 5.25, text: "Next." },
+      ],
+      language: "de",
+    });
     expect(mockTranscribeUrl).toHaveBeenCalledWith(
       expect.objectContaining({
         url: "https://audio",
         model: "nova-3-general",
+        detect_language: true,
         utterances: true,
       }),
       expect.anything(),
     );
   });
 
-  it("is empty when nothing was said", async () => {
+  it("is empty, in no language, when nothing was said", async () => {
     mockTranscribeUrl.mockResolvedValue({ results: { channels: [] } });
 
     expect(
       await transcription.transcribe("nova-3-general", "https://audio"),
-    ).toEqual([]);
+    ).toEqual({ segments: [], language: null });
   });
 });
 
@@ -119,37 +123,14 @@ describe("getTranscribeModelData", () => {
   });
 });
 
-describe("listTranscribeModels", () => {
+describe("model", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetOrSetCache.mockImplementation(runFetch);
     mockModelsList.mockResolvedValue(sttResponse);
   });
 
-  it("lists the current generation's models, the general one first", async () => {
-    expect(await transcription.listModels()).toEqual([
-      { id: "nova-3-general", name: "Nova 3" },
-    ]);
-    expect(await transcription.defaultModel()).toBe("nova-3-general");
-  });
-});
-
-describe("isValidTranscribeModel", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockGetOrSetCache.mockImplementation(runFetch);
-    mockModelsList.mockResolvedValue(sttResponse);
-  });
-
-  it("accepts a model by its canonical_name", async () => {
-    expect(await transcription.isValidModel("nova-3-general")).toBe(true);
-  });
-
-  it("rejects a display name, which repeats across generations", async () => {
-    expect(await transcription.isValidModel("general")).toBe(false);
-  });
-
-  it("rejects an offered model that is not in the catalog", async () => {
-    expect(await transcription.isValidModel("whisper-large")).toBe(false);
+  it("is Deepgram's current general model, by its canonical_name", async () => {
+    expect(await transcription.model()).toBe("nova-3-general");
   });
 });

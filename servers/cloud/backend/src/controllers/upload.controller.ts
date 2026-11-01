@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { QueuedYoutube, UploadedAudio } from "@parley/contract";
+import { transcription } from "../ai";
 import { data } from "../data";
 import { audioTranscription } from "../audioTranscription";
 import { uploads } from "../uploads";
@@ -59,7 +60,6 @@ export const handleAudioConfirm = authed.createHandlers(
       uploadId: audioUploadId,
       fileName,
       audioSource: source,
-      transcriptModelId,
     } = c.req.valid("json");
 
     const upload = await uploads.check(userId, {
@@ -78,7 +78,6 @@ export const handleAudioConfirm = authed.createHandlers(
       fileName,
       mimeType: upload.contentType,
       sizeBytes: upload.sizeBytes,
-      transcriptModelId,
     });
     if (!queued) {
       return c.json({ message: ALREADY_CONFIRMED }, 409);
@@ -106,7 +105,6 @@ export const handleYoutubeUpload = authed.createHandlers(
     const {
       youtubeUrl: url,
       youtubeVideoId,
-      transcriptModelId,
       useCaptionsIfAvailable,
     } = c.req.valid("json");
 
@@ -119,7 +117,6 @@ export const handleYoutubeUpload = authed.createHandlers(
       fileName: "YouTube audio",
       mimeType: null,
       sizeBytes: 0,
-      transcriptModelId,
     };
     const queued = {
       audioUploadId,
@@ -129,7 +126,10 @@ export const handleYoutubeUpload = authed.createHandlers(
 
     const transcript = await data.transcripts.findYoutubeTranscript(
       youtubeVideoId,
-      { transcriptModelId, useCaptionsIfAvailable },
+      {
+        transcriptModelId: await transcription.model(),
+        useCaptionsIfAvailable,
+      },
     );
     if (transcript) {
       await data.transcripts.createReusedYoutubeJob(job, transcript);
