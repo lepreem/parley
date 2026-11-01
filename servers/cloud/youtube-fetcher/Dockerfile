@@ -4,7 +4,7 @@
 # this image does not need ffmpeg — the audio is uploaded in whatever format
 # was downloaded and transcription reads the content type.
 
-FROM python:3.14-slim AS runtime
+FROM python:3.14-slim@sha256:cd89c30eda26ee911a4611b18680086e0ea42e6f5f8cbe653d07fa7958c9cec8 AS runtime
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     APP_ENV=production
