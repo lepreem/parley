@@ -10,7 +10,7 @@
 # Every workspace's manifest, which npm checks the lockfile against even when
 # installing only one of them. Installs skip lifecycle scripts: the root's
 # prepare sets up git hooks, and no dependency needs one to work.
-FROM node:22-alpine AS manifests
+FROM node:22-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS manifests
 WORKDIR /repo
 COPY package.json package-lock.json ./
 COPY client/package.json client/
