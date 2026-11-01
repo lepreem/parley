@@ -3,7 +3,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { decodeAudio, pingFfmpeg } from "../../core/ai/decodeAudio";
+import {
+  checkedFfmpeg,
+  decodeAudio,
+  pingFfmpeg,
+} from "../../core/ai/decodeAudio";
 
 // The real ffmpeg, the one ffmpeg-static installed for this platform.
 const SAMPLE = fileURLToPath(
@@ -42,5 +46,36 @@ describe("decodeAudio", () => {
 describe("pingFfmpeg", () => {
   it("passes when ffmpeg runs", async () => {
     await expect(pingFfmpeg()).resolves.toBeUndefined();
+  });
+});
+
+describe("checkedFfmpeg", () => {
+  const impostor = path.join(tmpdir(), "parley-not-ffmpeg");
+
+  it("refuses a build that isn't the one pinned", async () => {
+    await writeFile(impostor, "not ffmpeg");
+
+    await expect(
+      checkedFfmpeg(impostor, "linux-x64", undefined),
+    ).rejects.toMatchObject({
+      name: "AudioDecodeError",
+      message: expect.stringContaining("isn't the ffmpeg expected"),
+    });
+  });
+
+  it("refuses a platform with no pinned build", async () => {
+    await writeFile(impostor, "not ffmpeg");
+
+    await expect(
+      checkedFfmpeg(impostor, "freebsd-x64", undefined),
+    ).rejects.toThrow("No sha256 is pinned for ffmpeg on freebsd-x64");
+  });
+
+  it("runs the ffmpeg FFMPEG_BIN names as it is", async () => {
+    await writeFile(impostor, "my own ffmpeg");
+
+    await expect(checkedFfmpeg(impostor, "linux-x64", impostor)).resolves.toBe(
+      impostor,
+    );
   });
 });
