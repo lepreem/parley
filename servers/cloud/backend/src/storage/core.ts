@@ -30,3 +30,12 @@ export function storage(kind: StoredObjectKind) {
 export function objectPath(userId: string, { kind, uploadId }: StoredObject) {
   return `${userId}/${KINDS[kind].folder}/${uploadId}`;
 }
+
+/** Storage reports a missing object or bucket as a 400 whose body carries "404". */
+export function isNotFound(error: unknown) {
+  const { status, statusCode } = error as {
+    status?: number;
+    statusCode?: string;
+  };
+  return status === 404 || statusCode === "404";
+}

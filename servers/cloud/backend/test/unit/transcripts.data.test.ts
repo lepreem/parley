@@ -64,6 +64,7 @@ describe("saveCompletedTranscript", () => {
         segments: [{ start: 0, end: 1, text: "stale transcript" }],
         language: "en",
       },
+      "nova-3-general",
       claimToken,
     );
 
@@ -71,6 +72,7 @@ describe("saveCompletedTranscript", () => {
     expect(mockCompleteAudioJob).toHaveBeenCalledWith(
       audioUploadId,
       claimToken,
+      "nova-3-general",
       transactionExecutor,
     );
     expect(mockInsert).not.toHaveBeenCalled();
@@ -85,6 +87,7 @@ describe("saveCompletedTranscript", () => {
         segments: [{ start: 65, end: 70, text: "current transcript" }],
         language: "de",
       },
+      "nova-3-general",
       claimToken,
     );
 

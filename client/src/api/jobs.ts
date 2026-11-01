@@ -1,5 +1,6 @@
 import type {
   Job,
+  JobAudio,
   JobSource,
   JobStatus,
   JobsPage,
@@ -22,6 +23,19 @@ export async function fetchJob(
   const data = await apiJson<Job>(server, `/jobs/transcribe/${audioUploadId}`);
   if (!data?.audioUploadId) throw new Error("Invalid job response");
   return data;
+}
+
+/** Where the server has the job's audio, if it still does. */
+export async function fetchJobAudio(
+  server: Server,
+  audioUploadId: string,
+): Promise<JobAudio> {
+  const data = await apiJson<JobAudio>(
+    server,
+    `/jobs/transcribe/${audioUploadId}/audio`,
+  );
+  if (!data || !("url" in data)) throw new Error("Invalid job audio response");
+  return { url: data.url };
 }
 
 export async function fetchJobs(

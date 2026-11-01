@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, or } from "drizzle-orm";
 import {
   Attachments,
   AudioTranscriptionJobs,
@@ -54,14 +54,111 @@ async function insertTranscript(
 async function saveCompletedTranscript(
   audioUploadId: UploadId,
   transcript: TranscriptToSave,
+  transcriptModelId: string | null,
   claimToken: string,
 ) {
   return db.transaction(async (tx) => {
-    const ownsJob = await jobs.completeAudioJob(audioUploadId, claimToken, tx);
+    const ownsJob = await jobs.completeAudioJob(
+      audioUploadId,
+      claimToken,
+      transcriptModelId,
+      tx,
+    );
     if (!ownsJob) return false;
 
     await insertTranscript(audioUploadId, transcript, tx);
     return true;
+  });
+}
+
+/**
+ * A completed YouTube job's transcript of the video, whoever's job it is, or
+ * null when no one has one. The one read here not scoped by owner: it only
+ * matches YouTube transcripts, the text of a public video, and the caller
+ * copies it into a job of its own rather than linking anyone to this one.
+ *
+ * Only a transcript the request would have made itself: one by the model the
+ * server transcribes with now, or when it takes captions, the video's
+ * captions too. A transcript by a model must have its language: one without
+ * was made before Deepgram was asked to detect it, and may be English that
+ * was never said.
+ */
+async function findYoutubeTranscript(
+  youtubeVideoId: string,
+  {
+    transcriptModelId,
+    useCaptionsIfAvailable,
+  }: { transcriptModelId: string | undefined; useCaptionsIfAvailable: boolean },
+) {
+  const madeByModel = transcriptModelId
+    ? and(
+        eq(AudioTranscriptionJobs.transcriptModelId, transcriptModelId),
+        isNotNull(TranscriptContents.language),
+      )
+    : undefined;
+  const madeFromCaptions = useCaptionsIfAvailable
+    ? isNull(AudioTranscriptionJobs.transcriptModelId)
+    : undefined;
+  const madeAsAsked =
+    madeByModel && madeFromCaptions
+      ? or(madeByModel, madeFromCaptions)
+      : (madeByModel ?? madeFromCaptions);
+  if (!madeAsAsked) return null;
+
+  const [row] = await db
+    .select({
+      transcriptModelId: AudioTranscriptionJobs.transcriptModelId,
+      content: TranscriptContents.content,
+      segments: TranscriptContents.segments,
+      language: TranscriptContents.language,
+      charCount: TranscriptContents.charCount,
+    })
+    .from(AudioTranscriptionJobs)
+    .innerJoin(
+      TranscriptContents,
+      eq(
+        TranscriptContents.audioUploadId,
+        AudioTranscriptionJobs.audioUploadId,
+      ),
+    )
+    .where(
+      and(
+        eq(AudioTranscriptionJobs.youtubeVideoId, youtubeVideoId),
+        eq(AudioTranscriptionJobs.status, "completed"),
+        madeAsAsked,
+      ),
+    )
+    .limit(1);
+
+  return row ?? null;
+}
+
+type ReusableTranscript = NonNullable<
+  Awaited<ReturnType<typeof findYoutubeTranscript>>
+>;
+
+/**
+ * A YouTube job that starts out completed, with a copy of a transcript the
+ * video already has, in one transaction. Nothing is fetched or transcribed
+ * for it, so no audio is recorded for it either. It says what made the copy,
+ * not what the request asked for.
+ */
+async function createReusedYoutubeJob(
+  job: Omit<
+    Parameters<typeof jobs.createAudioJob>[0],
+    "status" | "transcriptModelId"
+  >,
+  { transcriptModelId, ...transcript }: ReusableTranscript,
+) {
+  await db.transaction(async (tx) => {
+    await jobs.createAudioJob(
+      { ...job, transcriptModelId, status: "completed" },
+      tx,
+    );
+    await tx.insert(TranscriptContents).values({
+      audioUploadId: job.audioUploadId,
+      ...transcript,
+    });
   });
 }
 
@@ -159,6 +256,8 @@ async function findMessageTranscriptAttachments(
 
 export const transcripts = {
   saveCompletedTranscript,
+  findYoutubeTranscript,
+  createReusedYoutubeJob,
   findTranscripts,
   findMessageTranscriptAttachments,
 };

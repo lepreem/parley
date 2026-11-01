@@ -57,15 +57,22 @@ type ClaimedJob = NonNullable<
   Awaited<ReturnType<typeof data.jobs.claimAudioJob>>
 >;
 
-/** The job's audio, transcribed. */
-async function transcribeAudio(job: ClaimedJob): Promise<Transcription> {
+/** The job's audio, transcribed, and the model that did it. */
+async function transcribeAudio(
+  job: ClaimedJob,
+): Promise<Transcription & { transcriptModelId: string }> {
+  const transcriptModelId = await transcription.model();
+  if (!transcriptModelId) {
+    throw new Error("Deepgram offers no transcription model");
+  }
   const audioUrl = await sign.url(job.userId, {
     kind: "audio",
     uploadId: job.audioUploadId,
   });
-  const model = await transcription.model();
-  if (!model) throw new Error("Deepgram offers no transcription model");
-  return transcription.transcribe(model, audioUrl);
+  return {
+    ...(await transcription.transcribe(transcriptModelId, audioUrl)),
+    transcriptModelId,
+  };
 }
 
 /**
@@ -136,8 +143,13 @@ export async function handleTranscribeJob(
     if (!job) return;
     const { claimToken } = job;
 
-    const { segments, language } = captions
-      ? { segments: captions, language: captionsLanguage ?? null }
+    // The job records what made its transcript: no model for captions.
+    const { segments, language, transcriptModelId } = captions
+      ? {
+          segments: captions,
+          language: captionsLanguage ?? null,
+          transcriptModelId: null,
+        }
       : await transcribeAudio(job);
     if (!segments.some((segment) => segment.text.trim())) {
       throw new NoSpeechError();
@@ -151,6 +163,7 @@ export async function handleTranscribeJob(
     const saved = await data.transcripts.saveCompletedTranscript(
       audioUploadId,
       { segments, language },
+      transcriptModelId,
       claimToken,
     );
     if (!saved) {

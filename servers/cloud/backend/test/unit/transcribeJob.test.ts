@@ -82,6 +82,7 @@ describe("handleTranscribeJob", () => {
       expect(mocks.saveCompletedTranscript).toHaveBeenCalledWith(
         audioUploadId,
         { segments: captions, language: "ar" },
+        null,
         claimToken,
       );
     });
@@ -95,6 +96,7 @@ describe("handleTranscribeJob", () => {
       expect(mocks.saveCompletedTranscript).toHaveBeenCalledWith(
         audioUploadId,
         { segments: captions, language: null },
+        null,
         claimToken,
       );
     });
@@ -113,6 +115,7 @@ describe("handleTranscribeJob", () => {
       expect(mocks.saveCompletedTranscript).toHaveBeenCalledWith(
         audioUploadId,
         { segments: transcribed, language: "de" },
+        "nova-3-general",
         claimToken,
       );
     });

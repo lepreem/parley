@@ -1,4 +1,4 @@
-import type { Job, JobsPage } from "@parley/contract";
+import type { Job, JobAudio, JobsPage } from "@parley/contract";
 import { authed } from "../middleware/auth.middleware";
 import { validate } from "../middleware/validate.middleware";
 import {
@@ -8,6 +8,7 @@ import {
 } from "../schema/jobs.schema";
 import { encodeCursor, decodeCursor } from "@parley/server-kit/http/cursor";
 import { uploads } from "../uploads";
+import { sign } from "../storage";
 import { data } from "../data";
 import { tryCatch } from "@parley/server-kit/runtime/try-catch";
 import { logger } from "@parley/server-kit/runtime/logger";
@@ -46,7 +47,34 @@ export const handleGetTranscribeJob = authed.createHandlers(
       status: audioJob.status,
       transcript: transcriptResult.data?.get(audioUploadId) ?? null,
       error: audioJob.error,
+      youtubeVideoId: audioJob.youtubeVideoId,
     } satisfies Job);
+  },
+);
+
+/**
+ * GET /jobs/transcribe/:audioUploadId/audio — a link to play the job's audio
+ * from, while it's still stored. The ledger says whether it is: the sweep
+ * marks a finished job's audio deleted once it's no longer kept.
+ */
+export const handleGetTranscribeJobAudio = authed.createHandlers(
+  validate("param", jobReqParamSchema),
+  async (c) => {
+    const { userId } = c.var;
+    const { audioUploadId } = c.req.valid("param");
+    const audio = { kind: "audio", uploadId: audioUploadId } as const;
+
+    const [audioJob, entry] = await Promise.all([
+      data.jobs.findAudioJob(userId, audioUploadId),
+      data.storageLedger.findLedgerEntry({ userId, ...audio }),
+    ]);
+    if (!audioJob) return c.json({ message: "Job not found" }, 404);
+
+    const url =
+      entry?.status === "confirmed"
+        ? await sign.urlIfStored(userId, audio)
+        : null;
+    return c.json({ url } satisfies JobAudio);
   },
 );
 

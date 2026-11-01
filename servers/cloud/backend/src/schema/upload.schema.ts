@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { QueueYoutubeBody } from "@parley/contract";
 import { takesBody } from "@parley/server-kit/http/takesBody";
-import { isYoutubeUrl } from "@parley/contract/youtube";
+import { youtubeVideoId } from "@parley/contract/youtube";
 import type { UploadId } from "@parley/server-kit/ids";
 
 /** Treat a blank ("" or null) optional field as unset. */
@@ -39,9 +39,10 @@ export const audioConfirmSchema = z.object({
 });
 
 /**
- * POST /upload/youtube — a YouTube URL. The youtube-fetcher service downloads
- * the audio out of band, so the job is created with placeholder file metadata
- * (real title/size are unknown until the fetch completes).
+ * POST /upload/youtube — a link to one YouTube video, known from here on by
+ * its id. The youtube-fetcher service downloads the audio out of band, so the
+ * job is created with placeholder file metadata (real title/size are unknown
+ * until the fetch completes).
  */
 export const youtubeUploadSchema = takesBody<QueueYoutubeBody>()(
   z
@@ -50,12 +51,17 @@ export const youtubeUploadSchema = takesBody<QueueYoutubeBody>()(
       useCaptionsIfAvailable: z.boolean().optional().default(false),
     })
     .superRefine((data, ctx) => {
-      if (!isYoutubeUrl(data.youtubeUrl)) {
+      if (!youtubeVideoId(data.youtubeUrl)) {
         ctx.addIssue({
           code: "custom",
           message: "Not a valid YouTube URL",
           path: ["youtubeUrl"],
         });
       }
-    }),
+    })
+    // The refinement above has turned away every URL without one.
+    .transform((data) => ({
+      ...data,
+      youtubeVideoId: youtubeVideoId(data.youtubeUrl)!,
+    })),
 );

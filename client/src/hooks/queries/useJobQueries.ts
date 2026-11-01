@@ -11,6 +11,7 @@ import {
   type JobsFilters,
 } from "../../api/jobs";
 import { errorMessage } from "../../api/http";
+import { audioCopies } from "../../media/audioCopies";
 import { queryKeys } from "../../lib/queryClient";
 import { useServer } from "../server/useServer";
 import { useToast } from "../toast/useToast";
@@ -49,6 +50,7 @@ export function useDeleteJobMutation() {
     mutationFn: ({ audioUploadId }: { audioUploadId: string }) =>
       deleteJob(server, audioUploadId),
     onSuccess: (_result, { audioUploadId }) => {
+      void audioCopies.remove(audioUploadId).catch(() => {});
       queryClient.removeQueries({
         queryKey: queryKeys.job(server.id, audioUploadId),
       });

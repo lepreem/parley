@@ -1,5 +1,5 @@
 {
-  "id": "fd83cbdd-c331-4e30-bbf4-4f9e86e29a5e",
+  "id": "b48bebf1-461f-4b56-8842-7aaca48d522a",
   "prevId": "7b831f05-14fb-4ba5-83e4-60481d6ed261",
   "version": "7",
   "dialect": "postgresql",
@@ -195,8 +195,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "YT_source_url": {
-          "name": "YT_source_url",
+        "youtube_video_id": {
+          "name": "youtube_video_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -235,7 +235,24 @@
           "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "audio_transcription_jobs_youtube_video_completed_idx": {
+          "name": "audio_transcription_jobs_youtube_video_completed_idx",
+          "columns": [
+            {
+              "expression": "youtube_video_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"audio_transcription_jobs\".\"status\" = 'completed'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "audio_transcription_jobs_audio_upload_id_attachment_uploads_attachment_upload_id_fk": {
           "name": "audio_transcription_jobs_audio_upload_id_attachment_uploads_attachment_upload_id_fk",
@@ -667,12 +684,6 @@
         "segments": {
           "name": "segments",
           "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "language": {
-          "name": "language",
-          "type": "text",
           "primaryKey": false,
           "notNull": false
         },

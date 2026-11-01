@@ -47,8 +47,15 @@
     {
       "idx": 6,
       "version": "7",
-      "when": 1793506706653,
-      "tag": "0006_transcript_language",
+      "when": 1793352363482,
+      "tag": "0006_youtube_video_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793507605526,
+      "tag": "0007_transcript_language",
       "breakpoints": true
     }
   ]
