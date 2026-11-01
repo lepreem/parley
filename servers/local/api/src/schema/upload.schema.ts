@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { QueueYoutubeBody } from "@parley/contract";
 import { takesBody } from "@parley/server-kit/http/takesBody";
-import { isYoutubeUrl } from "@parley/contract/youtube";
+import { youtubeVideoId } from "@parley/contract/youtube";
 import { CTX_KEYS, FORM_KEYS } from "../../../core/keys";
 import {
   DEFAULT_TRANSCRIBE_MODEL,
@@ -99,9 +99,10 @@ export const audioUploadSchema = z
   }));
 
 /**
- * POST /upload/youtube — a YouTube URL. The audio is fetched off the queue,
- * after the request, so the job is created with placeholder file metadata
- * (real title/size are unknown until the fetch completes).
+ * POST /upload/youtube — a link to one YouTube video, known from here on by
+ * its id. The audio is fetched off the queue, after the request, so the job
+ * is created with placeholder file metadata (real title/size are unknown
+ * until the fetch completes).
  */
 export const youtubeUploadSchema = takesBody<QueueYoutubeBody>()(
   z
@@ -111,7 +112,7 @@ export const youtubeUploadSchema = takesBody<QueueYoutubeBody>()(
       [CTX_KEYS.useCaptionsIfAvailable]: z.boolean().optional().default(false),
     })
     .superRefine(async (data, ctx) => {
-      if (!isYoutubeUrl(data[CTX_KEYS.youtubeUrl])) {
+      if (!youtubeVideoId(data[CTX_KEYS.youtubeUrl])) {
         ctx.addIssue({
           code: "custom",
           message: "Not a valid YouTube URL",
@@ -120,8 +121,10 @@ export const youtubeUploadSchema = takesBody<QueueYoutubeBody>()(
       }
       await refineTranscriptionModel(data[FORM_KEYS.transcriptModelId], ctx);
     })
+    // The refinement above has turned away every URL without a video id.
     .transform((data) => ({
       [CTX_KEYS.youtubeUrl]: data[CTX_KEYS.youtubeUrl],
+      [CTX_KEYS.youtubeVideoId]: youtubeVideoId(data[CTX_KEYS.youtubeUrl])!,
       [CTX_KEYS.transcriptModelId]: data[FORM_KEYS.transcriptModelId],
       [CTX_KEYS.useCaptionsIfAvailable]: data[CTX_KEYS.useCaptionsIfAvailable],
     })),

@@ -10,6 +10,8 @@ type AttachMenuProps = {
   onBrowseSources: () => void;
   transcriptModelId: string | null;
   onTranscriptModelChange: (modelId: string) => void;
+  useCaptionsIfAvailable: boolean;
+  onUseCaptionsChange: (use: boolean) => void;
 };
 
 export function AttachMenu({
@@ -17,6 +19,8 @@ export function AttachMenu({
   onBrowseSources,
   transcriptModelId,
   onTranscriptModelChange,
+  useCaptionsIfAvailable,
+  onUseCaptionsChange,
 }: AttachMenuProps) {
   const ready = useServerReady();
   const { models: transcriptionModels } = useTranscriptionModelsQuery(ready);
@@ -118,6 +122,20 @@ export function AttachMenu({
                 ))
               )}
             </select>
+            <label className="flex items-start gap-2 pt-2 text-xs text-ink">
+              <input
+                type="checkbox"
+                checked={useCaptionsIfAvailable}
+                onChange={(event) => onUseCaptionsChange(event.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                Use YouTube captions when a video has them
+                <span className="block text-[11px] leading-snug text-faint">
+                  Instant, but rougher than transcribing.
+                </span>
+              </span>
+            </label>
             <p className="pt-1.5 text-[11px] leading-snug text-faint">
               Applies to sources you add from now on.
             </p>

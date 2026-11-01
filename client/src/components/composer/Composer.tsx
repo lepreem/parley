@@ -68,6 +68,8 @@ export function Composer({
     retrySource,
     transcriptModelId,
     setTranscriptModelId,
+    useCaptionsIfAvailable,
+    setUseCaptionsIfAvailable,
   } = useSources(draftKey);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   // Held with the draft it belongs to, so declining an offer in one chat
@@ -164,6 +166,8 @@ export function Composer({
                 onBrowseSources={() => setSourcesOpen(true)}
                 transcriptModelId={transcriptModelId}
                 onTranscriptModelChange={setTranscriptModelId}
+                useCaptionsIfAvailable={useCaptionsIfAvailable}
+                onUseCaptionsChange={setUseCaptionsIfAvailable}
               />
             )}
             <ModelPicker

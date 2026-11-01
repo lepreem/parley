@@ -25,6 +25,8 @@ export function useSources(draftKey: string) {
     restoreDraft,
     transcriptModelId,
     setTranscriptModelId,
+    useCaptionsIfAvailable,
+    setUseCaptionsIfAvailable,
   } = context;
   const sources = drafts[draftKey] ?? NO_SOURCES;
 
@@ -33,6 +35,8 @@ export function useSources(draftKey: string) {
       sources,
       transcriptModelId,
       setTranscriptModelId,
+      useCaptionsIfAvailable,
+      setUseCaptionsIfAvailable,
       addFiles: (files: File[]) => addFiles(draftKey, files),
       addYoutube: (url: string) => addYoutube(draftKey, url),
       attachExisting: (job: ExistingSource) => attachExisting(draftKey, job),
@@ -52,6 +56,8 @@ export function useSources(draftKey: string) {
       sources,
       transcriptModelId,
       setTranscriptModelId,
+      useCaptionsIfAvailable,
+      setUseCaptionsIfAvailable,
       addFiles,
       addYoutube,
       attachExisting,

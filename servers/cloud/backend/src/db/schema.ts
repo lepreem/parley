@@ -12,6 +12,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { pgEnum } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import type { TranscriptSegment } from "@parley/server-kit/transcription/transcript";
 
 export const jobStatusEnum = pgEnum("job_status", [
@@ -86,32 +87,43 @@ export const Attachments = pgTable(
 ).enableRLS();
 
 /** Transcription processing state for an audio attachment. */
-export const AudioTranscriptionJobs = pgTable("audio_transcription_jobs", {
-  audioUploadId: text("audio_upload_id")
-    .notNull()
-    .primaryKey()
-    .references(() => Attachments.attachmentId, {
-      onDelete: "cascade",
-    }),
-  source: text("source", { enum: jobSources }).notNull(),
-  // Origin URL for 'youtube' jobs; null for direct uploads. Stored for history
-  // display and to enable transcript caching by video id later.
-  YT_sourceUrl: text("YT_source_url"),
-  status: jobStatusEnum("status").notNull().default("queued"),
-  // queued | processing | completed | failed
-  error: text("error"),
-  // RabbitMQ redelivers an unACKed message after its consumer connection closes,
-  // but that worker may still finish its AI call after a network split. Every
-  // claim replaces this fencing token, and terminal writes must still own it so
-  // a disconnected worker cannot commit after its replacement has taken over.
-  claimToken: uuid("claim_token"),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .defaultNow()
-    .$onUpdate(() => new Date())
-    .notNull(),
-  // Model used to transcribe the audio. Null falls back to the default
-  transcriptModelId: text("transcription_model_id"),
-}).enableRLS();
+export const AudioTranscriptionJobs = pgTable(
+  "audio_transcription_jobs",
+  {
+    audioUploadId: text("audio_upload_id")
+      .notNull()
+      .primaryKey()
+      .references(() => Attachments.attachmentId, {
+        onDelete: "cascade",
+      }),
+    source: text("source", { enum: jobSources }).notNull(),
+    // The video a 'youtube' job transcribes; null for direct uploads, and for
+    // YouTube jobs from before it was kept. A completed one's transcript is
+    // reused for the same video rather than transcribed again.
+    youtubeVideoId: text("youtube_video_id"),
+    status: jobStatusEnum("status").notNull().default("queued"),
+    // queued | processing | completed | failed
+    error: text("error"),
+    // RabbitMQ redelivers an unACKed message after its consumer connection closes,
+    // but that worker may still finish its AI call after a network split. Every
+    // claim replaces this fencing token, and terminal writes must still own it so
+    // a disconnected worker cannot commit after its replacement has taken over.
+    claimToken: uuid("claim_token"),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+    // The model that transcribes the audio. Once completed, what made the
+    // transcript: the model, or null for a YouTube video's own captions.
+    transcriptModelId: text("transcription_model_id"),
+  },
+  (table) => [
+    // findYoutubeTranscript: only a completed job has a transcript to reuse.
+    index("audio_transcription_jobs_youtube_video_completed_idx")
+      .on(table.youtubeVideoId)
+      .where(sql`${table.status} = 'completed'`),
+  ],
+).enableRLS();
 
 /** Chat conversations owned by a user. */
 export const Conversations = pgTable(

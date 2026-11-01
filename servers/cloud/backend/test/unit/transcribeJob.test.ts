@@ -77,6 +77,7 @@ describe("handleTranscribeJob", () => {
       expect(mocks.saveCompletedTranscript).toHaveBeenCalledWith(
         audioUploadId,
         captions,
+        null,
         claimToken,
       );
     });
@@ -95,6 +96,7 @@ describe("handleTranscribeJob", () => {
       expect(mocks.saveCompletedTranscript).toHaveBeenCalledWith(
         audioUploadId,
         transcribed,
+        "nova-3-general",
         claimToken,
       );
     });

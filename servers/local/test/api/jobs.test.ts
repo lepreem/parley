@@ -79,7 +79,6 @@ const audioJob = {
   audioUploadId,
   fileName: "clip.mp3",
   source: "audio",
-  youtubeSourceUrl: null,
   status: "completed",
   error: null,
 };
