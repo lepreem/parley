@@ -12,18 +12,18 @@ locally with Whisper, so nothing needs an API key.
 
 An import says whose code it is:
 
-| Import | Lives in | Run by |
-| --- | --- | --- |
-| `@parley/contract` | `packages/contract/` | the client and both servers |
-| `@parley/server-kit/...` | `packages/server-kit/` | both servers, never the client |
-| a relative path | the folder you're in | only that server, or only the client |
+| Import                   | Lives in               | Run by                               |
+| ------------------------ | ---------------------- | ------------------------------------ |
+| `@parley/contract`       | `packages/contract/`   | the client and both servers          |
+| `@parley/server-kit/...` | `packages/server-kit/` | both servers, never the client       |
+| a relative path          | the folder you're in   | only that server, or only the client |
 
 The two servers never import from each other.
 
 ## What you need
 
 - **Node and npm**, to install and start it. The rest of the toolchain
-  (Node 22, uv and yt-dlp, pinned in `mise.toml` and `servers/local/mise.toml`)
+  (Node 22 and yt-dlp, pinned in `mise.toml` and `servers/local/mise.toml`)
   comes through [mise](https://mise.jdx.dev), which `npm install` brings
   along: the root's npm scripts install those on first run and run the app
   with them.
@@ -40,11 +40,12 @@ npm run start:local # builds the client and the local server, then serves both
 
 Then open <http://127.0.0.1:3002>.
 
-The app refuses to start if it can't run Claude Code, uv or yt-dlp, and says
-which. Start it from the repo root rather than running `servers/local/`
-directly: that's what puts uv and yt-dlp on its PATH. The first transcription
-downloads its Whisper model (`small`, about 460 MB) and the Python packages
-Whisper needs; later ones start straight away.
+The app refuses to start if it can't run Claude Code, ffmpeg, Whisper or
+yt-dlp, and says which. Whisper (whisper.cpp) and ffmpeg come with
+`npm install`, built for your platform. Start it from the repo root rather
+than running `servers/local/` directly: that's what puts yt-dlp on its PATH.
+The first transcription downloads its Whisper model (`small`, about 470 MB);
+later ones start straight away.
 
 ## Where things live
 
