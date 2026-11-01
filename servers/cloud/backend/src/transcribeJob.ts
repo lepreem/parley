@@ -57,15 +57,21 @@ type ClaimedJob = NonNullable<
   Awaited<ReturnType<typeof data.jobs.claimAudioJob>>
 >;
 
-/** The job's audio, transcribed. */
+/** The job's audio, transcribed, and the model that did it. */
 async function transcribeAudio(job: ClaimedJob) {
+  const transcriptModelId =
+    job.transcriptModelId ?? (await transcription.defaultModel());
+  if (!transcriptModelId) {
+    throw new Error("Deepgram offers no transcription model");
+  }
   const audioUrl = await sign.url(job.userId, {
     kind: "audio",
     uploadId: job.audioUploadId,
   });
-  const model = job.transcriptModelId ?? (await transcription.defaultModel());
-  if (!model) throw new Error("Deepgram offers no transcription model");
-  return transcription.transcribe(model, audioUrl);
+  return {
+    segments: await transcription.transcribe(transcriptModelId, audioUrl),
+    transcriptModelId,
+  };
 }
 
 /**
@@ -133,7 +139,10 @@ export async function handleTranscribeJob(
     if (!job) return;
     const { claimToken } = job;
 
-    const segments = captions ?? (await transcribeAudio(job));
+    // The job records what made its transcript: no model for captions.
+    const { segments, transcriptModelId } = captions
+      ? { segments: captions, transcriptModelId: null }
+      : await transcribeAudio(job);
     if (!segments.some((segment) => segment.text.trim())) {
       throw new NoSpeechError();
     }
@@ -146,6 +155,7 @@ export async function handleTranscribeJob(
     const saved = await data.transcripts.saveCompletedTranscript(
       audioUploadId,
       segments,
+      transcriptModelId,
       claimToken,
     );
     if (!saved) {

@@ -26,9 +26,9 @@ async function findAudioJob(userId: string, audioUploadId: string) {
       audioUploadId: AudioTranscriptionJobs.audioUploadId,
       fileName: Attachments.fileName,
       source: AudioTranscriptionJobs.source,
-      youtubeSourceUrl: AudioTranscriptionJobs.YT_sourceUrl,
       status: AudioTranscriptionJobs.status,
       error: AudioTranscriptionJobs.error,
+      youtubeVideoId: AudioTranscriptionJobs.youtubeVideoId,
     })
     .from(AudioTranscriptionJobs)
     .innerJoin(
@@ -152,8 +152,11 @@ async function createAudioJob(
     fileName: string;
     mimeType: string | null;
     sizeBytes: number;
-    transcriptModelId: string;
-    youtubeSourceUrl?: string;
+    /** Null only for a copy of a video's captions. */
+    transcriptModelId: string | null;
+    youtubeVideoId?: string;
+    /** Only for a job whose transcript is written with it. */
+    status?: "completed";
   },
   executor: Executor = db,
 ) {
@@ -165,7 +168,8 @@ async function createAudioJob(
     mimeType,
     sizeBytes,
     transcriptModelId,
-    youtubeSourceUrl,
+    youtubeVideoId,
+    status,
   } = job;
 
   await executor.transaction(async (tx) => {
@@ -184,9 +188,8 @@ async function createAudioJob(
       audioUploadId,
       source,
       transcriptModelId,
-      ...(youtubeSourceUrl !== undefined
-        ? { YT_sourceUrl: youtubeSourceUrl }
-        : {}),
+      ...(youtubeVideoId !== undefined ? { youtubeVideoId } : {}),
+      ...(status !== undefined ? { status } : {}),
     });
   });
 }
@@ -308,15 +311,18 @@ async function claimAudioJob(
 /**
  * A terminal transition belongs only to the latest claimant. Returns false when
  * this worker lost ownership, so its caller can discard the stale result.
+ * `transcriptModelId` is what made the transcript: the model, or null for a
+ * video's own captions.
  */
 async function completeAudioJob(
   audioUploadId: UploadId,
   claimToken: string,
+  transcriptModelId: string | null,
   executor: Executor = db,
 ) {
   const [row] = await executor
     .update(AudioTranscriptionJobs)
-    .set({ status: "completed" })
+    .set({ status: "completed", transcriptModelId })
     .where(
       and(
         eq(AudioTranscriptionJobs.audioUploadId, audioUploadId),

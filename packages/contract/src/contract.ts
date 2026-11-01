@@ -221,7 +221,18 @@ export type Job = {
   /** Only once the job has completed. */
   transcript: string | null;
   error: string | null;
+  /** The video a YouTube job was made from, which the client plays; null otherwise. */
+  youtubeVideoId: string | null;
 };
+
+/**
+ * GET /jobs/transcribe/:audioUploadId/audio: where to fetch the job's audio
+ * from, or null when the server no longer has it. The cloud keeps it for a
+ * while after the job finishes and then removes it (a YouTube job's sooner),
+ * leaving the client's own copy, if it made one. The URL is a signed link from
+ * the cloud server, or a path relative to the local server.
+ */
+export type JobAudio = { url: string | null };
 
 /** A job as the history list shows it, without its transcript. */
 export type JobSummary = {

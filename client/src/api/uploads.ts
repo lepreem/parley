@@ -153,6 +153,7 @@ export async function requestYoutubeTranscript(
   server: Server,
   youtubeUrl: string,
   transcriptModelId: string | null,
+  useCaptionsIfAvailable: boolean,
 ): Promise<QueuedYoutube> {
   return apiJson<QueuedYoutube>(
     server,
@@ -160,6 +161,7 @@ export async function requestYoutubeTranscript(
     jsonRequest("POST", {
       youtubeUrl,
       ...modelField(transcriptModelId),
+      useCaptionsIfAvailable,
     } satisfies QueueYoutubeBody),
   );
 }

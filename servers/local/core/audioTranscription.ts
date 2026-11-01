@@ -2,6 +2,7 @@ import { data } from "./data";
 import { logger } from "@parley/server-kit/runtime/logger";
 import { mq } from "./message-queue/messageQueue";
 import type { UploadId } from "@parley/server-kit/ids";
+import { youtubeWatchUrl } from "@parley/contract/youtube";
 
 const log = logger.child({ component: "audio-transcription" });
 
@@ -32,10 +33,10 @@ export async function queueAudioTranscription(job: {
 export async function resumeUnfinishedJobs() {
   const jobs = await data.jobs.requeueUnfinishedAudioJobs();
   for (const job of jobs) {
-    if (job.source === "youtube" && job.youtubeSourceUrl) {
+    if (job.source === "youtube" && job.youtubeVideoId) {
       mq.publish(mq.queues.YT_FETCH, {
         audioUploadId: job.audioUploadId,
-        url: job.youtubeSourceUrl,
+        url: youtubeWatchUrl(job.youtubeVideoId),
         useCaptionsIfAvailable: job.useCaptionsIfAvailable ?? false,
       });
     } else {

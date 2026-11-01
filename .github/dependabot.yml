@@ -1,0 +1,43 @@
+# The workflow's actions and the cloud images' base images are pinned to a
+# commit or a digest, since a tag can be moved to other code, so nothing moves
+# them on by itself. Dependabot opens one PR a month for each kind, with every
+# update in it. Major versions are left alone: those are changes to make by
+# hand.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: docker
+    directories:
+      - /servers/cloud/backend
+      - /servers/cloud/youtube-fetcher
+    schedule:
+      interval: monthly
+    groups:
+      base-images:
+        patterns: ["*"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: docker-compose
+    directories:
+      - /servers/cloud
+      - /servers/cloud/deploy/proxy
+    schedule:
+      interval: monthly
+    groups:
+      compose-images:
+        patterns: ["*"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]

@@ -23,6 +23,9 @@ export type SourcesContextValue = {
   restoreDraft: (draftKey: string, sources: StagedSource[]) => void;
   transcriptModelId: string | null;
   setTranscriptModelId: (modelId: string) => void;
+  /** Whether a YouTube video added from now on takes its captions when it has them. */
+  useCaptionsIfAvailable: boolean;
+  setUseCaptionsIfAvailable: (use: boolean) => void;
 };
 
 export const SourcesContext = createContext<SourcesContextValue | null>(null);
