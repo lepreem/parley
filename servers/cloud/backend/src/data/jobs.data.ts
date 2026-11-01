@@ -28,6 +28,7 @@ async function findAudioJob(userId: string, audioUploadId: string) {
       source: AudioTranscriptionJobs.source,
       status: AudioTranscriptionJobs.status,
       error: AudioTranscriptionJobs.error,
+      youtubeVideoId: AudioTranscriptionJobs.youtubeVideoId,
     })
     .from(AudioTranscriptionJobs)
     .innerJoin(

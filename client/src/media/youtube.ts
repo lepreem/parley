@@ -18,3 +18,8 @@ export function youtubeLabel(url: string): string {
   const id = youtubeVideoId(url);
   return id ? `youtube/${id}` : url;
 }
+
+/** Where to embed a video. The no-cookie host sets no cookies until it's played. */
+export function youtubeEmbedUrl(videoId: string): string {
+  return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}`;
+}

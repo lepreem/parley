@@ -3,11 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const {
   mockWithAdvisoryLock,
   mockFindLedgerEntries,
+  mockMarkFinishedAudioDeleted,
   mockDeleteObjects,
   mockDeleteGuestsCreatedBefore,
 } = vi.hoisted(() => ({
   mockWithAdvisoryLock: vi.fn(),
   mockFindLedgerEntries: vi.fn(),
+  mockMarkFinishedAudioDeleted: vi.fn(),
   mockDeleteObjects: vi.fn(),
   mockDeleteGuestsCreatedBefore: vi.fn(),
 }));
@@ -20,6 +22,7 @@ vi.mock("../../src/data/advisoryLock.data", () => ({
 vi.mock("../../src/data/storageLedger.data", () => ({
   storageLedger: {
     findLedgerEntries: mockFindLedgerEntries,
+    markFinishedAudioDeleted: mockMarkFinishedAudioDeleted,
   },
 }));
 vi.mock("../../src/data/users.data", () => ({
@@ -41,6 +44,7 @@ beforeEach(() => {
     async (_name: string, run: () => unknown) => run(),
   );
   mockFindLedgerEntries.mockResolvedValue([]);
+  mockMarkFinishedAudioDeleted.mockResolvedValue(0);
   mockDeleteObjects.mockResolvedValue(undefined);
   mockDeleteGuestsCreatedBefore.mockResolvedValue(0);
 });
@@ -81,6 +85,26 @@ describe("sweeper.sweepUnusedObjects", () => {
     expect(createdBefore.getTime()).toBeLessThanOrEqual(
       Date.now() - 3 * HOUR_MS,
     );
+  });
+
+  it("first marks deleted the audio of jobs finished a week ago", async () => {
+    const before = Date.now();
+
+    await sweeper.sweepUnusedObjects();
+
+    const [recordedBefore] = mockMarkFinishedAudioDeleted.mock.calls[0] as [
+      Date,
+    ];
+    expect(recordedBefore.getTime()).toBeGreaterThanOrEqual(
+      before - 7 * 24 * HOUR_MS,
+    );
+    expect(recordedBefore.getTime()).toBeLessThanOrEqual(
+      Date.now() - 7 * 24 * HOUR_MS,
+    );
+    // So the same run removes what it just marked.
+    expect(
+      mockMarkFinishedAudioDeleted.mock.invocationCallOrder[0],
+    ).toBeLessThan(mockFindLedgerEntries.mock.invocationCallOrder[0]);
   });
 
   it("releases each owner's objects together", async () => {

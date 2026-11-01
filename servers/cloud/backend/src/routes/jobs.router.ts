@@ -14,6 +14,11 @@ jobsRouter.get(
   ...jobsController.handleGetTranscribeJob,
 );
 
+jobsRouter.get(
+  "/transcribe/:audioUploadId/audio",
+  ...jobsController.handleGetTranscribeJobAudio,
+);
+
 jobsRouter.delete(
   "/transcribe/:audioUploadId",
   ...jobsController.handleDeleteTranscribeJob,

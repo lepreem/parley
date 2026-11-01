@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import type { Job, JobsPage } from "@parley/contract";
+import type { Job, JobAudio, JobsPage } from "@parley/contract";
 import { CTX_KEYS } from "../../../core/keys";
 import { jobCursorSchema, type JobStatus } from "../schema/jobs.schema";
 import { encodeCursor, decodeCursor } from "@parley/server-kit/http/cursor";
@@ -39,7 +39,45 @@ export async function handleGetTranscribeJob(c: Context) {
     status: audioJob.status,
     transcript: transcriptResult.data?.get(audioUploadId) ?? null,
     error: audioJob.error,
+    youtubeVideoId: audioJob.youtubeVideoId,
   } satisfies Job);
+}
+
+/**
+ * GET /jobs/transcribe/:audioUploadId/audio — where to play the job's audio
+ * from. Nothing here removes audio a job still has, so it's there unless the
+ * job never had any.
+ */
+export async function handleGetTranscribeJobAudio(c: Context) {
+  const audioUploadId: string = c.get(CTX_KEYS.audioUploadId);
+
+  const audioJob = await data.jobs.findAudioJob(audioUploadId);
+  if (!audioJob) return c.json({ message: "Job not found" }, 404);
+
+  const stored = await files.exists({ kind: "audio", uploadId: audioUploadId });
+  return c.json({
+    url: stored ? `/jobs/transcribe/${audioUploadId}/audio/file` : null,
+  } satisfies JobAudio);
+}
+
+/**
+ * GET /jobs/transcribe/:audioUploadId/audio/file — the audio itself. An id
+ * names one file for good, so the browser may keep it as long as it likes.
+ */
+export async function handleGetTranscribeJobAudioFile(c: Context) {
+  const audioUploadId: string = c.get(CTX_KEYS.audioUploadId);
+  const audio = { kind: "audio", uploadId: audioUploadId } as const;
+
+  const audioJob = await data.jobs.findAudioJob(audioUploadId);
+  if (!audioJob || !(await files.exists(audio))) {
+    return c.json({ message: "Audio not found" }, 404);
+  }
+
+  const bytes = await files.read(audio);
+  return c.body(new Uint8Array(bytes), 200, {
+    "Content-Type": audioJob.mimeType ?? "application/octet-stream",
+    "Cache-Control": "private, max-age=31536000, immutable",
+  });
 }
 
 const DEFAULT_PAGE_SIZE = 20;

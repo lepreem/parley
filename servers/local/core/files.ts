@@ -1,4 +1,11 @@
-import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  access,
+  mkdir,
+  readdir,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import { getBaseEnv } from "./env";
 
@@ -43,6 +50,14 @@ async function read(file: StoredFile) {
   return readFile(pathOf(file));
 }
 
+/** Whether the file is there: a YouTube job with captions never writes one. */
+async function exists(file: StoredFile) {
+  return access(pathOf(file)).then(
+    () => true,
+    () => false,
+  );
+}
+
 /** Removes files; one that's already gone is no error. */
 async function deleteFiles(files: readonly StoredFile[]) {
   await Promise.all(files.map((file) => rm(pathOf(file), { force: true })));
@@ -72,6 +87,7 @@ export const files = {
   path: pathOf,
   write,
   read,
+  exists,
   delete: deleteFiles,
   removeOrphans,
 };

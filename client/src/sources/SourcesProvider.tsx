@@ -14,8 +14,8 @@ import {
 } from "../api/uploads";
 import { errorMessage } from "../api/http";
 import { resolveDefaultModel } from "../api/models";
-import { extractAudioFromVideo } from "../media/extractAudio";
-import { compressAudioForSpeech } from "../media/compressAudio";
+import { audioCopies } from "../media/audioCopies";
+import { prepareSpeech } from "../media/speech";
 import {
   classifyFile,
   formatBytes,
@@ -154,9 +154,7 @@ export function SourcesProvider({ children }: { children: ReactNode }) {
         }
 
         patch({ status: "preparing" });
-        const speech = await compressAudioForSpeech(
-          kind === "video" ? await extractAudioFromVideo(file) : file,
-        );
+        const speech = await prepareSpeech(file, kind);
 
         if (speech.size > MAX_AUDIO_BYTES) {
           patch({
@@ -177,6 +175,8 @@ export function SourcesProvider({ children }: { children: ReactNode }) {
           status: "transcribing",
           sourceUploadId: uploaded.audioUploadId,
         });
+        // What plays the source once the server no longer keeps its audio.
+        void audioCopies.save(uploaded.audioUploadId, speech).catch(() => {});
       } catch (error) {
         patch({
           status: "failed",

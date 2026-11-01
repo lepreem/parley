@@ -21,9 +21,11 @@ async function findAudioJob(audioUploadId: string) {
     .select({
       audioUploadId: AudioTranscriptionJobs.audioUploadId,
       fileName: Attachments.fileName,
+      mimeType: Attachments.mimeType,
       source: AudioTranscriptionJobs.source,
       status: AudioTranscriptionJobs.status,
       error: AudioTranscriptionJobs.error,
+      youtubeVideoId: AudioTranscriptionJobs.youtubeVideoId,
     })
     .from(AudioTranscriptionJobs)
     .innerJoin(

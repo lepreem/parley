@@ -1,18 +1,41 @@
-import { objectPath, storage } from "./core";
+import { isNotFound, objectPath, storage } from "./core";
 import { KINDS, type UploadableKind, type UploadableObject } from "./schema";
+
+/** Asks storage to sign one object for its kind's TTL. */
+function requestSignedUrl(userId: string, object: UploadableObject) {
+  return storage(object.kind).createSignedUrl(
+    objectPath(userId, object),
+    KINDS[object.kind].upload.readUrlTtlSeconds,
+  );
+}
 
 /**
  * A read URL for one object, valid for its kind's TTL: a week for images
  * (client thumbnails and the chat model's vision input), an hour for audio
- * (which the transcription provider fetches for itself).
+ * (which the transcription provider fetches for itself, and the client plays).
  */
 async function createSignedUrl(userId: string, object: UploadableObject) {
-  const { data, error } = await storage(object.kind).createSignedUrl(
-    objectPath(userId, object),
-    KINDS[object.kind].upload.readUrlTtlSeconds,
-  );
+  const { data, error } = await requestSignedUrl(userId, object);
 
   if (error) throw error;
+  return data.signedUrl;
+}
+
+/**
+ * A read URL as createSignedUrl signs it, or null when there's no such
+ * object: a YouTube job's audio is recorded before it lands, and a video with
+ * captions never sends any.
+ */
+async function createSignedUrlIfStored(
+  userId: string,
+  object: UploadableObject,
+) {
+  const { data, error } = await requestSignedUrl(userId, object);
+
+  if (error) {
+    if (isNotFound(error)) return null;
+    throw error;
+  }
   return data.signedUrl;
 }
 
@@ -57,5 +80,6 @@ async function signGroup(
  */
 export const sign = {
   url: createSignedUrl,
+  urlIfStored: createSignedUrlIfStored,
   urls: createSignedUrls,
 };

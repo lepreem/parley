@@ -111,3 +111,35 @@ describe("urls", () => {
     ).rejects.toThrow("audio signing failed");
   });
 });
+
+describe("urlIfStored", () => {
+  it("signs an object that's there", async () => {
+    storage.createSignedUrl.mockResolvedValue({
+      data: { signedUrl: "https://signed" },
+      error: null,
+    });
+
+    expect(await sign.urlIfStored(USER, audio)).toBe("https://signed");
+    expect(storage.createSignedUrl).toHaveBeenCalledWith(
+      "user_01/audios/a1",
+      HOUR,
+    );
+  });
+
+  // Storage reports a missing object as a 400 whose body carries "404".
+  it("is null for an object that isn't there", async () => {
+    storage.createSignedUrl.mockResolvedValue({
+      data: null,
+      error: { status: 400, statusCode: "404", message: "Object not found" },
+    });
+
+    expect(await sign.urlIfStored(USER, audio)).toBeNull();
+  });
+
+  it("throws any other failure", async () => {
+    const failure = { status: 500, statusCode: "500", message: "down" };
+    storage.createSignedUrl.mockResolvedValue({ data: null, error: failure });
+
+    await expect(sign.urlIfStored(USER, audio)).rejects.toBe(failure);
+  });
+});
