@@ -51,7 +51,6 @@ async function createJob() {
     fileName: "YouTube audio",
     mimeType: null,
     sizeBytes: 0,
-    transcriptModelId: "nova-3-general",
   });
   return audioUploadId;
 }

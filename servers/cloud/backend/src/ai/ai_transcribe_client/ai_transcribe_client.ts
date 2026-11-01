@@ -1,11 +1,10 @@
 import { DeepgramClient } from "@deepgram/sdk";
-import type { TranscribeModel } from "@parley/contract";
 import type { TranscriptSegment } from "@parley/server-kit/transcription/transcript";
 import { getEnv } from "../../env";
 import { CACHE_KEYS, memory } from "../../memory";
 import {
+  currentModel,
   newestVersions,
-  offeredModels,
   type TranscribeModelData,
 } from "./model_catalog";
 
@@ -112,36 +111,16 @@ export function getTranscribeModelData(): Promise<TranscribeModelData> {
 }
 
 /**
- * The models offered, the default first. Ids are canonical names, since
- * Deepgram's own names repeat across generations ("general" is both nova-2
- * and nova-3).
+ * The model a file is transcribed with: Deepgram's current general model.
+ * Undefined only while Deepgram's catalog has none.
  */
-async function listModels(): Promise<TranscribeModel[]> {
-  return offeredModels(await getTranscribeModelData());
+async function model(): Promise<string | undefined> {
+  return currentModel(await getTranscribeModelData());
 }
 
-/**
- * The model a job runs on when it names none: the current generation's
- * general model. Undefined only while Deepgram offers nothing.
- */
-async function defaultModel(): Promise<string | undefined> {
-  return (await listModels())[0]?.id;
-}
-
-/**
- * Whether a model id can be used for transcription: one listModels lists.
- * Deepgram STT models are single-modality, so being offered and in the
- * catalog is the whole check, as presence is for chat.findModel.
- */
-async function isValidModel(modelId: string): Promise<boolean> {
-  return (await listModels()).some((model) => model.id === modelId);
-}
-
-/** Speech-to-text and its model catalog, from Deepgram. */
+/** Speech-to-text, from Deepgram. */
 export const transcription = {
   transcribe,
-  listModels,
-  defaultModel,
-  isValidModel,
+  model,
   ping,
 };

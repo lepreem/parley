@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { QueueYoutubeBody } from "@parley/contract";
+import type { LocalQueueYoutubeBody } from "@parley/contract";
 import { takesBody } from "@parley/server-kit/http/takesBody";
 import { isYoutubeUrl } from "@parley/contract/youtube";
 import { CTX_KEYS, FORM_KEYS } from "../../../core/keys";
@@ -103,7 +103,7 @@ export const audioUploadSchema = z
  * after the request, so the job is created with placeholder file metadata
  * (real title/size are unknown until the fetch completes).
  */
-export const youtubeUploadSchema = takesBody<QueueYoutubeBody>()(
+export const youtubeUploadSchema = takesBody<LocalQueueYoutubeBody>()(
   z
     .object({
       [CTX_KEYS.youtubeUrl]: z.string().url(),

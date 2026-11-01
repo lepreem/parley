@@ -109,7 +109,8 @@ export const AudioTranscriptionJobs = pgTable("audio_transcription_jobs", {
     .defaultNow()
     .$onUpdate(() => new Date())
     .notNull(),
-  // Model used to transcribe the audio. Null falls back to the default
+  // The model the user picked, on jobs from before the server picked it
+  // (Deepgram's current general model, when it transcribes). Unused now.
   transcriptModelId: text("transcription_model_id"),
 }).enableRLS();
 

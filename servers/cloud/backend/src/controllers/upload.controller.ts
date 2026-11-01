@@ -57,7 +57,6 @@ export const handleAudioConfirm = authed.createHandlers(
       uploadId: audioUploadId,
       fileName,
       audioSource: source,
-      transcriptModelId,
     } = c.req.valid("json");
 
     const upload = await uploads.check(userId, {
@@ -76,7 +75,6 @@ export const handleAudioConfirm = authed.createHandlers(
       fileName,
       mimeType: upload.contentType,
       sizeBytes: upload.sizeBytes,
-      transcriptModelId,
     });
     if (!queued) {
       return c.json({ message: ALREADY_CONFIRMED }, 409);
@@ -97,11 +95,7 @@ export const handleYoutubeUpload = authed.createHandlers(
   validate("json", youtubeUploadSchema),
   async (c) => {
     const { userId } = c.var;
-    const {
-      youtubeUrl: url,
-      transcriptModelId,
-      useCaptionsIfAvailable,
-    } = c.req.valid("json");
+    const { youtubeUrl: url, useCaptionsIfAvailable } = c.req.valid("json");
 
     const audioUploadId: UploadId = randomUUID();
 
@@ -117,7 +111,6 @@ export const handleYoutubeUpload = authed.createHandlers(
       fileName: "YouTube audio",
       mimeType: null,
       sizeBytes: 0,
-      transcriptModelId,
     });
 
     // A failed publish would leave the job queued with no fetcher coming for

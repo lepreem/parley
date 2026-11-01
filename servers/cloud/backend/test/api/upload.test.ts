@@ -9,7 +9,6 @@ const {
   mockSendEvent,
   mockCreateUploadUrl,
   mockInspectUploadedObject,
-  mockIsValidTranscribeModel,
   ledger,
 } = vi.hoisted(() => ({
   mockInsert: vi.fn(),
@@ -18,7 +17,6 @@ const {
   mockSendEvent: vi.fn(),
   mockCreateUploadUrl: vi.fn(),
   mockInspectUploadedObject: vi.fn(),
-  mockIsValidTranscribeModel: vi.fn(),
   ledger: {
     recordPendingUpload: vi.fn(),
     recordConfirmedObjects: vi.fn(),
@@ -42,24 +40,6 @@ vi.mock("../../src/ai/ai_chat_client/ai_chat_client", async (importActual) => {
     chat: { ...actual.chat, listModels: mockListChatModels },
   };
 });
-
-vi.mock(
-  "../../src/ai/ai_transcribe_client/ai_transcribe_client",
-  async (importActual) => {
-    const actual =
-      await importActual<
-        typeof import("../../src/ai/ai_transcribe_client/ai_transcribe_client")
-      >();
-    return {
-      ...actual,
-      transcription: {
-        ...actual.transcription,
-        isValidModel: mockIsValidTranscribeModel,
-        defaultModel: async () => "nova-3-general",
-      },
-    };
-  },
-);
 
 vi.mock("../../src/db", async () => ({
   db: {
@@ -237,7 +217,6 @@ describe("POST /upload/audio/confirm", () => {
     mockUpdateSet.mockReturnValue({ where: vi.fn().mockResolvedValue([]) });
     mockUpdate.mockReturnValue({ set: mockUpdateSet });
     mockSendEvent.mockResolvedValue(undefined);
-    mockIsValidTranscribeModel.mockResolvedValue(true);
     ledger.findLedgerEntry.mockResolvedValue({
       status: "pending",
       createdAt: new Date(),
@@ -528,7 +507,6 @@ describe("POST /upload/youtube", () => {
     mockUpdateSet.mockReturnValue({ where: vi.fn().mockResolvedValue([]) });
     mockUpdate.mockReturnValue({ set: mockUpdateSet });
     mockSendEvent.mockResolvedValue(undefined);
-    mockIsValidTranscribeModel.mockResolvedValue(true);
   });
 
   it("returns 401 without a session cookie", async () => {

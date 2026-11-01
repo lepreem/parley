@@ -63,7 +63,7 @@ async function transcribeAudio(job: ClaimedJob): Promise<Transcription> {
     kind: "audio",
     uploadId: job.audioUploadId,
   });
-  const model = job.transcriptModelId ?? (await transcription.defaultModel());
+  const model = await transcription.model();
   if (!model) throw new Error("Deepgram offers no transcription model");
   return transcription.transcribe(model, audioUrl);
 }

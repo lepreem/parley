@@ -123,37 +123,14 @@ describe("getTranscribeModelData", () => {
   });
 });
 
-describe("listTranscribeModels", () => {
+describe("model", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetOrSetCache.mockImplementation(runFetch);
     mockModelsList.mockResolvedValue(sttResponse);
   });
 
-  it("lists the current generation's models, the general one first", async () => {
-    expect(await transcription.listModels()).toEqual([
-      { id: "nova-3-general", name: "Nova 3" },
-    ]);
-    expect(await transcription.defaultModel()).toBe("nova-3-general");
-  });
-});
-
-describe("isValidTranscribeModel", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockGetOrSetCache.mockImplementation(runFetch);
-    mockModelsList.mockResolvedValue(sttResponse);
-  });
-
-  it("accepts a model by its canonical_name", async () => {
-    expect(await transcription.isValidModel("nova-3-general")).toBe(true);
-  });
-
-  it("rejects a display name, which repeats across generations", async () => {
-    expect(await transcription.isValidModel("general")).toBe(false);
-  });
-
-  it("rejects an offered model that is not in the catalog", async () => {
-    expect(await transcription.isValidModel("whisper-large")).toBe(false);
+  it("is Deepgram's current general model, by its canonical_name", async () => {
+    expect(await transcription.model()).toBe("nova-3-general");
   });
 });

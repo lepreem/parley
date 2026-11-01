@@ -152,7 +152,6 @@ async function createAudioJob(
     fileName: string;
     mimeType: string | null;
     sizeBytes: number;
-    transcriptModelId: string;
     youtubeSourceUrl?: string;
   },
   executor: Executor = db,
@@ -164,7 +163,6 @@ async function createAudioJob(
     fileName,
     mimeType,
     sizeBytes,
-    transcriptModelId,
     youtubeSourceUrl,
   } = job;
 
@@ -183,7 +181,6 @@ async function createAudioJob(
     await tx.insert(AudioTranscriptionJobs).values({
       audioUploadId,
       source,
-      transcriptModelId,
       ...(youtubeSourceUrl !== undefined
         ? { YT_sourceUrl: youtubeSourceUrl }
         : {}),

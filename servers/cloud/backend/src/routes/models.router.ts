@@ -14,7 +14,3 @@ modelsRouter.use("*", requireAuth, modelRateLimiter);
 // An unchanged catalog costs a 304 with no body.
 modelsRouter.use("*", httpCache({ revalidate: true }));
 modelsRouter.get("/chat", ...modelsController.handleGetModels);
-modelsRouter.get(
-  "/transcription",
-  ...modelsController.handleGetTranscribeModels,
-);
