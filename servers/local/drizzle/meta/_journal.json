@@ -36,6 +36,13 @@
       "when": 1793352638081,
       "tag": "0004_youtube_video_id",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1793507944056,
+      "tag": "0005_drop_transcription_model",
+      "breakpoints": true
     }
   ]
 }

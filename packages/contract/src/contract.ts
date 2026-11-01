@@ -201,9 +201,6 @@ export type ModelPricing = {
   outputPerMillionTokens: number;
 };
 
-/** A transcription model, whichever provider serves it. */
-export type TranscribeModel = { id: string; name: string };
-
 /** GET /models/chat and GET /models/transcription */
 export type ModelsResponse<Model> = { models: Model[] };
 
@@ -265,17 +262,11 @@ export type UploadedAudio = {
   source: "audio" | "video";
 };
 
-/** POST /upload/youtube. The cloud picks the transcription model itself. */
+/** POST /upload/youtube. The server picks the transcription model itself. */
 export type QueueYoutubeBody = {
   youtubeUrl: string;
   /** Use the video's own captions instead of transcribing, when it has them. */
   useCaptionsIfAvailable?: boolean;
-};
-
-/** The local server's POST /upload/youtube, where the user picks the model. */
-export type LocalQueueYoutubeBody = QueueYoutubeBody & {
-  /** The local server's default when absent. */
-  transcriptModelId?: string;
 };
 
 /** What POST /upload/youtube answers with, once the fetch is queued. */

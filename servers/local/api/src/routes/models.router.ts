@@ -12,4 +12,3 @@ modelsRouter.use(
   }),
 );
 modelsRouter.get("/chat", modelsController.handleGetModels);
-modelsRouter.get("/transcription", modelsController.handleGetTranscribeModels);

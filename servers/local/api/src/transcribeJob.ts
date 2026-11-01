@@ -1,7 +1,4 @@
-import {
-  DEFAULT_TRANSCRIBE_MODEL,
-  transcribeAI,
-} from "../../core/ai/ai_transcribe_client";
+import { transcribeAI } from "../../core/ai/ai_transcribe_client";
 import { files } from "../../core/files";
 import { data } from "../../core/data";
 import { logger } from "@parley/server-kit/runtime/logger";
@@ -41,7 +38,6 @@ type ClaimedJob = NonNullable<
 /** The job's audio, transcribed. */
 async function transcribeAudio(job: ClaimedJob) {
   return transcribeAI(
-    job.transcriptModelId ?? DEFAULT_TRANSCRIBE_MODEL,
     files.path({ kind: "audio", uploadId: job.audioUploadId }),
   );
 }

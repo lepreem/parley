@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockPublish, mockIsValidTranscribeModel } = vi.hoisted(() => ({
+const { mockPublish } = vi.hoisted(() => ({
   mockPublish: vi.fn(),
-  mockIsValidTranscribeModel: vi.fn(),
 }));
 
 vi.mock("../../core/db", async () =>
@@ -14,15 +13,6 @@ vi.mock("../../core/files", async (importActual) => ({
   ...(await importActual<typeof import("../../core/files")>()),
   MAX_AUDIO_BYTES: 1024,
 }));
-
-vi.mock("../../core/ai/ai_transcribe_client", async (importActual) => {
-  const actual =
-    await importActual<typeof import("../../core/ai/ai_transcribe_client")>();
-  return {
-    ...actual, // preserves DEFAULT_TRANSCRIBE_MODEL
-    isValidTranscribeModel: mockIsValidTranscribeModel,
-  };
-});
 
 vi.mock("../../core/message-queue/messageQueue", async (importActual) => {
   const { QUEUES } =
@@ -64,7 +54,6 @@ const talk = () => new File([SOUND], "talk.mp3", { type: "audio/mpeg" });
 
 beforeEach(async () => {
   vi.clearAllMocks();
-  mockIsValidTranscribeModel.mockResolvedValue(true);
   await deleteAllRows(db);
 });
 
@@ -111,7 +100,6 @@ describe("POST /upload/audio", () => {
         audioUploadId: body.audioUploadId,
         source: "video",
         status: "queued",
-        transcriptModelId: "small",
       }),
     ]);
     expect(mockPublish).toHaveBeenCalledWith("transcribe", {
@@ -163,17 +151,6 @@ describe("POST /upload/audio", () => {
       expect(mockPublish).not.toHaveBeenCalled();
     },
   );
-
-  it("refuses an unusable transcription model", async () => {
-    mockIsValidTranscribeModel.mockResolvedValue(false);
-
-    const res = await uploadAudio(talk(), { transcriptModelId: "nope" });
-
-    expect(res.status).toBe(400);
-    expect(await res.json()).toEqual({
-      message: "Invalid transcription model",
-    });
-  });
 
   it("refuses a body far over the limit without reading it", async () => {
     const res = await uploadAudio(

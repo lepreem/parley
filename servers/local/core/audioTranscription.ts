@@ -16,7 +16,6 @@ export async function queueAudioTranscription(job: {
   fileName: string;
   mimeType: string;
   sizeBytes: number;
-  transcriptModelId: string;
 }) {
   await data.jobs.createAudioJob(job);
   mq.publish(mq.queues.TRANSCRIBE, { audioUploadId: job.audioUploadId });

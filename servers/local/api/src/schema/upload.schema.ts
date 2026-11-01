@@ -1,39 +1,13 @@
 import { z } from "zod";
-import type { LocalQueueYoutubeBody } from "@parley/contract";
+import type { QueueYoutubeBody } from "@parley/contract";
 import { takesBody } from "@parley/server-kit/http/takesBody";
 import { youtubeVideoId } from "@parley/contract/youtube";
 import { CTX_KEYS, FORM_KEYS } from "../../../core/keys";
-import {
-  DEFAULT_TRANSCRIBE_MODEL,
-  isValidTranscribeModel,
-} from "../../../core/ai/ai_transcribe_client";
 import { MAX_AUDIO_BYTES } from "../../../core/files";
 
 /** Treat a blank ("" or null) optional field as unset. */
 const blankToUndefined = (v: unknown) =>
   v === "" || v === null ? undefined : v;
-
-/**
- * The transcription model is optional on every route that has one — omit it
- * (or send blank) to get the default.
- */
-const transcriptionModelField = z.preprocess(
-  blankToUndefined,
-  z.string().min(1).optional().default(DEFAULT_TRANSCRIBE_MODEL),
-);
-
-/**
- * Shared by the audio and youtube routes so the two reject an unusable model
- * with one message on one path rather than two copies that can drift apart.
- */
-async function refineTranscriptionModel(modelId: string, ctx: z.RefinementCtx) {
-  if (await isValidTranscribeModel(modelId)) return;
-  ctx.addIssue({
-    code: "custom",
-    message: "Invalid transcription model",
-    path: [FORM_KEYS.transcriptModelId],
-  });
-}
 
 /**
  * The `file` field of an upload form: a non-empty file of one kind, no bigger
@@ -86,15 +60,10 @@ export const audioUploadSchema = z
         .optional()
         .default("audio"),
     ),
-    [FORM_KEYS.transcriptModelId]: transcriptionModelField,
-  })
-  .superRefine(async (data, ctx) => {
-    await refineTranscriptionModel(data[FORM_KEYS.transcriptModelId], ctx);
   })
   .transform((data) => ({
     [CTX_KEYS.file]: data[FORM_KEYS.file],
     [CTX_KEYS.fileName]: displayName(data[FORM_KEYS.file], "audio"),
-    [CTX_KEYS.transcriptModelId]: data[FORM_KEYS.transcriptModelId],
     [CTX_KEYS.audioSource]: data[FORM_KEYS.audioSource],
   }));
 
@@ -104,14 +73,13 @@ export const audioUploadSchema = z
  * is created with placeholder file metadata (real title/size are unknown
  * until the fetch completes).
  */
-export const youtubeUploadSchema = takesBody<LocalQueueYoutubeBody>()(
+export const youtubeUploadSchema = takesBody<QueueYoutubeBody>()(
   z
     .object({
       [CTX_KEYS.youtubeUrl]: z.string().url(),
-      [FORM_KEYS.transcriptModelId]: transcriptionModelField,
       [CTX_KEYS.useCaptionsIfAvailable]: z.boolean().optional().default(false),
     })
-    .superRefine(async (data, ctx) => {
+    .superRefine((data, ctx) => {
       if (!youtubeVideoId(data[CTX_KEYS.youtubeUrl])) {
         ctx.addIssue({
           code: "custom",
@@ -119,13 +87,11 @@ export const youtubeUploadSchema = takesBody<LocalQueueYoutubeBody>()(
           path: [CTX_KEYS.youtubeUrl],
         });
       }
-      await refineTranscriptionModel(data[FORM_KEYS.transcriptModelId], ctx);
     })
     // The refinement above has turned away every URL without a video id.
     .transform((data) => ({
       [CTX_KEYS.youtubeUrl]: data[CTX_KEYS.youtubeUrl],
       [CTX_KEYS.youtubeVideoId]: youtubeVideoId(data[CTX_KEYS.youtubeUrl])!,
-      [CTX_KEYS.transcriptModelId]: data[FORM_KEYS.transcriptModelId],
       [CTX_KEYS.useCaptionsIfAvailable]: data[CTX_KEYS.useCaptionsIfAvailable],
     })),
 );

@@ -136,7 +136,6 @@ async function createAudioJob(job: {
   fileName: string;
   mimeType: string | null;
   sizeBytes: number;
-  transcriptModelId: string;
   youtubeVideoId?: string;
   useCaptionsIfAvailable?: boolean;
 }) {
@@ -146,7 +145,6 @@ async function createAudioJob(job: {
     fileName,
     mimeType,
     sizeBytes,
-    transcriptModelId,
     youtubeVideoId,
     useCaptionsIfAvailable,
   } = job;
@@ -165,7 +163,6 @@ async function createAudioJob(job: {
     await tx.insert(AudioTranscriptionJobs).values({
       audioUploadId,
       source,
-      transcriptModelId,
       ...(youtubeVideoId !== undefined ? { youtubeVideoId } : {}),
       ...(useCaptionsIfAvailable !== undefined
         ? { YT_useCaptionsIfAvailable: useCaptionsIfAvailable }

@@ -23,8 +23,6 @@ export const queryKeys = {
   /** A guest is offered fewer models, so their catalog is kept apart. */
   chatModels: (server: ServerId, guest: boolean) =>
     [server, "models", "chat", guest ? "guest" : "member"] as const,
-  transcriptionModels: (server: ServerId) =>
-    [server, "models", "transcription"] as const,
   jobLists: (server: ServerId) => [server, "jobs"] as const,
   everyJob: (server: ServerId) => [server, "job"] as const,
   job: (server: ServerId, audioUploadId: string) =>

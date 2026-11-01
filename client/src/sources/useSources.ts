@@ -23,8 +23,6 @@ export function useSources(draftKey: string) {
     retrySource,
     takeDraft,
     restoreDraft,
-    transcriptModelId,
-    setTranscriptModelId,
     useCaptionsIfAvailable,
     setUseCaptionsIfAvailable,
   } = context;
@@ -33,8 +31,6 @@ export function useSources(draftKey: string) {
   return useMemo(
     () => ({
       sources,
-      transcriptModelId,
-      setTranscriptModelId,
       useCaptionsIfAvailable,
       setUseCaptionsIfAvailable,
       addFiles: (files: File[]) => addFiles(draftKey, files),
@@ -54,8 +50,6 @@ export function useSources(draftKey: string) {
     [
       draftKey,
       sources,
-      transcriptModelId,
-      setTranscriptModelId,
       useCaptionsIfAvailable,
       setUseCaptionsIfAvailable,
       addFiles,

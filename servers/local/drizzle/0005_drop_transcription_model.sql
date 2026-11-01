@@ -1,0 +1,1 @@
+ALTER TABLE `audio_transcription_jobs` DROP COLUMN `transcription_model_id`;
