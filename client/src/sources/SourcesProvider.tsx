@@ -55,6 +55,9 @@ export function SourcesProvider({ children }: { children: ReactNode }) {
   const [transcriptModelPick, setTranscriptModelPick] = useState<string | null>(
     null,
   );
+  // On by default: a video's captions are free and immediate, where
+  // transcribing its audio is billed.
+  const [useCaptionsIfAvailable, setUseCaptionsIfAvailable] = useState(true);
 
   const transcriptModelId =
     transcriptModelPick ??
@@ -68,10 +71,12 @@ export function SourcesProvider({ children }: { children: ReactNode }) {
   // before the next event handler or resumed upload can read them.
   const draftsRef = useRef<Drafts>(drafts);
   const transcriptModelRef = useRef(transcriptModelId);
+  const captionsRef = useRef(useCaptionsIfAvailable);
   useEffect(() => {
     draftsRef.current = drafts;
     transcriptModelRef.current = transcriptModelId;
-  }, [drafts, transcriptModelId]);
+    captionsRef.current = useCaptionsIfAvailable;
+  }, [drafts, transcriptModelId, useCaptionsIfAvailable]);
 
   const patchSource = useCallback(
     (draftKey: string, localId: string, patch: Partial<StagedSource>) => {
@@ -191,6 +196,7 @@ export function SourcesProvider({ children }: { children: ReactNode }) {
           server,
           url,
           transcriptModelRef.current ?? server.defaultTranscribeModelId,
+          captionsRef.current,
         );
         patch({
           status: "transcribing",
@@ -394,6 +400,8 @@ export function SourcesProvider({ children }: { children: ReactNode }) {
       restoreDraft,
       transcriptModelId,
       setTranscriptModelId: setTranscriptModelPick,
+      useCaptionsIfAvailable,
+      setUseCaptionsIfAvailable,
     }),
     [
       drafts,
@@ -405,6 +413,7 @@ export function SourcesProvider({ children }: { children: ReactNode }) {
       takeDraft,
       restoreDraft,
       transcriptModelId,
+      useCaptionsIfAvailable,
     ],
   );
 
