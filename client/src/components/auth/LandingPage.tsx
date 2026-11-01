@@ -49,7 +49,7 @@ function ComposerPreview() {
       <div className="flex items-center gap-2 px-1">
         <Icon name="plus" className="h-5 w-5 text-faint" />
         <span className="font-mono text-[11px] text-faint">
-          anthropic/claude-sonnet-5
+          any-provider/any-model
         </span>
         <span className="flex-1" />
         <span className="rounded-full bg-line p-2 text-faint">

@@ -176,8 +176,8 @@ What a guest can't do, because it costs money nobody is accountable for:
   stored object's key starts with its owner's id, so letting guests upload
   means moving their objects in storage when they sign in; see
   `users.adoptGuest`.
-- **Use a model that costs more than `openai/gpt-4o-mini`**, for input or
-  output (`chat.listGuestModels`).
+- **Use a model that costs more than $0.10 in / $0.50 out** per million
+  tokens, GPT-6 Luna's price (`chat.listGuestModels`).
 - **Spend from the main OpenRouter key.** Guest turns, titles included, go
   through `OPENROUTER_GUEST_API_KEY`, whose credit limit in OpenRouter is the
   hard cap on guest spending. Without it, and `GUEST_SESSION_SECRET`, there is

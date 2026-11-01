@@ -61,6 +61,16 @@ export default defineConfig([
             { directory: srcDirectory("storage"), entry: "index" },
             { directory: srcDirectory("cache"), entry: "index" },
             { directory: srcDirectory("ai"), entry: "index" },
+            // Each client's catalog rules are its own: what to offer is
+            // decided in one place, next to the fetch.
+            {
+              directory: srcDirectory("ai/ai_chat_client"),
+              entry: "ai_chat_client",
+            },
+            {
+              directory: srcDirectory("ai/ai_transcribe_client"),
+              entry: "ai_transcribe_client",
+            },
           ],
         },
       ],

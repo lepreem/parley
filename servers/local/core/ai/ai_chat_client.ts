@@ -336,6 +336,10 @@ const CHAT_MODELS: readonly ChatModel[] = [
     name: "Claude Opus",
     contextTokens: 200_000,
     acceptsImages: true,
+    released: null,
+    aliases: [],
+    replacedBy: null,
+    retires: null,
     pricing: null,
   },
   {
@@ -343,6 +347,10 @@ const CHAT_MODELS: readonly ChatModel[] = [
     name: "Claude Sonnet",
     contextTokens: 200_000,
     acceptsImages: true,
+    released: null,
+    aliases: [],
+    replacedBy: null,
+    retires: null,
     pricing: null,
   },
   {
@@ -350,6 +358,10 @@ const CHAT_MODELS: readonly ChatModel[] = [
     name: "Claude Haiku",
     contextTokens: 200_000,
     acceptsImages: true,
+    released: null,
+    aliases: [],
+    replacedBy: null,
+    retires: null,
     pricing: null,
   },
 ];

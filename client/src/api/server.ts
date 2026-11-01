@@ -23,12 +23,16 @@ export type Server = {
    * request carries the file (local).
    */
   uploads: "signed" | "direct";
-  /** The models a new chat and a new transcript start on, when offered. */
+  /**
+   * The models a new chat and a new transcript start on, when offered. A
+   * chat model may be named by alias.
+   */
   defaultChatModelId: string;
-  defaultTranscribeModelId: string;
+  /** Null for the first one the server lists, which it orders by default. */
+  defaultTranscribeModelId: string | null;
   /**
    * Chat models listed first in the picker, in this order, ahead of the full
-   * catalog. Ones the catalog doesn't offer are skipped.
+   * catalog, by id or alias. Ones the catalog doesn't offer are skipped.
    */
   recommendedChatModelIds: readonly string[];
 };

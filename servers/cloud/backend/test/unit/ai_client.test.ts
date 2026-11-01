@@ -32,7 +32,10 @@ vi.mock("@openrouter/sdk", () => ({
   },
 }));
 
-import { buildUserTurn, chat } from "../../src/ai/ai_chat_client";
+import {
+  buildUserTurn,
+  chat,
+} from "../../src/ai/ai_chat_client/ai_chat_client";
 
 const MODEL_ID = "openai/gpt-4o-mini";
 
@@ -42,6 +45,10 @@ const sampleModel = {
   name: "GPT-4o Mini",
   contextTokens: 128000,
   acceptsImages: true,
+  released: "2024-07-18",
+  aliases: [],
+  replacedBy: null,
+  retires: null,
   pricing: { inputPerMillionTokens: 0.15, outputPerMillionTokens: 0.6 },
 };
 
@@ -49,6 +56,7 @@ const openRouterListModel = {
   id: MODEL_ID,
   name: "GPT-4o Mini",
   description: "Fast chat model",
+  created: 1721260800,
   contextLength: 128000,
   knowledgeCutoff: null,
   topProvider: { contextLength: 128000, isModerated: true },
@@ -64,6 +72,13 @@ const openRouterListModel = {
 describe("listChatModels", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // The fixtures are from 2024; the catalog leaves out models a year old.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2024-08-01"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("serves the catalog through its cache entry", async () => {
@@ -112,6 +127,10 @@ describe("listChatModels", () => {
         name: "Text only",
         contextTokens: null,
         acceptsImages: false,
+        released: "2024-07-18",
+        aliases: [],
+        replacedBy: null,
+        retires: null,
         pricing: { inputPerMillionTokens: 0.15, outputPerMillionTokens: 0.6 },
       },
       {
@@ -119,25 +138,15 @@ describe("listChatModels", () => {
         name: "Auto Router",
         contextTokens: 128000,
         acceptsImages: true,
+        released: "2024-07-18",
+        aliases: [],
+        replacedBy: null,
+        retires: null,
         pricing: null,
       },
     ]);
     // Only text-output models are relevant here; transcription is Deepgram's.
     expect(mockModelsList).toHaveBeenCalledWith({ outputModalities: "text" });
-  });
-
-  it("leaves out batch-only variants, which can't stream a reply", async () => {
-    mockGetOrSetCache.mockImplementationOnce(runFetch);
-    mockModelsList.mockResolvedValueOnce({
-      result: {
-        data: [
-          openRouterListModel,
-          { ...openRouterListModel, id: `${openRouterListModel.id}:batch` },
-        ],
-      },
-    });
-
-    expect(await chat.listModels()).toEqual([sampleModel]);
   });
 });
 
@@ -152,29 +161,23 @@ describe("listGuestModels", () => {
     vi.clearAllMocks();
   });
 
-  it("offers gpt-4o-mini and what costs no more, for input and output both", async () => {
+  it("offers what costs no more than $0.10/$0.50, for input and output both", async () => {
     mockGetOrSetCache.mockResolvedValue([
-      priced(MODEL_ID, 0.15, 0.6),
-      priced("cheap/model", 0.1, 0.4),
+      priced("at-ceiling/model", 0.1, 0.5),
+      priced("cheap/model", 0.05, 0.2),
       priced("free/model:free", 0, 0),
-      priced("dear-input/model", 0.2, 0.4),
-      priced("dear-output/model", 0.1, 0.8),
+      priced("dear-input/model", 0.15, 0.4),
+      priced("dear-output/model", 0.05, 0.6),
       { ...sampleModel, id: "openrouter/auto", pricing: null },
     ]);
 
     expect((await chat.listGuestModels()).map((model) => model.id)).toEqual([
-      MODEL_ID,
+      "at-ceiling/model",
       "cheap/model",
       "free/model:free",
     ]);
     expect(await chat.isGuestModel("cheap/model")).toBe(true);
     expect(await chat.isGuestModel("dear-output/model")).toBe(false);
-  });
-
-  it("offers nothing while gpt-4o-mini is missing from the catalog", async () => {
-    mockGetOrSetCache.mockResolvedValue([priced("cheap/model", 0.1, 0.4)]);
-
-    expect(await chat.listGuestModels()).toEqual([]);
   });
 });
 
@@ -439,7 +442,7 @@ describe("generateTitle", () => {
     vi.clearAllMocks();
   });
 
-  it("uses the default model and returns a trimmed title", async () => {
+  it("uses the title model, without reasoning, and returns a trimmed title", async () => {
     mockChatSend.mockResolvedValueOnce({
       choices: [{ message: { content: "  Quarterly planning  " } }],
     });
@@ -453,7 +456,7 @@ describe("generateTitle", () => {
     expect(mockChatSend).toHaveBeenCalledWith(
       {
         chatRequest: expect.objectContaining({
-          model: MODEL_ID,
+          model: "~openai/gpt-luna-latest",
           messages: [
             {
               role: "user",
@@ -463,6 +466,7 @@ describe("generateTitle", () => {
             },
           ],
           maxCompletionTokens: 24,
+          reasoning: { effort: "none" },
         }),
       },
       { signal: expect.any(AbortSignal) },

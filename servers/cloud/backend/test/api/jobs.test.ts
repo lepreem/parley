@@ -53,10 +53,12 @@ vi.mock("../../src/data/storageLedger.data", () => ({
   storageLedger: { findLedgerEntry: mockFindLedgerEntry },
 }));
 
-vi.mock("../../src/ai/ai_transcribe_client", () => ({
-  DEFAULT_TRANSCRIBE_MODEL: "nova-3",
+vi.mock("../../src/ai/ai_transcribe_client/ai_transcribe_client", () => ({
   getTranscribeModelData: vi.fn(),
-  transcription: { isValidModel: vi.fn() },
+  transcription: {
+    isValidModel: vi.fn(),
+    defaultModel: async () => "nova-3-general",
+  },
 }));
 
 vi.mock("../../src/message-queue/messageQueue", () => {
@@ -251,8 +253,7 @@ describe("GET /jobs/transcribe/:audioUploadId", () => {
       headers: await authedHeaders("user_01OWNER"),
     });
     expect(
-      ((await res.json()) as { youtubeVideoId: string | null })
-        .youtubeVideoId,
+      ((await res.json()) as { youtubeVideoId: string | null }).youtubeVideoId,
     ).toBe("dQw4w9WgXcQ");
   });
 

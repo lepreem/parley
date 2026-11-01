@@ -6,27 +6,34 @@ const { mockListChatModels, mockListTranscribeModels } = vi.hoisted(() => ({
   mockListTranscribeModels: vi.fn(),
 }));
 
-vi.mock("../../src/ai/ai_chat_client", async (importActual) => {
+vi.mock("../../src/ai/ai_chat_client/ai_chat_client", async (importActual) => {
   // importActual is the correct way to get real values inside vi.mock
   const actual =
-    await importActual<typeof import("../../src/ai/ai_chat_client")>();
+    await importActual<
+      typeof import("../../src/ai/ai_chat_client/ai_chat_client")
+    >();
   return {
     ...actual,
     chat: { ...actual.chat, listModels: mockListChatModels },
   };
 });
 
-vi.mock("../../src/ai/ai_transcribe_client", async (importActual) => {
-  const actual =
-    await importActual<typeof import("../../src/ai/ai_transcribe_client")>();
-  return {
-    ...actual,
-    transcription: {
-      ...actual.transcription,
-      listModels: mockListTranscribeModels,
-    },
-  };
-});
+vi.mock(
+  "../../src/ai/ai_transcribe_client/ai_transcribe_client",
+  async (importActual) => {
+    const actual =
+      await importActual<
+        typeof import("../../src/ai/ai_transcribe_client/ai_transcribe_client")
+      >();
+    return {
+      ...actual,
+      transcription: {
+        ...actual.transcription,
+        listModels: mockListTranscribeModels,
+      },
+    };
+  },
+);
 
 // Now this import gets the mocked module, with real DEFAULT_MODELS intact
 
@@ -40,6 +47,10 @@ const sampleModel = {
   name: "GPT-4o Mini",
   contextTokens: 128000,
   acceptsImages: true,
+  released: null,
+  aliases: [],
+  replacedBy: null,
+  retires: null,
 };
 
 describe("GET /models/chat", () => {

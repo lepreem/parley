@@ -19,17 +19,18 @@ export const cloudServer: Server = {
   appPath: "/chat",
   alwaysOn: true,
   uploads: "signed",
-  defaultChatModelId: "openai/gpt-4o-mini",
-  defaultTranscribeModelId: "nova-3-general",
-  // OpenRouter's "~…-latest" ids follow each family's newest model, so this
-  // list doesn't go stale as models are released.
+  defaultChatModelId: "~openai/gpt-luna-latest",
+  // The server lists Deepgram's current general model first.
+  defaultTranscribeModelId: null,
+  // OpenRouter's "~…-latest" ids follow each family's newest model, but only
+  // while the provider keeps the family's name: OpenAI's "GPT Mini" became
+  // Luna, and its alias stopped moving.
   recommendedChatModelIds: [
-    "openai/gpt-4o-mini",
+    "~openai/gpt-luna-latest",
     "~anthropic/claude-sonnet-latest",
     "~anthropic/claude-haiku-latest",
     "~google/gemini-pro-latest",
     "~google/gemini-flash-latest",
-    "~openai/gpt-mini-latest",
     "~deepseek/deepseek-flash-latest",
   ],
 };
