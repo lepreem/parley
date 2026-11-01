@@ -6,7 +6,11 @@ const {
   mockDeleteAudioJob,
   mockFindTranscripts,
   mockDeleteObjects,
+  mockFindLedgerEntry,
+  mockSignUrlIfStored,
 } = vi.hoisted(() => ({
+  mockFindLedgerEntry: vi.fn(),
+  mockSignUrlIfStored: vi.fn(),
   mockFindAudioJob: vi.fn(),
   mockFindUserJobsPage: vi.fn(),
   mockDeleteAudioJob: vi.fn(),
@@ -45,6 +49,10 @@ vi.mock("../../src/data/transcripts.data", async (importActual) => {
   };
 });
 
+vi.mock("../../src/data/storageLedger.data", () => ({
+  storageLedger: { findLedgerEntry: mockFindLedgerEntry },
+}));
+
 vi.mock("../../src/ai/ai_transcribe_client", () => ({
   DEFAULT_TRANSCRIBE_MODEL: "nova-3",
   getTranscribeModelData: vi.fn(),
@@ -77,6 +85,7 @@ vi.mock("../../src/storage/sign", () => ({
   IMAGE_URL_TTL_SECONDS: 7 * 24 * 60 * 60,
   sign: {
     urls: vi.fn(),
+    urlIfStored: mockSignUrlIfStored,
   },
 }));
 
@@ -89,7 +98,7 @@ const audioJob = {
   audioUploadId,
   fileName: "clip.mp3",
   source: "audio",
-  youtubeSourceUrl: null,
+  youtubeVideoId: null,
   status: "completed",
   error: null,
 };
@@ -100,6 +109,11 @@ beforeEach(() => {
   mockFindTranscripts.mockResolvedValue(new Map());
   mockDeleteAudioJob.mockResolvedValue({ fetchMayStillWrite: false });
   mockDeleteObjects.mockResolvedValue(undefined);
+  mockFindLedgerEntry.mockResolvedValue({
+    status: "confirmed",
+    createdAt: new Date(),
+  });
+  mockSignUrlIfStored.mockResolvedValue("https://signed/audio");
 });
 
 describe("GET /jobs/summarize/:audioUploadId", () => {
@@ -133,6 +147,7 @@ describe("GET /jobs/transcribe/:audioUploadId", () => {
       status: "processing",
       transcript: null,
       error: null,
+      youtubeVideoId: null,
     });
   });
 
@@ -155,6 +170,7 @@ describe("GET /jobs/transcribe/:audioUploadId", () => {
       status: "completed",
       transcript: "the full transcript text",
       error: null,
+      youtubeVideoId: null,
     });
     expect(mockFindTranscripts).toHaveBeenCalledWith("user_01OWNER", [
       audioUploadId,
@@ -218,7 +234,26 @@ describe("GET /jobs/transcribe/:audioUploadId", () => {
       status: "completed",
       transcript: null,
       error: null,
+      youtubeVideoId: null,
     });
+  });
+
+  it("names the video a youtube job came from", async () => {
+    mockFindAudioJob.mockResolvedValueOnce({
+      ...audioJob,
+      source: "youtube",
+      youtubeVideoId: "dQw4w9WgXcQ",
+    });
+
+    const res = await (
+      await createApp()
+    ).request(`http://localhost/jobs/transcribe/${audioUploadId}`, {
+      headers: await authedHeaders("user_01OWNER"),
+    });
+    expect(
+      ((await res.json()) as { youtubeVideoId: string | null })
+        .youtubeVideoId,
+    ).toBe("dQw4w9WgXcQ");
   });
 
   it("returns 404 when no audio job exists for the user", async () => {
@@ -238,6 +273,77 @@ describe("GET /jobs/transcribe/:audioUploadId", () => {
     ).request(`http://localhost/jobs/transcribe/${audioUploadId}`);
     expect(res.status).toBe(401);
     expect(mockFindAudioJob).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /jobs/transcribe/:audioUploadId/audio", () => {
+  const url = `http://localhost/jobs/transcribe/${audioUploadId}/audio`;
+
+  it("hands out a link to the audio while it's kept", async () => {
+    const res = await (
+      await createApp()
+    ).request(url, { headers: await authedHeaders("user_01OWNER") });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ url: "https://signed/audio" });
+    expect(mockFindLedgerEntry).toHaveBeenCalledWith({
+      userId: "user_01OWNER",
+      kind: "audio",
+      uploadId: audioUploadId,
+    });
+    expect(mockSignUrlIfStored).toHaveBeenCalledWith("user_01OWNER", {
+      kind: "audio",
+      uploadId: audioUploadId,
+    });
+  });
+
+  // The sweep marks it deleted once the server stops keeping it, which may
+  // be before the object itself is gone.
+  it("has no link once the audio is marked deleted", async () => {
+    mockFindLedgerEntry.mockResolvedValueOnce({
+      status: "deleted",
+      createdAt: new Date(),
+    });
+
+    const res = await (
+      await createApp()
+    ).request(url, { headers: await authedHeaders("user_01OWNER") });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ url: null });
+    expect(mockSignUrlIfStored).not.toHaveBeenCalled();
+  });
+
+  it("has no link once the audio's record is gone", async () => {
+    mockFindLedgerEntry.mockResolvedValueOnce(undefined);
+
+    const res = await (
+      await createApp()
+    ).request(url, { headers: await authedHeaders("user_01OWNER") });
+
+    expect(await res.json()).toEqual({ url: null });
+    expect(mockSignUrlIfStored).not.toHaveBeenCalled();
+  });
+
+  it("has no link when no audio ever landed", async () => {
+    mockSignUrlIfStored.mockResolvedValueOnce(null);
+
+    const res = await (
+      await createApp()
+    ).request(url, { headers: await authedHeaders("user_01OWNER") });
+
+    expect(await res.json()).toEqual({ url: null });
+  });
+
+  it("returns 404 for someone else's job", async () => {
+    mockFindAudioJob.mockResolvedValueOnce(null);
+
+    const res = await (
+      await createApp()
+    ).request(url, { headers: await authedHeaders("user_01OTHER") });
+
+    expect(res.status).toBe(404);
+    expect(mockSignUrlIfStored).not.toHaveBeenCalled();
   });
 });
 

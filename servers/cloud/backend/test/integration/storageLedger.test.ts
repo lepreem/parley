@@ -565,7 +565,7 @@ describe.skipIf(!testState.databaseUrl)("storage ledger in PostgreSQL", () => {
       audioUploadId: randomUUID() as never,
       userId,
       source: "youtube" as const,
-      youtubeSourceUrl: "https://youtu.be/x",
+      youtubeVideoId: "dQw4w9WgXcQ",
       fileName: "YouTube audio",
       mimeType: null,
       sizeBytes: 0,
@@ -697,6 +697,97 @@ describe.skipIf(!testState.databaseUrl)("storage ledger in PostgreSQL", () => {
           failing.uploadId,
         ].sort(),
       );
+    });
+  });
+
+  describe("markFinishedAudioDeleted", () => {
+    const DAY_MS = 24 * HOUR_MS;
+
+    /** A job whose audio is on record, at `status`, recorded `daysAgo`. */
+    async function audioJob(
+      source: "audio" | "youtube",
+      status: "queued" | "processing" | "completed" | "failed",
+      daysAgo: number,
+    ) {
+      const audioUploadId = randomUUID();
+      const job = {
+        audioUploadId: audioUploadId as never,
+        userId,
+        source,
+        fileName: "a.webm",
+        mimeType: "audio/webm",
+        sizeBytes: 1,
+        transcriptModelId: "nova-3",
+      };
+      if (source === "youtube") {
+        await jobs.createYoutubeAudioJob({
+          ...job,
+          youtubeVideoId: "dQw4w9WgXcQ",
+        });
+      } else {
+        await storageLedger.recordConfirmedObjects(userId, [
+          { kind: "audio", uploadId: audioUploadId },
+        ]);
+        await jobs.createAudioJob(job);
+      }
+      await db
+        .update(AudioTranscriptionJobs)
+        .set({ status })
+        .where(sql`${AudioTranscriptionJobs.audioUploadId} = ${audioUploadId}`);
+      await backdate(audioUploadId, daysAgo * DAY_MS);
+      return audioUploadId;
+    }
+
+    it("marks a youtube job's audio once transcribed, and any finished job's after the cutoff", async () => {
+      const marked = [
+        await audioJob("youtube", "completed", 0),
+        await audioJob("youtube", "failed", 8),
+        await audioJob("audio", "completed", 8),
+        await audioJob("audio", "failed", 8),
+      ];
+      const kept = [
+        await audioJob("youtube", "processing", 0),
+        // A failed fetch's audio stays for the week, to replay it by hand.
+        await audioJob("youtube", "failed", 1),
+        await audioJob("audio", "completed", 1),
+        await audioJob("audio", "failed", 1),
+        // However old: the transcription still reads it.
+        await audioJob("audio", "queued", 8),
+        await audioJob("audio", "processing", 8),
+      ];
+      const picture = image();
+      await storageLedger.recordConfirmedObjects(userId, [picture]);
+      await backdate(picture.uploadId, 8 * DAY_MS);
+
+      expect(
+        await storageLedger.markFinishedAudioDeleted(
+          new Date(Date.now() - 7 * DAY_MS),
+        ),
+      ).toBe(marked.length);
+
+      const statusOf = new Map(
+        (await ledger()).map((row) => [row.uploadId, row.status]),
+      );
+      for (const id of marked) expect(statusOf.get(id)).toBe("deleted");
+      for (const id of [...kept, picture.uploadId]) {
+        expect(statusOf.get(id)).toBe("confirmed");
+      }
+      // The job keeps its rows; only the object goes.
+      expect(await db.select().from(AudioTranscriptionJobs)).toHaveLength(
+        marked.length + kept.length,
+      );
+    });
+
+    it("lets one sweep remove the audio it marks", async () => {
+      const expired = await audioJob("audio", "completed", 8);
+      const recent = await audioJob("audio", "completed", 1);
+
+      expect(await sweeper.sweepUnusedObjects()).toBe(1);
+
+      expect(testState.deleteFromBucket).toHaveBeenCalledWith(userId, [
+        { kind: "audio", uploadId: expired },
+      ]);
+      expect((await ledger()).map((row) => row.uploadId)).toEqual([recent]);
     });
   });
 

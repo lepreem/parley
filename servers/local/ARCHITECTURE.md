@@ -29,6 +29,11 @@ row first, then the file. Whatever a crash leaves between the two, and audio a
 YouTube fetch writes for a job deleted while it ran, is a file no row uses:
 startup removes those before anything else runs.
 
+A job's audio stays as long as the job does. The client plays it from the
+path `GET /jobs/transcribe/:audioUploadId/audio` answers with,
+`/jobs/transcribe/:audioUploadId/audio/file`, or from its own copy in the
+browser, and plays a YouTube job's video from YouTube.
+
 The client reads an image from `GET /upload/image/:imageUploadId`. The model is
 handed it inline, base64-encoded in the prompt (`chatImageInput`).
 

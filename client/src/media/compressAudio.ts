@@ -1,5 +1,6 @@
 import { fetchFile } from "@ffmpeg/util";
 import { withFFmpeg } from "./ffmpeg";
+import { speechFileName } from "./fileNames";
 
 type CompressOptions = {
   /** Opus bitrate in kbps (speech: ~16–48). */
@@ -27,9 +28,6 @@ export async function compressAudioForSpeech(
     const ext = extMatch ? extMatch[1] : ".bin";
     const inputName = `input${ext}`;
 
-    const base =
-      audioFile.name.replace(/\.[^.]+$/, "").replace(/[^\w.-]+/g, "_") ||
-      "audio";
     const outputName = "speech-audio.webm";
 
     await ff.writeFile(inputName, await fetchFile(audioFile));
@@ -79,6 +77,6 @@ export async function compressAudioForSpeech(
 
     const mime = "audio/webm";
     const blob = new Blob([new Uint8Array(data)], { type: mime });
-    return new File([blob], `${base}-speech.webm`, { type: mime });
+    return new File([blob], speechFileName(audioFile.name), { type: mime });
   });
 }

@@ -11,14 +11,20 @@ const log = logger.child({ component: "sweeper" });
  * window has long finished before the sweep can act on the same object.
  */
 const GRACE_MS = UPLOAD_CONFIRM_WINDOW_MS * 1.5;
+/**
+ * How long a finished job's uploaded audio stays on the server, for playing it
+ * back from another device. The client keeps its own copy for after that.
+ * Long enough, too, to replay a failed job's dead-lettered message by hand.
+ */
+const AUDIO_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const BATCH_SIZE = 500;
 const INTERVAL_MS = 60 * 60 * 1000;
 const LOCK_NAME = "storage-sweep";
 
 /**
- * Removes one batch of objects nothing uses — uploads never confirmed, and
- * objects marked deleted whose removal didn't finish — once they're past the
- * grace. Each object leaves storage before its record does, so a crash
+ * Removes one batch of objects nothing uses — uploads never confirmed, objects
+ * marked deleted whose removal didn't finish, and audio no job needs any more
+ * (markFinishedAudioDeleted) — once they're past the grace. Each object leaves storage before its record does, so a crash
  * mid-sweep leaves records to retry, never unrecorded objects.
  *
  * Returns how many were removed, or undefined when another process holds the
@@ -29,6 +35,12 @@ const LOCK_NAME = "storage-sweep";
  */
 async function sweepUnusedObjects() {
   return data.advisoryLock.withAdvisoryLock(LOCK_NAME, async () => {
+    const expired = await data.storageLedger.markFinishedAudioDeleted(
+      new Date(Date.now() - AUDIO_RETENTION_MS),
+    );
+    if (expired > 0)
+      log.info("Marked finished jobs' audio deleted", { expired });
+
     const objects = await data.storageLedger.findLedgerEntries({
       statuses: ["pending", "deleted"],
       createdBefore: new Date(Date.now() - GRACE_MS),
