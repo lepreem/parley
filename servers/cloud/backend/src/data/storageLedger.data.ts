@@ -1,5 +1,6 @@
-import { and, asc, eq, inArray, lt, ne, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, lt, ne, or, sql } from "drizzle-orm";
 import {
+  AudioTranscriptionJobs,
   StorageLedger,
   db,
   type Executor,
@@ -140,6 +141,48 @@ async function markDeleted(
 }
 
 /**
+ * Marks as deleted the audio of jobs that are done with it, for the sweep to
+ * remove: a YouTube job's once it has its transcript, since the video stays
+ * on YouTube to play from there, and any finished job's once it was recorded
+ * before `recordedBefore`. Audio of a job still queued or processing is kept
+ * whatever its age, because the transcription reads it. The job's rows stay;
+ * only the object goes. Returns how many were marked.
+ */
+async function markFinishedAudioDeleted(recordedBefore: Date) {
+  const finishedJobs = (onlyYoutube: boolean) =>
+    db
+      .select({ audioUploadId: AudioTranscriptionJobs.audioUploadId })
+      .from(AudioTranscriptionJobs)
+      .where(
+        onlyYoutube
+          ? and(
+              eq(AudioTranscriptionJobs.source, "youtube"),
+              eq(AudioTranscriptionJobs.status, "completed"),
+            )
+          : inArray(AudioTranscriptionJobs.status, ["completed", "failed"]),
+      );
+
+  const marked = await db
+    .update(StorageLedger)
+    .set({ status: "deleted" })
+    .where(
+      and(
+        eq(StorageLedger.kind, "audio"),
+        eq(StorageLedger.status, "confirmed"),
+        or(
+          inArray(StorageLedger.uploadId, finishedJobs(true)),
+          and(
+            lt(StorageLedger.createdAt, recordedBefore),
+            inArray(StorageLedger.uploadId, finishedJobs(false)),
+          ),
+        ),
+      ),
+    )
+    .returning({ uploadId: StorageLedger.uploadId });
+  return marked.length;
+}
+
+/**
  * Drops the records of objects that are gone from storage. A confirmed
  * record is never dropped: its object is still in use.
  */
@@ -164,5 +207,6 @@ export const storageLedger = {
   findLedgerEntries,
   confirmUpload,
   markDeleted,
+  markFinishedAudioDeleted,
   forgetObjects,
 };

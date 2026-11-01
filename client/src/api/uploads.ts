@@ -1,6 +1,6 @@
 import type {
   QueuedYoutube,
-  QueueYoutubeBody,
+  LocalQueueYoutubeBody,
   UploadedAudio,
   UploadedImage,
 } from "@parley/contract";
@@ -104,6 +104,16 @@ export async function deleteImage(
 }
 
 /**
+ * A transcription model to send, if the user picked one: the local server's
+ * default otherwise. The cloud picks its own and is sent none.
+ */
+function modelField(transcriptModelId: string | null): Record<string, string> {
+  return transcriptModelId
+    ? { [FORM_KEYS.transcriptModelId]: transcriptModelId }
+    : {};
+}
+
+/**
  * Speech audio — already extracted from video and compressed by the caller.
  * `source` records what it came from; the transcribe job is queued server-side
  * once the upload is confirmed.
@@ -113,7 +123,7 @@ export async function uploadAudio(
   upload: {
     file: File;
     source: "audio" | "video";
-    transcriptModelId: string;
+    transcriptModelId: string | null;
   },
 ): Promise<UploadedAudio> {
   if (server.uploads === "direct") {
@@ -122,7 +132,7 @@ export async function uploadAudio(
       "/upload/audio",
       directUpload(upload.file, {
         [FORM_KEYS.audioSource]: upload.source,
-        [FORM_KEYS.transcriptModelId]: upload.transcriptModelId,
+        ...modelField(upload.transcriptModelId),
       }),
     );
   }
@@ -136,7 +146,7 @@ export async function uploadAudio(
       [FORM_KEYS.uploadId]: uploadId,
       [FORM_KEYS.fileName]: upload.file.name,
       [FORM_KEYS.audioSource]: upload.source,
-      [FORM_KEYS.transcriptModelId]: upload.transcriptModelId,
+      ...modelField(upload.transcriptModelId),
     }),
   );
 }
@@ -145,14 +155,16 @@ export async function uploadAudio(
 export async function requestYoutubeTranscript(
   server: Server,
   youtubeUrl: string,
-  transcriptModelId: string,
+  transcriptModelId: string | null,
+  useCaptionsIfAvailable: boolean,
 ): Promise<QueuedYoutube> {
   return apiJson<QueuedYoutube>(
     server,
     "/upload/youtube",
     jsonRequest("POST", {
       youtubeUrl,
-      [FORM_KEYS.transcriptModelId]: transcriptModelId,
-    } satisfies QueueYoutubeBody),
+      ...modelField(transcriptModelId),
+      useCaptionsIfAvailable,
+    } satisfies LocalQueueYoutubeBody),
   );
 }

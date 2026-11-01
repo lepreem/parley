@@ -1,30 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Only hoist the mock function factory — no async work here
-const { mockListChatModels, mockListTranscribeModels } = vi.hoisted(() => ({
+const { mockListChatModels } = vi.hoisted(() => ({
   mockListChatModels: vi.fn(),
-  mockListTranscribeModels: vi.fn(),
 }));
 
-vi.mock("../../src/ai/ai_chat_client", async (importActual) => {
+vi.mock("../../src/ai/ai_chat_client/ai_chat_client", async (importActual) => {
   // importActual is the correct way to get real values inside vi.mock
   const actual =
-    await importActual<typeof import("../../src/ai/ai_chat_client")>();
+    await importActual<
+      typeof import("../../src/ai/ai_chat_client/ai_chat_client")
+    >();
   return {
     ...actual,
     chat: { ...actual.chat, listModels: mockListChatModels },
-  };
-});
-
-vi.mock("../../src/ai/ai_transcribe_client", async (importActual) => {
-  const actual =
-    await importActual<typeof import("../../src/ai/ai_transcribe_client")>();
-  return {
-    ...actual,
-    transcription: {
-      ...actual.transcription,
-      listModels: mockListTranscribeModels,
-    },
   };
 });
 
@@ -40,6 +29,10 @@ const sampleModel = {
   name: "GPT-4o Mini",
   contextTokens: 128000,
   acceptsImages: true,
+  released: null,
+  aliases: [],
+  replacedBy: null,
+  retires: null,
 };
 
 describe("GET /models/chat", () => {
@@ -126,30 +119,13 @@ describe("GET /models/chat", () => {
   });
 });
 
-const sampleTranscribeModel = { id: "nova-3-general", name: "nova-3-general" };
-
 describe("GET /models/transcription", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockListTranscribeModels.mockResolvedValue([sampleTranscribeModel]);
-  });
-
-  it("returns 401 without a session cookie", async () => {
-    const res = await (
-      await createApp()
-    ).request("http://localhost/models/transcription");
-    expect(res.status).toBe(401);
-    expect(mockListTranscribeModels).not.toHaveBeenCalled();
-  });
-
-  it("returns the transcription models for a valid session", async () => {
+  it("is gone: the cloud picks the transcription model itself", async () => {
     const res = await (
       await createApp()
     ).request("http://localhost/models/transcription", {
       headers: { Cookie: await sessionCookieHeader("user_01") },
     });
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ models: [sampleTranscribeModel] });
-    expect(mockListTranscribeModels).toHaveBeenCalledTimes(1);
+    expect(res.status).toBe(404);
   });
 });

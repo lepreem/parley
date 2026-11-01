@@ -23,12 +23,20 @@ export type Server = {
    * request carries the file (local).
    */
   uploads: "signed" | "direct";
-  /** The models a new chat and a new transcript start on, when offered. */
+  /**
+   * The model a new chat starts on, when offered. It may be named by alias.
+   */
   defaultChatModelId: string;
-  defaultTranscribeModelId: string;
+  /**
+   * Whether the user picks the model sources are transcribed with, and the
+   * one it starts on. Null where the server picks it: the cloud, whose
+   * Deepgram models differ only in specialist vocabulary, and which detects
+   * the language whatever the model.
+   */
+  transcribeModelChoice: { defaultModelId: string } | null;
   /**
    * Chat models listed first in the picker, in this order, ahead of the full
-   * catalog. Ones the catalog doesn't offer are skipped.
+   * catalog, by id or alias. Ones the catalog doesn't offer are skipped.
    */
   recommendedChatModelIds: readonly string[];
 };

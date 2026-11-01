@@ -117,6 +117,18 @@ order. There is no second job pipeline: the prompt contains the linked
 transcripts plus whatever the user types, and the reply streams over the same
 SSE endpoint every other chat turn uses.
 
+**Audio is kept for a week, a YouTube job's not at all.** Once a job has
+its transcript nothing on the server reads its audio, so the hourly storage
+sweep (`src/sweeper.ts`) marks it deleted in the ledger
+(`markFinishedAudioDeleted`) and then removes it like any other unused object:
+a YouTube job's as soon as it's transcribed, since the video plays from
+YouTube; any other finished job's, failed ones included, a week after its
+upload, which is also how long a dead-lettered job's audio stays to replay.
+The job and its transcript stay. Until then the client plays the audio from
+`GET /jobs/transcribe/:audioUploadId/audio`, a signed link, or null once the
+ledger no longer has it confirmed. After that it plays the copy it keeps in
+the browser, or the original file the user picks again.
+
 Job state transitions are **claimed atomically**. A fresh delivery can claim
 only a queued job; a broker redelivery can reclaim a processing job. Every claim
 gets a new token, which prevents an older delivery from writing a stale result if
@@ -164,8 +176,8 @@ What a guest can't do, because it costs money nobody is accountable for:
   stored object's key starts with its owner's id, so letting guests upload
   means moving their objects in storage when they sign in; see
   `users.adoptGuest`.
-- **Use a model that costs more than `openai/gpt-4o-mini`**, for input or
-  output (`chat.listGuestModels`).
+- **Use a model that costs more than $0.10 in / $0.50 out** per million
+  tokens, GPT-6 Luna's price (`chat.listGuestModels`).
 - **Spend from the main OpenRouter key.** Guest turns, titles included, go
   through `OPENROUTER_GUEST_API_KEY`, whose credit limit in OpenRouter is the
   hard cap on guest spending. Without it, and `GUEST_SESSION_SECRET`, there is

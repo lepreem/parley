@@ -1,0 +1,5 @@
+# The fetcher's packages, plus the test and lint tools. requirements-dev.txt is
+# compiled from this, held to requirements.txt's versions; see requirements.in.
+-r requirements.in
+pytest
+ruff

@@ -6,7 +6,11 @@ const {
   mockDeleteAudioJob,
   mockFindTranscripts,
   mockDeleteFiles,
+  mockFileExists,
+  mockReadFile,
 } = vi.hoisted(() => ({
+  mockFileExists: vi.fn(),
+  mockReadFile: vi.fn(),
   mockFindAudioJob: vi.fn(),
   mockFindJobsPage: vi.fn(),
   mockDeleteAudioJob: vi.fn(),
@@ -67,7 +71,15 @@ vi.mock("../../core/message-queue/messageQueue", () => {
 
 vi.mock("../../core/files", async (importActual) => {
   const actual = await importActual<typeof import("../../core/files")>();
-  return { ...actual, files: { ...actual.files, delete: mockDeleteFiles } };
+  return {
+    ...actual,
+    files: {
+      ...actual.files,
+      delete: mockDeleteFiles,
+      exists: mockFileExists,
+      read: mockReadFile,
+    },
+  };
 });
 
 import { createApp } from "../../api/app";
@@ -79,7 +91,8 @@ const audioJob = {
   audioUploadId,
   fileName: "clip.mp3",
   source: "audio",
-  youtubeSourceUrl: null,
+  mimeType: "audio/webm",
+  youtubeVideoId: null,
   status: "completed",
   error: null,
 };
@@ -90,6 +103,8 @@ beforeEach(() => {
   mockFindTranscripts.mockResolvedValue(new Map());
   mockDeleteAudioJob.mockResolvedValue(true);
   mockDeleteFiles.mockResolvedValue(undefined);
+  mockFileExists.mockResolvedValue(true);
+  mockReadFile.mockResolvedValue(Buffer.from("opus bytes"));
 });
 
 describe("GET /jobs/summarize/:audioUploadId", () => {
@@ -123,6 +138,7 @@ describe("GET /jobs/transcribe/:audioUploadId", () => {
       status: "processing",
       transcript: null,
       error: null,
+      youtubeVideoId: null,
     });
   });
 
@@ -145,6 +161,7 @@ describe("GET /jobs/transcribe/:audioUploadId", () => {
       status: "completed",
       transcript: "the full transcript text",
       error: null,
+      youtubeVideoId: null,
     });
     expect(mockFindTranscripts).toHaveBeenCalledWith([audioUploadId]);
   });
@@ -203,6 +220,7 @@ describe("GET /jobs/transcribe/:audioUploadId", () => {
       status: "completed",
       transcript: null,
       error: null,
+      youtubeVideoId: null,
     });
   });
 
@@ -215,6 +233,62 @@ describe("GET /jobs/transcribe/:audioUploadId", () => {
     });
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({ message: "Job not found" });
+  });
+});
+
+describe("GET /jobs/transcribe/:audioUploadId/audio", () => {
+  const url = `http://localhost/jobs/transcribe/${audioUploadId}/audio`;
+
+  it("points at the audio file", async () => {
+    const res = await (
+      await createApp()
+    ).request(url, { headers: originHeaders() });
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      url: `/jobs/transcribe/${audioUploadId}/audio/file`,
+    });
+  });
+
+  it("has no link when the job never had audio", async () => {
+    mockFileExists.mockResolvedValueOnce(false);
+
+    const res = await (
+      await createApp()
+    ).request(url, { headers: originHeaders() });
+
+    expect(await res.json()).toEqual({ url: null });
+  });
+
+  it("returns 404 for a job that isn't there", async () => {
+    mockFindAudioJob.mockResolvedValueOnce(null);
+
+    const res = await (
+      await createApp()
+    ).request(url, { headers: originHeaders() });
+
+    expect(res.status).toBe(404);
+  });
+
+  it("serves the file as the type it was uploaded as", async () => {
+    const res = await (
+      await createApp()
+    ).request(`${url}/file`, { headers: originHeaders() });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toBe("audio/webm");
+    expect(await res.text()).toBe("opus bytes");
+  });
+
+  it("returns 404 for a file that isn't there", async () => {
+    mockFileExists.mockResolvedValueOnce(false);
+
+    const res = await (
+      await createApp()
+    ).request(`${url}/file`, { headers: originHeaders() });
+
+    expect(res.status).toBe(404);
+    expect(mockReadFile).not.toHaveBeenCalled();
   });
 });
 

@@ -25,6 +25,14 @@ export function fetchTranscriptionModels(
   return fetchModels<TranscribeModel>(server, "/models/transcription");
 }
 
+/** The model with this id or alias, if it's one of these. */
+export function findChatModel(
+  models: readonly ChatModel[],
+  id: string,
+): ChatModel | undefined {
+  return models.find((model) => model.id === id || model.aliases.includes(id));
+}
+
 /** Fall back to the first available model when the preferred one isn't offered. */
 export function resolveDefaultModel(
   modelIds: string[],

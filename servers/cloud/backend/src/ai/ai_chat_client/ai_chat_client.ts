@@ -1,14 +1,15 @@
-import { getEnv } from "../env";
+import { getEnv } from "../../env";
 import { OpenRouter } from "@openrouter/sdk";
 
-import { CACHE_KEYS, memory } from "../memory";
+import { CACHE_KEYS, memory } from "../../memory";
 import type {
   ChatContentItems,
   ChatRequest,
-  PublicPricing,
+  ChatRequestEffort,
 } from "@openrouter/sdk/models";
 import { withTimeout } from "@parley/server-kit/runtime/withTimeout";
-import type { ChatModel, ModelPricing } from "@parley/contract";
+import type { ChatModel } from "@parley/contract";
+import { guestModelsOf, offeredModels } from "./model_catalog";
 
 const client = new OpenRouter({
   apiKey: getEnv().OPENROUTER_API_KEY,
@@ -138,6 +139,11 @@ type ChatOptions = {
   /** Ceiling on the completion, so one call can't run up an unbounded bill. */
   maxOutputTokens?: number | undefined;
   /**
+   * How hard a reasoning model thinks. Its thinking counts against
+   * maxOutputTokens, so a small ceiling needs "none" or the reply is empty.
+   */
+  reasoningEffort?: ChatRequestEffort | undefined;
+  /**
    * Groups a conversation's turns so OpenRouter routes them all to the same
    * provider (sticky), keeping that provider's prompt cache warm across the
    * turn's stable history prefix — the biggest lever on time-to-first-token.
@@ -160,6 +166,9 @@ async function complete(
     model,
     messages,
     maxCompletionTokens: opts.maxOutputTokens,
+    reasoning: opts.reasoningEffort
+      ? { effort: opts.reasoningEffort }
+      : undefined,
     // `sort: "latency"` routes to the lowest time-to-first-token endpoint (no
     // load balancing); paired with the sticky sessionId, turns stay on one fast,
     // warm provider.
@@ -186,43 +195,12 @@ async function complete(
   );
 }
 
-/**
- * OpenRouter's per-token USD price as dollars per million tokens, rounded to
- * a millionth of a dollar to drop the float noise of scaling up. Null for a
- * price that isn't one: its routers list -1, since what they charge depends
- * on the model they pick.
- */
-function perMillionTokens(perToken: string): number | null {
-  const price = Number(perToken);
-  if (!Number.isFinite(price) || price < 0) return null;
-  return Math.round(price * 1e12) / 1e6;
-}
-
-function toPricing(pricing: PublicPricing): ModelPricing | null {
-  const inputPerMillionTokens = perMillionTokens(pricing.prompt);
-  const outputPerMillionTokens = perMillionTokens(pricing.completion);
-  if (inputPerMillionTokens === null || outputPerMillionTokens === null)
-    return null;
-  return { inputPerMillionTokens, outputPerMillionTokens };
-}
-
 async function fetchChatModels(): Promise<ChatModel[]> {
   // Only models that answer in text: every one listed is a chat model.
   // Transcription is served by Deepgram.
-  const models = (await client.models.list({ outputModalities: "text" })).result
-    .data;
-
-  // ":batch" variants are for OpenRouter's batch API, which doesn't stream, so
-  // none of them can hold a chat.
-  return models
-    .filter((model) => !model.id.endsWith(":batch"))
-    .map((model) => ({
-      id: model.id,
-      name: model.name,
-      contextTokens: model.contextLength,
-      acceptsImages: model.architecture.inputModalities.includes("image"),
-      pricing: toPricing(model.pricing),
-    }));
+  const { data } = (await client.models.list({ outputModalities: "text" }))
+    .result;
+  return offeredModels(data);
 }
 
 // Every send looks up the chosen model here, so the cache keeps that lookup
@@ -248,26 +226,6 @@ async function findModel(id: string): Promise<ChatModel | undefined> {
   return (await listModels()).find((model) => model.id === id);
 }
 
-/**
- * Guests get this model and any that cost no more, for input and output
- * both. A model without a fixed price (a router's) isn't one of them, and
- * nor is anything while this one is missing from the catalog.
- */
-const GUEST_PRICE_CEILING_MODEL = "openai/gpt-4o-mini";
-
-function guestModelsOf(models: readonly ChatModel[]): ChatModel[] {
-  const ceiling = models.find(
-    (model) => model.id === GUEST_PRICE_CEILING_MODEL,
-  )?.pricing;
-  if (!ceiling) return [];
-  return models.filter(
-    ({ pricing }) =>
-      pricing !== null &&
-      pricing.inputPerMillionTokens <= ceiling.inputPerMillionTokens &&
-      pricing.outputPerMillionTokens <= ceiling.outputPerMillionTokens,
-  );
-}
-
 /** The models a guest can chat with. */
 async function listGuestModels(): Promise<ChatModel[]> {
   return guestModelsOf(await listModels());
@@ -278,7 +236,8 @@ async function isGuestModel(id: string): Promise<boolean> {
 }
 
 const MAX_TITLE_INPUT_CHARS = 12_000;
-const DEFAULT_TITLE_GENERATION_MODEL = "openai/gpt-4o-mini";
+// The alias follows OpenAI's newest Luna.
+const DEFAULT_TITLE_GENERATION_MODEL = "~openai/gpt-luna-latest";
 
 async function generateTitle(
   kind: "conversation" | "transcript",
@@ -293,7 +252,12 @@ async function generateTitle(
         content: `Generate a concise, descriptive title of at most eight words for this ${kind}. Return only the title.\n\n${content.slice(0, MAX_TITLE_INPUT_CHARS)}`,
       },
     ],
-    { maxOutputTokens: 24, timeoutMs: TITLE_TIMEOUT_MS, guest },
+    {
+      maxOutputTokens: 24,
+      reasoningEffort: "none",
+      timeoutMs: TITLE_TIMEOUT_MS,
+      guest,
+    },
   );
 
   return title.trim();

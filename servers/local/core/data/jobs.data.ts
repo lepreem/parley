@@ -21,10 +21,11 @@ async function findAudioJob(audioUploadId: string) {
     .select({
       audioUploadId: AudioTranscriptionJobs.audioUploadId,
       fileName: Attachments.fileName,
+      mimeType: Attachments.mimeType,
       source: AudioTranscriptionJobs.source,
-      youtubeSourceUrl: AudioTranscriptionJobs.YT_sourceUrl,
       status: AudioTranscriptionJobs.status,
       error: AudioTranscriptionJobs.error,
+      youtubeVideoId: AudioTranscriptionJobs.youtubeVideoId,
     })
     .from(AudioTranscriptionJobs)
     .innerJoin(
@@ -136,7 +137,7 @@ async function createAudioJob(job: {
   mimeType: string | null;
   sizeBytes: number;
   transcriptModelId: string;
-  youtubeSourceUrl?: string;
+  youtubeVideoId?: string;
   useCaptionsIfAvailable?: boolean;
 }) {
   const {
@@ -146,7 +147,7 @@ async function createAudioJob(job: {
     mimeType,
     sizeBytes,
     transcriptModelId,
-    youtubeSourceUrl,
+    youtubeVideoId,
     useCaptionsIfAvailable,
   } = job;
 
@@ -165,9 +166,7 @@ async function createAudioJob(job: {
       audioUploadId,
       source,
       transcriptModelId,
-      ...(youtubeSourceUrl !== undefined
-        ? { YT_sourceUrl: youtubeSourceUrl }
-        : {}),
+      ...(youtubeVideoId !== undefined ? { youtubeVideoId } : {}),
       ...(useCaptionsIfAvailable !== undefined
         ? { YT_useCaptionsIfAvailable: useCaptionsIfAvailable }
         : {}),
@@ -318,7 +317,7 @@ async function requeueUnfinishedAudioJobs() {
       .select({
         audioUploadId: AudioTranscriptionJobs.audioUploadId,
         source: AudioTranscriptionJobs.source,
-        youtubeSourceUrl: AudioTranscriptionJobs.YT_sourceUrl,
+        youtubeVideoId: AudioTranscriptionJobs.youtubeVideoId,
         useCaptionsIfAvailable:
           AudioTranscriptionJobs.YT_useCaptionsIfAvailable,
       })

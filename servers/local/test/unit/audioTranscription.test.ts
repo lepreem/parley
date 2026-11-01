@@ -23,7 +23,7 @@ const audioUploadId = "11111111-1111-4111-8111-111111111111";
 const unfinished = {
   audioUploadId,
   source: "audio",
-  youtubeSourceUrl: null,
+  youtubeVideoId: null,
   useCaptionsIfAvailable: null,
 };
 
@@ -37,7 +37,7 @@ describe("resumeUnfinishedJobs", () => {
       {
         ...unfinished,
         source: "youtube",
-        youtubeSourceUrl: "https://www.youtube.com/watch?v=abc",
+        youtubeVideoId: "dQw4w9WgXcQ",
         useCaptionsIfAvailable: true,
       },
     ]);
@@ -49,7 +49,7 @@ describe("resumeUnfinishedJobs", () => {
         "yt_fetch",
         {
           audioUploadId,
-          url: "https://www.youtube.com/watch?v=abc",
+          url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
           useCaptionsIfAvailable: true,
         },
       ],
@@ -69,7 +69,7 @@ describe("resumeUnfinishedJobs", () => {
       {
         ...unfinished,
         source: "youtube",
-        youtubeSourceUrl: "https://www.youtube.com/watch?v=abc",
+        youtubeVideoId: "dQw4w9WgXcQ",
       },
     ]);
 

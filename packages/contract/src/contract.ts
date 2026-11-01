@@ -173,6 +173,21 @@ export type ChatModel = {
   contextTokens: number | null;
   /** Whether a turn may carry images. */
   acceptsImages: boolean;
+  /** The day the provider listed it, as YYYY-MM-DD, when known. */
+  released: string | null;
+  /**
+   * Other ids that name it: OpenRouter's "~anthropic/claude-sonnet-latest"
+   * follows the family's newest model, so config can name a model without
+   * naming a version.
+   */
+  aliases: string[];
+  /**
+   * When it's archived for a newer model from its provider that costs no
+   * more and does as much, that model's id.
+   */
+  replacedBy: string | null;
+  /** The day the provider may retire it, as YYYY-MM-DD, if it's announced. */
+  retires: string | null;
   /**
    * What it charges, or null when that isn't a price per token: a router
    * whose price depends on the model it picks, or a subscription.
@@ -206,7 +221,18 @@ export type Job = {
   /** Only once the job has completed. */
   transcript: string | null;
   error: string | null;
+  /** The video a YouTube job was made from, which the client plays; null otherwise. */
+  youtubeVideoId: string | null;
 };
+
+/**
+ * GET /jobs/transcribe/:audioUploadId/audio: where to fetch the job's audio
+ * from, or null when the server no longer has it. The cloud keeps it for a
+ * while after the job finishes and then removes it (a YouTube job's sooner),
+ * leaving the client's own copy, if it made one. The URL is a signed link from
+ * the cloud server, or a path relative to the local server.
+ */
+export type JobAudio = { url: string | null };
 
 /** A job as the history list shows it, without its transcript. */
 export type JobSummary = {
@@ -239,13 +265,17 @@ export type UploadedAudio = {
   source: "audio" | "video";
 };
 
-/** POST /upload/youtube */
+/** POST /upload/youtube. The cloud picks the transcription model itself. */
 export type QueueYoutubeBody = {
   youtubeUrl: string;
-  /** The server's default when absent. */
-  transcriptModelId?: string;
   /** Use the video's own captions instead of transcribing, when it has them. */
   useCaptionsIfAvailable?: boolean;
+};
+
+/** The local server's POST /upload/youtube, where the user picks the model. */
+export type LocalQueueYoutubeBody = QueueYoutubeBody & {
+  /** The local server's default when absent. */
+  transcriptModelId?: string;
 };
 
 /** What POST /upload/youtube answers with, once the fetch is queued. */

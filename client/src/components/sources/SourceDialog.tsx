@@ -6,6 +6,7 @@ import { useSources } from "../../sources/useSources";
 import { useShell } from "../app/shellContext";
 import { Icon } from "../ui/Icon";
 import { Meter } from "../ui/Meter";
+import { SourcePlayback } from "./SourcePlayback";
 import { useDraftKey } from "./useDraftKey";
 
 function TranscriptBody({
@@ -109,6 +110,8 @@ function TranscriptBody({
           </>
         )}
       </div>
+
+      <SourcePlayback key={job.audioUploadId} job={job} />
 
       <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         {job.status === "failed" ? (

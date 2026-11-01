@@ -20,7 +20,6 @@ async function queue(job: {
   fileName: string;
   mimeType: string;
   sizeBytes: number;
-  transcriptModelId: string;
 }) {
   const confirmed = await uploads.confirm(
     job.userId,
