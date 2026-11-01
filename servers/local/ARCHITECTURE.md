@@ -56,7 +56,8 @@ detected. The transcript is joined into paragraphs, breaking where the
 speaker pauses or at a sentence end once a paragraph passes 500 characters,
 and `transcribeAI` gives up on a run that finishes no segment for ten
 minutes. Models download into `DATA_DIR/models` the first time they're used,
-from Hugging Face.
+from Hugging Face at a fixed commit, and a download whose sha256 isn't the one
+pinned in `ai_transcribe_client.ts` is thrown away (`core/ai/modelFiles.ts`).
 
 ## External dependencies
 

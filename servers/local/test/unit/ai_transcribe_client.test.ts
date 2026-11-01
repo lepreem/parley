@@ -84,7 +84,9 @@ const transcribe = (model = "small") =>
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.decodeAudio.mockResolvedValue(pcmOf(20));
-  mocks.modelFile.mockImplementation(async (name: string) => `/models/${name}`);
+  mocks.modelFile.mockImplementation(
+    async ({ name }: { name: string }) => `/models/${name}`,
+  );
   mocks.loadWhisperModule.mockResolvedValue({});
   mocks.initWhisperVad.mockResolvedValue(fakeVad([{ t0: 0, t1: 2000 }]));
 });
@@ -114,8 +116,12 @@ describe("transcribeAI", () => {
       expect.any(AbortSignal),
     );
     expect(mocks.modelFile).toHaveBeenCalledWith(
-      "ggml-large-v3-turbo.bin",
-      "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo.bin",
+      {
+        name: "ggml-large-v3-turbo.bin",
+        url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-large-v3-turbo.bin",
+        sha256:
+          "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69",
+      },
       expect.any(AbortSignal),
     );
     expect(mocks.initWhisper).toHaveBeenCalledWith({

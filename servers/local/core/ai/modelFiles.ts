@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createWriteStream } from "node:fs";
 import { access, mkdir, rename, rm } from "node:fs/promises";
 import path from "node:path";
@@ -12,15 +12,23 @@ function modelsDir() {
   return path.join(getBaseEnv().DATA_DIR, "models");
 }
 
+/** A model file, and where to get it. */
+export interface ModelSource {
+  name: string;
+  url: string;
+  /** The file's sha256, in hex. A download that doesn't match is thrown away. */
+  sha256: string;
+}
+
 /**
  * The path of the model file `name`, downloaded from `url` the first time it's
  * asked for. The download goes to a file of its own and is renamed into place
- * once complete, so an interrupted one, or two at once, never leave half a
- * model under the real name.
+ * once complete and checked against `sha256`, so an interrupted one, two at
+ * once, or one that isn't the file expected, never leave a model under the
+ * real name.
  */
 export async function modelFile(
-  name: string,
-  url: string,
+  { name, url, sha256 }: ModelSource,
   abortSignal?: AbortSignal,
 ): Promise<string> {
   const target = path.join(modelsDir(), name);
@@ -40,11 +48,24 @@ export async function modelFile(
     if (!response.ok || !response.body) {
       throw new Error(`Downloading ${name} failed: HTTP ${response.status}`);
     }
+    const hash = createHash("sha256");
     await pipeline(
       Readable.fromWeb(response.body as ReadableStream),
+      async function* (chunks: AsyncIterable<Buffer>) {
+        for await (const chunk of chunks) {
+          hash.update(chunk);
+          yield chunk;
+        }
+      },
       createWriteStream(partial),
       ...(abortSignal ? [{ signal: abortSignal }] : []),
     );
+    const actual = hash.digest("hex");
+    if (actual !== sha256) {
+      throw new Error(
+        `Downloaded ${name} isn't the file expected: sha256 ${actual}, not ${sha256}`,
+      );
+    }
     await rename(partial, target);
     return target;
   } finally {

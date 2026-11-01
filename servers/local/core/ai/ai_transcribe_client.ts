@@ -10,7 +10,7 @@ import { logger } from "@parley/server-kit/runtime/logger";
 import { withTimeout } from "@parley/server-kit/runtime/withTimeout";
 import type { TranscriptSegment } from "@parley/server-kit/transcription/transcript";
 import { decodeAudio, pingFfmpeg } from "./decodeAudio";
-import { modelFile } from "./modelFiles";
+import { type ModelSource, modelFile } from "./modelFiles";
 import { type Span, speechOnly } from "./speechOnly";
 
 const log = logger.child({ component: "whisper" });
@@ -22,16 +22,41 @@ const log = logger.child({ component: "whisper" });
  * and voice detection cuts out the silences.
  */
 
+/**
+ * The models come from Hugging Face at a fixed commit, rather than whatever
+ * the repo holds today, and each is checked against the sha256 Hugging Face
+ * lists for it there. Moving to a newer commit means taking the new hashes
+ * from the same place.
+ */
+const WHISPER_REPO =
+  "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1";
+const WHISPER_SHA256: Readonly<Record<string, string>> = {
+  tiny: "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21",
+  base: "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe",
+  small: "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b",
+  medium: "6c14d5adee5f86394037b4e4e8b59f1673b6cee10e3cf0b11bbdbee79c156208",
+  "large-v3-turbo":
+    "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69",
+  "large-v3":
+    "64d182b440b98d5203c4f9bd541544d84c605196c4f7b845dfa11fb23594d1e2",
+};
+
 /** Whisper models, in whisper.cpp's format, by the name the catalog uses. */
-const whisperModel = (id: string) => ({
-  name: `ggml-${id}.bin`,
-  url: `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-${id}.bin`,
-});
+function whisperModel(id: string): ModelSource {
+  const sha256 = WHISPER_SHA256[id];
+  if (!sha256) throw new Error(`No Whisper model "${id}"`);
+  return {
+    name: `ggml-${id}.bin`,
+    url: `${WHISPER_REPO}/ggml-${id}.bin`,
+    sha256,
+  };
+}
 
 /** Silero, the voice detection model whisper.cpp runs. */
-const VAD_MODEL = {
+const VAD_MODEL: ModelSource = {
   name: "ggml-silero-v6.2.0.bin",
-  url: "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v6.2.0.bin",
+  url: "https://huggingface.co/ggml-org/whisper-vad/resolve/9ffd54a1e1ee413ddf265af9913beaf518d1639b/ggml-silero-v6.2.0.bin",
+  sha256: "2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987",
 };
 
 /**
@@ -109,11 +134,10 @@ export async function transcribeAI(
       progressTimeoutMs: BETWEEN_SEGMENTS_TIMEOUT_MS,
     },
     async ({ abortSignal, markProgress }) => {
-      const { name, url } = whisperModel(model);
       const [pcm, vadPath, modelPath] = await Promise.all([
         decodeAudio(audioPath, abortSignal),
-        modelFile(VAD_MODEL.name, VAD_MODEL.url, abortSignal),
-        modelFile(name, url, abortSignal),
+        modelFile(VAD_MODEL, abortSignal),
+        modelFile(whisperModel(model), abortSignal),
         loadWhisper(),
       ]);
 
