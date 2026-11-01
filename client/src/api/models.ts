@@ -1,13 +1,8 @@
-import type {
-  ChatModel,
-  ModelPricing,
-  ModelsResponse,
-  TranscribeModel,
-} from "@parley/contract";
+import type { ChatModel, ModelPricing, ModelsResponse } from "@parley/contract";
 import { apiJson } from "./http";
 import type { Server } from "./server";
 
-export type { ChatModel, ModelPricing, TranscribeModel };
+export type { ChatModel, ModelPricing };
 
 async function fetchModels<T>(server: Server, path: string): Promise<T[]> {
   const data = await apiJson<ModelsResponse<T>>(server, path);
@@ -17,12 +12,6 @@ async function fetchModels<T>(server: Server, path: string): Promise<T[]> {
 
 export function fetchChatModels(server: Server): Promise<ChatModel[]> {
   return fetchModels<ChatModel>(server, "/models/chat");
-}
-
-export function fetchTranscriptionModels(
-  server: Server,
-): Promise<TranscribeModel[]> {
-  return fetchModels<TranscribeModel>(server, "/models/transcription");
 }
 
 /** The model with this id or alias, if it's one of these. */

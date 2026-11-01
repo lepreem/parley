@@ -20,7 +20,6 @@ export const cloudServer: Server = {
   alwaysOn: true,
   uploads: "signed",
   defaultChatModelId: "~openai/gpt-luna-latest",
-  transcribeModelChoice: null,
   // OpenRouter's "~…-latest" ids follow each family's newest model, but only
   // while the provider keeps the family's name: OpenAI's "GPT Mini" became
   // Luna, and its alias stopped moving.
@@ -60,7 +59,6 @@ export const localServer: Server = {
   alwaysOn: false,
   uploads: "direct",
   defaultChatModelId: "sonnet",
-  transcribeModelChoice: { defaultModelId: "small" },
   // Its catalog is a handful of Claude models already.
   recommendedChatModelIds: [],
 };

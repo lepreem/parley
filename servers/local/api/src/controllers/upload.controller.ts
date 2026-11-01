@@ -18,7 +18,6 @@ export async function handleAudioUpload(c: Context) {
   const file: File = c.get(CTX_KEYS.file);
   const fileName: string = c.get(CTX_KEYS.fileName);
   const source = c.get(CTX_KEYS.audioSource);
-  const transcriptModelId = c.get(CTX_KEYS.transcriptModelId);
   const audioUploadId: UploadId = randomUUID();
 
   await files.write(
@@ -31,7 +30,6 @@ export async function handleAudioUpload(c: Context) {
     fileName,
     mimeType: file.type,
     sizeBytes: file.size,
-    transcriptModelId,
   });
 
   return c.json({
@@ -47,7 +45,6 @@ export async function handleAudioUpload(c: Context) {
 export async function handleYoutubeUpload(c: Context) {
   const url = c.get(CTX_KEYS.youtubeUrl);
   const youtubeVideoId = c.get(CTX_KEYS.youtubeVideoId);
-  const transcriptModelId = c.get(CTX_KEYS.transcriptModelId);
   const useCaptionsIfAvailable = c.get(CTX_KEYS.useCaptionsIfAvailable);
 
   const audioUploadId: UploadId = randomUUID();
@@ -63,7 +60,6 @@ export async function handleYoutubeUpload(c: Context) {
     fileName: "YouTube audio",
     mimeType: null,
     sizeBytes: 0,
-    transcriptModelId,
   });
 
   mq.publish(mq.queues.YT_FETCH, {

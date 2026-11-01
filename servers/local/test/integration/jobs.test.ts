@@ -18,7 +18,6 @@ async function createJob() {
     fileName: "YouTube audio",
     mimeType: null,
     sizeBytes: 0,
-    transcriptModelId: "small",
   });
   return audioUploadId;
 }
@@ -180,7 +179,6 @@ describe("audio jobs", () => {
         fileName: "YouTube audio",
         mimeType: null,
         sizeBytes: 0,
-        transcriptModelId: "small",
         youtubeVideoId: "dQw4w9WgXcQ",
         useCaptionsIfAvailable: true,
       });
@@ -191,7 +189,6 @@ describe("audio jobs", () => {
         fileName: "talk.mp3",
         mimeType: "audio/mpeg",
         sizeBytes: 10,
-        transcriptModelId: "small",
       });
       await jobs.claimAudioJob(uploadedJob);
 

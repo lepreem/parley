@@ -1,6 +1,6 @@
 import type {
   QueuedYoutube,
-  LocalQueueYoutubeBody,
+  QueueYoutubeBody,
   UploadedAudio,
   UploadedImage,
 } from "@parley/contract";
@@ -20,7 +20,6 @@ const FORM_KEYS = {
   fileName: "fileName",
   file: "file",
   audioSource: "audioSource",
-  transcriptModelId: "transcriptModelId",
 } as const;
 
 /** A multipart request carrying `file` and the other fields given. */
@@ -104,16 +103,6 @@ export async function deleteImage(
 }
 
 /**
- * A transcription model to send, if the user picked one: the local server's
- * default otherwise. The cloud picks its own and is sent none.
- */
-function modelField(transcriptModelId: string | null): Record<string, string> {
-  return transcriptModelId
-    ? { [FORM_KEYS.transcriptModelId]: transcriptModelId }
-    : {};
-}
-
-/**
  * Speech audio — already extracted from video and compressed by the caller.
  * `source` records what it came from; the transcribe job is queued server-side
  * once the upload is confirmed.
@@ -123,7 +112,6 @@ export async function uploadAudio(
   upload: {
     file: File;
     source: "audio" | "video";
-    transcriptModelId: string | null;
   },
 ): Promise<UploadedAudio> {
   if (server.uploads === "direct") {
@@ -132,7 +120,6 @@ export async function uploadAudio(
       "/upload/audio",
       directUpload(upload.file, {
         [FORM_KEYS.audioSource]: upload.source,
-        ...modelField(upload.transcriptModelId),
       }),
     );
   }
@@ -146,7 +133,6 @@ export async function uploadAudio(
       [FORM_KEYS.uploadId]: uploadId,
       [FORM_KEYS.fileName]: upload.file.name,
       [FORM_KEYS.audioSource]: upload.source,
-      ...modelField(upload.transcriptModelId),
     }),
   );
 }
@@ -155,7 +141,6 @@ export async function uploadAudio(
 export async function requestYoutubeTranscript(
   server: Server,
   youtubeUrl: string,
-  transcriptModelId: string | null,
   useCaptionsIfAvailable: boolean,
 ): Promise<QueuedYoutube> {
   return apiJson<QueuedYoutube>(
@@ -163,8 +148,7 @@ export async function requestYoutubeTranscript(
     "/upload/youtube",
     jsonRequest("POST", {
       youtubeUrl,
-      ...modelField(transcriptModelId),
       useCaptionsIfAvailable,
-    } satisfies LocalQueueYoutubeBody),
+    } satisfies QueueYoutubeBody),
   );
 }

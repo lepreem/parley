@@ -24,9 +24,6 @@ vi.mock("@fugood/whisper.node", () => ({
 }));
 
 import {
-  DEFAULT_TRANSCRIBE_MODEL,
-  isValidTranscribeModel,
-  listTranscribeModels,
   pingTranscribeAI,
   transcribeAI,
 } from "../../core/ai/ai_transcribe_client";
@@ -78,8 +75,7 @@ function fakeVad(spans: { t0: number; t1: number }[]) {
   };
 }
 
-const transcribe = (model = "small") =>
-  transcribeAI(model, "/data/audios/talk");
+const transcribe = () => transcribeAI("/data/audios/talk");
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -101,15 +97,13 @@ describe("pingTranscribeAI", () => {
 });
 
 describe("transcribeAI", () => {
-  it("transcribes the decoded audio with the model's ggml file", async () => {
+  it("transcribes the decoded audio with Whisper Small's ggml file", async () => {
     const whisper = fakeWhisper([
       { segment: { t0: 0, t1: 2000, text: " Hello." } },
     ]);
     mocks.initWhisper.mockResolvedValue(whisper);
 
-    expect(await transcribe("large-v3-turbo")).toEqual([
-      { start: 0, end: 2, text: " Hello." },
-    ]);
+    expect(await transcribe()).toEqual([{ start: 0, end: 2, text: " Hello." }]);
 
     expect(mocks.decodeAudio).toHaveBeenCalledWith(
       "/data/audios/talk",
@@ -117,15 +111,15 @@ describe("transcribeAI", () => {
     );
     expect(mocks.modelFile).toHaveBeenCalledWith(
       {
-        name: "ggml-large-v3-turbo.bin",
-        url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-large-v3-turbo.bin",
+        name: "ggml-small.bin",
+        url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small.bin",
         sha256:
-          "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69",
+          "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b",
       },
       expect.any(AbortSignal),
     );
     expect(mocks.initWhisper).toHaveBeenCalledWith({
-      filePath: "/models/ggml-large-v3-turbo.bin",
+      filePath: "/models/ggml-small.bin",
       useGpu: true,
     });
     expect(whisper.release).toHaveBeenCalled();
@@ -236,27 +230,5 @@ describe("transcribeAI timeouts", () => {
     await failed;
     expect(whisper.stop).toHaveBeenCalled();
     expect(whisper.release).toHaveBeenCalled();
-  });
-});
-
-describe("the model catalog", () => {
-  it("lists the Whisper models by name", async () => {
-    expect((await listTranscribeModels()).map((model) => model.id)).toEqual([
-      "tiny",
-      "base",
-      "small",
-      "medium",
-      "large-v3-turbo",
-      "large-v3",
-    ]);
-  });
-
-  it("accepts a listed model, the default among them", async () => {
-    expect(await isValidTranscribeModel(DEFAULT_TRANSCRIBE_MODEL)).toBe(true);
-    expect(await isValidTranscribeModel("large-v3-turbo")).toBe(true);
-  });
-
-  it("refuses a model it doesn't list", async () => {
-    expect(await isValidTranscribeModel("nova-3-general")).toBe(false);
   });
 });

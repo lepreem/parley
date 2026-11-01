@@ -49,12 +49,6 @@ vi.mock("../../core/data/transcripts.data", async (importActual) => {
   };
 });
 
-vi.mock("../../core/ai/ai_transcribe_client", () => ({
-  DEFAULT_TRANSCRIBE_MODEL: "small",
-  listTranscribeModels: vi.fn(),
-  isValidTranscribeModel: vi.fn(),
-}));
-
 vi.mock("../../core/message-queue/messageQueue", () => {
   const queues = {
     TRANSCRIBE: "transcribe",

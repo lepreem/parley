@@ -66,8 +66,6 @@ export function Composer({
     addYoutube,
     removeSource,
     retrySource,
-    transcriptModelId,
-    setTranscriptModelId,
     useCaptionsIfAvailable,
     setUseCaptionsIfAvailable,
   } = useSources(draftKey);
@@ -164,8 +162,6 @@ export function Composer({
               <AttachMenu
                 onAddFiles={addFiles}
                 onBrowseSources={() => setSourcesOpen(true)}
-                transcriptModelId={transcriptModelId}
-                onTranscriptModelChange={setTranscriptModelId}
                 useCaptionsIfAvailable={useCaptionsIfAvailable}
                 onUseCaptionsChange={setUseCaptionsIfAvailable}
               />

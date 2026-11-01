@@ -5,7 +5,6 @@ import {
   loadWhisperModule,
   toggleNativeLog,
 } from "@fugood/whisper.node";
-import type { TranscribeModel } from "@parley/contract";
 import { logger } from "@parley/server-kit/runtime/logger";
 import { withTimeout } from "@parley/server-kit/runtime/withTimeout";
 import type { TranscriptSegment } from "@parley/server-kit/transcription/transcript";
@@ -23,34 +22,18 @@ const log = logger.child({ component: "whisper" });
  */
 
 /**
- * The models come from Hugging Face at a fixed commit, rather than whatever
- * the repo holds today, and each is checked against the sha256 Hugging Face
- * lists for it there. Moving to a newer commit means taking the new hashes
- * from the same place.
+ * The Whisper model every file is transcribed with, in whisper.cpp's format:
+ * Small, fast enough on a CPU for long audio and accurate enough to
+ * summarize. It comes from Hugging Face at a fixed commit, rather than
+ * whatever the repo holds today, and is checked against the sha256 Hugging
+ * Face lists for it there. Moving to a newer commit, or another model, means
+ * taking the new hash from the same place.
  */
-const WHISPER_REPO =
-  "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1";
-const WHISPER_SHA256: Readonly<Record<string, string>> = {
-  tiny: "be07e048e1e599ad46341c8d2a135645097a538221678b7acdd1b1919c6e1b21",
-  base: "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe",
-  small: "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b",
-  medium: "6c14d5adee5f86394037b4e4e8b59f1673b6cee10e3cf0b11bbdbee79c156208",
-  "large-v3-turbo":
-    "1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69",
-  "large-v3":
-    "64d182b440b98d5203c4f9bd541544d84c605196c4f7b845dfa11fb23594d1e2",
+const WHISPER_MODEL: ModelSource = {
+  name: "ggml-small.bin",
+  url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small.bin",
+  sha256: "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b",
 };
-
-/** Whisper models, in whisper.cpp's format, by the name the catalog uses. */
-function whisperModel(id: string): ModelSource {
-  const sha256 = WHISPER_SHA256[id];
-  if (!sha256) throw new Error(`No Whisper model "${id}"`);
-  return {
-    name: `ggml-${id}.bin`,
-    url: `${WHISPER_REPO}/ggml-${id}.bin`,
-    sha256,
-  };
-}
 
 /** Silero, the voice detection model whisper.cpp runs. */
 const VAD_MODEL: ModelSource = {
@@ -124,7 +107,6 @@ const BETWEEN_SEGMENTS_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
  * order, timed against the original audio. The language is detected.
  */
 export async function transcribeAI(
-  model: string,
   audioPath: string,
 ): Promise<TranscriptSegment[]> {
   return withTimeout(
@@ -137,7 +119,7 @@ export async function transcribeAI(
       const [pcm, vadPath, modelPath] = await Promise.all([
         decodeAudio(audioPath, abortSignal),
         modelFile(VAD_MODEL, abortSignal),
-        modelFile(whisperModel(model), abortSignal),
+        modelFile(WHISPER_MODEL, abortSignal),
         loadWhisper(),
       ]);
 
@@ -175,30 +157,3 @@ export async function transcribeAI(
     },
   );
 }
-
-/**
- * The Whisper models, smallest and fastest first. Larger ones transcribe
- * better and take longer.
- */
-const TRANSCRIBE_MODELS: readonly TranscribeModel[] = [
-  { id: "tiny", name: "Whisper Tiny" },
-  { id: "base", name: "Whisper Base" },
-  { id: "small", name: "Whisper Small" },
-  { id: "medium", name: "Whisper Medium" },
-  { id: "large-v3-turbo", name: "Whisper Large v3 Turbo" },
-  { id: "large-v3", name: "Whisper Large v3" },
-];
-
-export async function listTranscribeModels(): Promise<TranscribeModel[]> {
-  return [...TRANSCRIBE_MODELS];
-}
-
-/** Whether a model id can be used for transcription. */
-export async function isValidTranscribeModel(
-  modelId: string,
-): Promise<boolean> {
-  return TRANSCRIBE_MODELS.some((model) => model.id === modelId);
-}
-
-/** Fast enough on a CPU for long audio, and accurate enough to summarize. */
-export const DEFAULT_TRANSCRIBE_MODEL = "small";

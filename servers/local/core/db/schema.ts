@@ -96,8 +96,6 @@ export const AudioTranscriptionJobs = sqliteTable(
       .default(now)
       .$onUpdate(() => new Date())
       .notNull(),
-    // Model used to transcribe the audio. Null falls back to the default
-    transcriptModelId: text("transcription_model_id"),
   },
   (table) => [
     check("audio_transcription_jobs_status", oneOf(table.status, jobStatuses)),

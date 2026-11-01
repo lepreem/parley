@@ -19,7 +19,6 @@ async function claimedJob() {
     fileName: "talk.mp3",
     mimeType: "audio/mpeg",
     sizeBytes: 5,
-    transcriptModelId: "small",
   });
   const job = await jobs.claimAudioJob(audioUploadId);
   return { audioUploadId, claimToken: job!.claimToken };

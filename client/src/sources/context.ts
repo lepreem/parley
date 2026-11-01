@@ -21,8 +21,6 @@ export type SourcesContextValue = {
   takeDraft: (draftKey: string) => StagedSource[];
   /** Puts a taken draft back when the send it was taken for failed. */
   restoreDraft: (draftKey: string, sources: StagedSource[]) => void;
-  transcriptModelId: string | null;
-  setTranscriptModelId: (modelId: string) => void;
   /** Whether a YouTube video added from now on takes its captions when it has them. */
   useCaptionsIfAvailable: boolean;
   setUseCaptionsIfAvailable: (use: boolean) => void;

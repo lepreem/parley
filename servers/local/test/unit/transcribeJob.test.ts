@@ -25,7 +25,6 @@ vi.mock("../../core/data", () => ({
 }));
 
 vi.mock("../../core/ai/ai_transcribe_client", () => ({
-  DEFAULT_TRANSCRIBE_MODEL: "small",
   transcribeAI: mocks.transcribeAI,
 }));
 
@@ -53,7 +52,6 @@ describe("handleTranscribeJob", () => {
     vi.clearAllMocks();
     mocks.claimAudioJob.mockResolvedValue({
       audioUploadId,
-      transcriptModelId: null,
       claimToken,
     });
     mocks.filePath.mockReturnValue("/data/audios/audio-file");
@@ -95,7 +93,6 @@ describe("handleTranscribeJob", () => {
         uploadId: audioUploadId,
       });
       expect(mocks.transcribeAI).toHaveBeenCalledWith(
-        "small",
         "/data/audios/audio-file",
       );
       expect(mocks.saveCompletedTranscript).toHaveBeenCalledWith(
