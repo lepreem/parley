@@ -24,9 +24,16 @@ import { attachments } from "./attachments.data";
  * of a row means a valid transcript is ready.
  */
 
+/** A transcript as it's stored: what was said, with when, and in what language. */
+type TranscriptToSave = {
+  segments: readonly TranscriptSegment[];
+  /** A BCP-47 tag ("de", "ar-JO"); null when the transcriber named none. */
+  language: string | null;
+};
+
 async function insertTranscript(
   audioUploadId: UploadId,
-  segments: readonly TranscriptSegment[],
+  { segments, language }: TranscriptToSave,
   executor: Executor = db,
 ) {
   const content = transcriptText(segments);
@@ -34,6 +41,7 @@ async function insertTranscript(
     audioUploadId,
     content,
     segments: [...segments],
+    language,
     charCount: content.length,
   });
 }
@@ -45,14 +53,14 @@ async function insertTranscript(
  */
 async function saveCompletedTranscript(
   audioUploadId: UploadId,
-  segments: readonly TranscriptSegment[],
+  transcript: TranscriptToSave,
   claimToken: string,
 ) {
   return db.transaction(async (tx) => {
     const ownsJob = await jobs.completeAudioJob(audioUploadId, claimToken, tx);
     if (!ownsJob) return false;
 
-    await insertTranscript(audioUploadId, segments, tx);
+    await insertTranscript(audioUploadId, transcript, tx);
     return true;
   });
 }

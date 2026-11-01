@@ -1,4 +1,4 @@
-import { transcription } from "./ai";
+import { transcription, type Transcription } from "./ai";
 import { sign } from "./storage";
 import { data } from "./data";
 import { logger } from "@parley/server-kit/runtime/logger";
@@ -58,7 +58,7 @@ type ClaimedJob = NonNullable<
 >;
 
 /** The job's audio, transcribed. */
-async function transcribeAudio(job: ClaimedJob) {
+async function transcribeAudio(job: ClaimedJob): Promise<Transcription> {
   const audioUrl = await sign.url(job.userId, {
     kind: "audio",
     uploadId: job.audioUploadId,
@@ -113,16 +113,19 @@ async function settleFailedJob(
 }
 
 /**
- * Stores a job's transcript: the video's captions when the message carries
- * them (yt_save_captions), otherwise its audio transcribed (transcribe_audio).
+ * Stores a job's transcript, with its language: the video's captions when the
+ * message carries them (yt_save_captions), otherwise its audio transcribed
+ * (transcribe_audio).
  */
 export async function handleTranscribeJob(
   {
     audioUploadId,
     segments: captions,
+    language: captionsLanguage,
   }: {
     audioUploadId: UploadId;
     segments?: TranscriptSegment[];
+    language?: string;
   },
   { attempt, lastAttempt, redelivered }: DeliveryMetadata,
 ) {
@@ -133,7 +136,9 @@ export async function handleTranscribeJob(
     if (!job) return;
     const { claimToken } = job;
 
-    const segments = captions ?? (await transcribeAudio(job));
+    const { segments, language } = captions
+      ? { segments: captions, language: captionsLanguage ?? null }
+      : await transcribeAudio(job);
     if (!segments.some((segment) => segment.text.trim())) {
       throw new NoSpeechError();
     }
@@ -145,7 +150,7 @@ export async function handleTranscribeJob(
 
     const saved = await data.transcripts.saveCompletedTranscript(
       audioUploadId,
-      segments,
+      { segments, language },
       claimToken,
     );
     if (!saved) {

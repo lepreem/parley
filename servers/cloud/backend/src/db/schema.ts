@@ -256,6 +256,9 @@ export const AttachmentTurnReservations = pgTable(
  *   paragraph (transcriptText in @parley/server-kit/transcription/transcript).
  * - segments: what the transcriber heard, with when; null for transcripts
  *   made before timestamps were kept.
+ * - language: the BCP-47 tag of the language it's in ("de", "ar-JO"), as
+ *   Deepgram detected it or the captions were labelled; null for transcripts
+ *   made before it was kept, or when neither named one.
  * - charCount lets a chat turn be budgeted without reading the body.
  */
 export const TranscriptContents = pgTable("transcript_contents", {
@@ -267,6 +270,7 @@ export const TranscriptContents = pgTable("transcript_contents", {
     }),
   content: text("content").notNull(),
   segments: jsonb("segments").$type<TranscriptSegment[]>(),
+  language: text("language"),
   charCount: integer("char_count").notNull(),
 }).enableRLS();
 

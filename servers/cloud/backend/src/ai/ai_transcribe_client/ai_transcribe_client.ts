@@ -28,18 +28,28 @@ async function ping(): Promise<void> {
   await deepgram.auth.v1.tokens.grant();
 }
 
+/** What Deepgram heard in a file, and in what language. */
+export type Transcription = {
+  /** Deepgram's utterances, each a stretch of speech between pauses. */
+  segments: TranscriptSegment[];
+  /** The language Deepgram detected ("de", "ar"); null if it named none. */
+  language: string | null;
+};
+
 /**
- * The audio at `audioUrl`, transcribed: Deepgram's utterances, each a stretch
- * of speech between pauses, with when it was said.
+ * The audio at `audioUrl`, transcribed in the language it's spoken in.
+ * Deepgram detects the language first: without that it assumes English and
+ * turns anything else into English that was never said.
  */
 async function transcribe(
   model: string,
   audioUrl: string,
-): Promise<TranscriptSegment[]> {
+): Promise<Transcription> {
   const response = await deepgram.listen.v1.media.transcribeUrl(
     {
       url: audioUrl,
       model,
+      detect_language: true,
       smart_format: true,
       utterances: true,
     },
@@ -56,11 +66,14 @@ async function transcribe(
     throw new Error("Deepgram returned no transcription results");
   }
 
-  return (response.results.utterances ?? []).map((utterance) => ({
-    start: utterance.start ?? 0,
-    end: utterance.end ?? utterance.start ?? 0,
-    text: utterance.transcript ?? "",
-  }));
+  return {
+    segments: (response.results.utterances ?? []).map((utterance) => ({
+      start: utterance.start ?? 0,
+      end: utterance.end ?? utterance.start ?? 0,
+      text: utterance.transcript ?? "",
+    })),
+    language: response.results.channels[0]?.detected_language || null,
+  };
 }
 
 async function fetchTranscribeModelData(): Promise<TranscribeModelData> {
