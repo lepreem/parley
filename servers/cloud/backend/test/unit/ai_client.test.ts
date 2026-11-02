@@ -35,6 +35,7 @@ vi.mock("@openrouter/sdk", () => ({
 import {
   buildUserTurn,
   chat,
+  NoRoomToReply,
 } from "../../src/ai/ai_chat_client/ai_chat_client";
 
 const MODEL_ID = "openai/gpt-4o-mini";
@@ -44,6 +45,7 @@ const sampleModel = {
   id: MODEL_ID,
   name: "GPT-4o Mini",
   contextTokens: 128000,
+  maxOutputTokens: null,
   acceptsImages: true,
   released: "2024-07-18",
   aliases: [],
@@ -126,6 +128,7 @@ describe("listChatModels", () => {
         id: "vendor/text-only",
         name: "Text only",
         contextTokens: null,
+        maxOutputTokens: null,
         acceptsImages: false,
         released: "2024-07-18",
         aliases: [],
@@ -137,6 +140,7 @@ describe("listChatModels", () => {
         id: "openrouter/auto",
         name: "Auto Router",
         contextTokens: 128000,
+        maxOutputTokens: null,
         acceptsImages: true,
         released: "2024-07-18",
         aliases: [],
@@ -335,7 +339,7 @@ describe("chatAI timeouts", () => {
   });
 
   const TOTAL_TIMEOUT_MS = 8 * 60_000;
-  const FIRST_TOKEN_TIMEOUT_MS = 2 * 60_000;
+  const FIRST_TOKEN_TIMEOUT_MS = 6 * 60_000;
   const BETWEEN_CHUNKS_TIMEOUT_MS = 30_000;
   const TITLE_TIMEOUT_MS = 15_000;
 
@@ -363,7 +367,30 @@ describe("chatAI timeouts", () => {
     await vi.advanceTimersByTimeAsync(FIRST_TOKEN_TIMEOUT_MS - 1);
     expect(outcome.settled).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
-    expect(outcome.value).toEqual(timedOut("No progress within 120000 ms"));
+    expect(outcome.value).toEqual(timedOut("No progress within 360000 ms"));
+  });
+
+  it("fails when the model reaches its ceiling before writing anything", async () => {
+    mockChatSend.mockImplementationOnce(async () =>
+      (async function* () {
+        yield { choices: [{ delta: { content: "" }, finishReason: "length" }] };
+      })(),
+    );
+
+    await expect(streamChat()).rejects.toBeInstanceOf(NoRoomToReply);
+  });
+
+  it("keeps what the model wrote before reaching its ceiling", async () => {
+    mockChatSend.mockImplementationOnce(async () =>
+      (async function* () {
+        yield { choices: [{ delta: { content: "cut " } }] };
+        yield {
+          choices: [{ delta: { content: "off" }, finishReason: "length" }],
+        };
+      })(),
+    );
+
+    await expect(streamChat()).resolves.toBe("cut off");
   });
 
   it("keeps waiting for the first token after an empty chunk", async () => {

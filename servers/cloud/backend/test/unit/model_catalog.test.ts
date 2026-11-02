@@ -20,6 +20,7 @@ function listed(
     canonicalSlug: id,
     created: Date.parse(released) / 1000,
     contextLength: 200_000,
+    topProvider: { isModerated: true },
     architecture: {
       inputModalities: ["text", "image"],
       outputModalities: ["text"],
@@ -65,6 +66,7 @@ describe("offeredModels", () => {
       id: "openai/gpt-6-luna",
       name: "OpenAI: GPT-6 Luna",
       contextTokens: 200_000,
+      maxOutputTokens: null,
       acceptsImages: true,
       released: "2026-09-22",
       aliases: [],
@@ -109,6 +111,20 @@ describe("offeredModels", () => {
       Date.parse("2026-10-31"),
     );
     expect(models[0]?.aliases).toEqual(["~openai/gpt-luna-latest"]);
+  });
+
+  it("carries the most the model can write, when OpenRouter says", () => {
+    const [known, unknown] = offeredModels(
+      [
+        listed("a/known", "2026-09-22", [1, 1], {
+          topProvider: { isModerated: true, maxCompletionTokens: 8_192 },
+        }),
+        listed("a/unknown", "2026-09-22", [1, 1]),
+      ],
+      Date.parse("2026-10-31"),
+    );
+    expect(known?.maxOutputTokens).toBe(8_192);
+    expect(unknown?.maxOutputTokens).toBeNull();
   });
 
   it("leaves out OpenAI's pro reasoning modes, but not other providers' pro models", () => {

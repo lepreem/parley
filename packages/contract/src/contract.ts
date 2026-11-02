@@ -171,6 +171,8 @@ export type ChatModel = {
   name: string;
   /** The longest prompt it takes, in tokens, when known. */
   contextTokens: number | null;
+  /** The most it can write in one go, thinking included, when known. */
+  maxOutputTokens: number | null;
   /** Whether a turn may carry images. */
   acceptsImages: boolean;
   /** The day the provider listed it, as YYYY-MM-DD, when known. */

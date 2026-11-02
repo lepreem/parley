@@ -3,6 +3,7 @@ import {
   MAX_CONTEXT_CHARS,
   MAX_HISTORY_MESSAGES,
   admitHistory,
+  completionTokenCeiling,
   countMessagesInContextWindow,
 } from "../../src/chat/contextWindow";
 
@@ -15,6 +16,17 @@ function turn(name: string, contextCharCount: number, imageCount = 0) {
 }
 
 const tenth = MAX_CONTEXT_CHARS / 10;
+
+describe("completionTokenCeiling", () => {
+  it("leaves room for thinking as well as the reply", () => {
+    expect(completionTokenCeiling(null)).toBe(20_000);
+  });
+
+  it("stays within what the model can write", () => {
+    expect(completionTokenCeiling(8_192)).toBe(8_192);
+    expect(completionTokenCeiling(128_000)).toBe(20_000);
+  });
+});
 
 describe("admitHistory", () => {
   it("admits turns newest first while they fit beside the new one", () => {

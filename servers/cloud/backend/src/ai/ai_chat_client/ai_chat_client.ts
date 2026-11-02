@@ -76,10 +76,21 @@ export function buildUserTurn(
 // reservations. The total stays under CLAIM_LEASE_MS (10 minutes) so the turn
 // can still be persisted afterwards.
 const CHAT_TOTAL_TIMEOUT_MS = 8 * 60 * 1000; // 8 minutes
-// Reasoning models can think for minutes before their first token.
-const CHAT_FIRST_TOKEN_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
+// Reasoning models can think for minutes before their first token: tens of
+// thousands of tokens, at around 100 a second, with room left to write a reply.
+const CHAT_FIRST_TOKEN_TIMEOUT_MS = 6 * 60 * 1000; // 6 minutes
 const CHAT_BETWEEN_CHUNKS_TIMEOUT_MS = 30 * 1000; // 30 seconds
 const TITLE_TIMEOUT_MS = 15 * 1000; // 15 seconds
+
+/** The model reached its token ceiling while thinking, so it wrote nothing. */
+export class NoRoomToReply extends Error {
+  constructor() {
+    super(
+      "The model used up its token limit thinking and wrote no reply. Try again, or pick another model.",
+    );
+    this.name = "NoRoomToReply";
+  }
+}
 
 async function nonStreamChatAI(
   sender: OpenRouter,
@@ -116,11 +127,14 @@ async function streamChatAI(
     throw new Error("Expected a streaming chat response");
 
   let full = "";
+  let reachedCeiling = false;
 
   for await (const chunk of stream) {
     if (chunk.error) throw new Error(chunk.error.message);
 
-    const delta = chunk.choices[0]?.delta?.content;
+    const choice = chunk.choices[0];
+    const delta = choice?.delta?.content;
+    if (choice?.finishReason === "length") reachedCeiling = true;
 
     // Only text counts: a stream can open with an empty chunk and then think
     // silently for longer than the between-chunk limit.
@@ -131,6 +145,7 @@ async function streamChatAI(
     }
   }
 
+  if (reachedCeiling && !full) throw new NoRoomToReply();
   return full;
 }
 

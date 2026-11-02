@@ -172,11 +172,12 @@ import { resetHistoryTextCache } from "../../src/memory/historyText";
 import { resetRateLimits } from "../../src/middleware/rateLimit.middleware";
 import { measurePreparation } from "../../src/preparationMetrics";
 import {
+  completionTokenCeiling,
   MAX_CONTEXT_CHARS,
   MAX_HISTORY_MESSAGES,
-  MAX_RESPONSE_TOKENS,
 } from "../../src/chat/contextWindow";
 import { MAX_TRANSCRIPTS } from "../../src/schema/messages.schema";
+import { NoRoomToReply } from "../../src/ai";
 import {
   authedHeaders,
   guestCookieHeader,
@@ -670,6 +671,21 @@ describe("POST /conversations/:conversationId/messages", () => {
 
     finishGeneration("Summary");
     expect(await response.text()).toContain("event: done");
+  });
+
+  it("says so when the model thought until it had no room to reply", async () => {
+    mockChatAI.mockRejectedValueOnce(new NoRoomToReply());
+
+    const response = await postMessage({
+      messageContent: "A hard question",
+      chosenModelId: modelId,
+    });
+
+    const body = await response.text();
+    expect(body).toContain("event: error");
+    expect(body).toContain("used up its token limit");
+    expect(mockPersistAndUnclaimChatTurn).not.toHaveBeenCalled();
+    expect(mockUnclaimConversationTurn).toHaveBeenCalled();
   });
 
   it("releases reservations when persistence fails after generation", async () => {
@@ -1470,7 +1486,7 @@ describe("POST /conversations/:conversationId/messages", () => {
     const [, turns, opts] = mockChatAI.mock.calls[0];
     const labels = turns.map((t: { content: string }) => t.content.slice(0, 6));
     expect(labels).toEqual(["middle", "newest", "Hi the"]);
-    expect(opts.maxOutputTokens).toBe(MAX_RESPONSE_TOKENS);
+    expect(opts.maxOutputTokens).toBe(completionTokenCeiling(null));
     expect(mockPersistAndUnclaimChatTurn).toHaveBeenCalledWith(
       expect.objectContaining({ contextWindowMessageCount: 4 }),
     );

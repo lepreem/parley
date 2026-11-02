@@ -121,6 +121,7 @@ export function offeredModels(
       id: model.id,
       name: model.name,
       contextTokens: model.contextLength,
+      maxOutputTokens: model.topProvider.maxCompletionTokens ?? null,
       acceptsImages: model.architecture.inputModalities.includes("image"),
       released: new Date(model.created * 1000).toISOString().slice(0, 10),
       aliases: aliases.get(model.id) ?? [],

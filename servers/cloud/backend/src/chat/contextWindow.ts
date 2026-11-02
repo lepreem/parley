@@ -10,7 +10,28 @@ const MAX_CONTEXT_MESSAGES = 50;
 export const MAX_HISTORY_MESSAGES = MAX_CONTEXT_MESSAGES - 1;
 
 export const MAX_CONTEXT_CHARS = 100_000;
-export const MAX_RESPONSE_TOKENS = 4_000;
+
+/** Room for the reply a person reads. */
+const MAX_RESPONSE_TOKENS = 4_000;
+
+/**
+ * Room for thinking on top of it. Providers count a model's thinking against
+ * the same ceiling as its reply, so with no room for it, a model that thinks
+ * hard spends the ceiling doing so and writes nothing.
+ */
+const MAX_THINKING_TOKENS = 16_000;
+
+/**
+ * The ceiling on one turn's completion, thinking and reply together, within
+ * what the model can write. Any unspent thinking room can go to the reply, as
+ * providers don't count the two apart.
+ */
+export function completionTokenCeiling(modelLimit: number | null | undefined) {
+  return Math.min(
+    MAX_RESPONSE_TOKENS + MAX_THINKING_TOKENS,
+    modelLimit ?? Number.POSITIVE_INFINITY,
+  );
+}
 
 /**
  * Images in one prompt, the new turn's included. Attachments outlive the turn

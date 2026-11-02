@@ -10,8 +10,8 @@ import type { messageCreateBodySchema } from "../schema/messages.schema";
 import {
   MAX_CONTEXT_CHARS,
   MAX_HISTORY_MESSAGES,
-  MAX_RESPONSE_TOKENS,
   admitHistory,
+  completionTokenCeiling,
   countMessagesInContextWindow,
 } from "./contextWindow";
 import { memory } from "../memory";
@@ -361,6 +361,8 @@ export async function answerTurn(
       ? titleForFirstTurn(request)
       : Promise.resolve(undefined);
 
+  const model = await chat.findModel(request.chosenModelId);
+
   let assistantContent: string;
   let stopped = false;
   try {
@@ -372,7 +374,7 @@ export async function answerTurn(
           entry.append(delta);
           onDelta(delta);
         },
-        maxOutputTokens: MAX_RESPONSE_TOKENS,
+        maxOutputTokens: completionTokenCeiling(model?.maxOutputTokens),
         sessionId: request.conversationId,
         signal: entry.signal,
         guest: request.guest,
