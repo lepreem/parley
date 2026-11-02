@@ -113,9 +113,6 @@ export const AudioTranscriptionJobs = pgTable(
       .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
-    // What made the transcript, once the job completes: the model the server
-    // picked, or null for a YouTube video's own captions. Null until then.
-    transcriptModelId: text("transcription_model_id"),
   },
   (table) => [
     // findYoutubeTranscript: only a completed job has a transcript to reuse.
@@ -269,8 +266,10 @@ export const AttachmentTurnReservations = pgTable(
  * - segments: what the transcriber heard, with when; null for transcripts
  *   made before timestamps were kept.
  * - language: the BCP-47 tag of the language it's in ("de", "ar-JO"), as
- *   Deepgram detected it or the captions were labelled; null for transcripts
- *   made before it was kept, or when neither named one.
+ *   Deepgram detected it or the captions were labelled; null when neither
+ *   named one.
+ * - fromCaptions: it's a YouTube video's own captions, not its audio
+ *   transcribed, so it's reused only for a request that takes captions.
  * - charCount lets a chat turn be budgeted without reading the body.
  */
 export const TranscriptContents = pgTable("transcript_contents", {
@@ -283,6 +282,7 @@ export const TranscriptContents = pgTable("transcript_contents", {
   content: text("content").notNull(),
   segments: jsonb("segments").$type<TranscriptSegment[]>(),
   language: text("language"),
+  fromCaptions: boolean("from_captions").notNull().default(false),
   charCount: integer("char_count").notNull(),
 }).enableRLS();
 

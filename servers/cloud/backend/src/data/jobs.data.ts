@@ -152,12 +152,6 @@ async function createAudioJob(
     fileName: string;
     mimeType: string | null;
     sizeBytes: number;
-    /**
-     * What made the transcript, for a job created completed with one: the
-     * model, or null for a copy of a video's captions. A queued job has none
-     * until it's transcribed.
-     */
-    transcriptModelId?: string | null;
     youtubeVideoId?: string;
     /** Only for a job whose transcript is written with it. */
     status?: "completed";
@@ -171,7 +165,6 @@ async function createAudioJob(
     fileName,
     mimeType,
     sizeBytes,
-    transcriptModelId = null,
     youtubeVideoId,
     status,
   } = job;
@@ -191,7 +184,6 @@ async function createAudioJob(
     await tx.insert(AudioTranscriptionJobs).values({
       audioUploadId,
       source,
-      transcriptModelId,
       ...(youtubeVideoId !== undefined ? { youtubeVideoId } : {}),
       ...(status !== undefined ? { status } : {}),
     });
@@ -315,18 +307,15 @@ async function claimAudioJob(
 /**
  * A terminal transition belongs only to the latest claimant. Returns false when
  * this worker lost ownership, so its caller can discard the stale result.
- * `transcriptModelId` is what made the transcript: the model, or null for a
- * video's own captions.
  */
 async function completeAudioJob(
   audioUploadId: UploadId,
   claimToken: string,
-  transcriptModelId: string | null,
   executor: Executor = db,
 ) {
   const [row] = await executor
     .update(AudioTranscriptionJobs)
-    .set({ status: "completed", transcriptModelId })
+    .set({ status: "completed" })
     .where(
       and(
         eq(AudioTranscriptionJobs.audioUploadId, audioUploadId),

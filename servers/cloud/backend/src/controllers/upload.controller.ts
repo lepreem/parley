@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import type { QueuedYoutube, UploadedAudio } from "@parley/contract";
-import { transcription } from "../ai";
 import { data } from "../data";
 import { audioTranscription } from "../audioTranscription";
 import { uploads } from "../uploads";
@@ -126,10 +125,7 @@ export const handleYoutubeUpload = authed.createHandlers(
 
     const transcript = await data.transcripts.findYoutubeTranscript(
       youtubeVideoId,
-      {
-        transcriptModelId: await transcription.model(),
-        useCaptionsIfAvailable,
-      },
+      { useCaptionsIfAvailable },
     );
     if (transcript) {
       await data.transcripts.createReusedYoutubeJob(job, transcript);

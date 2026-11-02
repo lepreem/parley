@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNotNull, isNull, or } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import {
   Attachments,
   AudioTranscriptionJobs,
@@ -29,11 +29,13 @@ type TranscriptToSave = {
   segments: readonly TranscriptSegment[];
   /** A BCP-47 tag ("de", "ar-JO"); null when the transcriber named none. */
   language: string | null;
+  /** A YouTube video's own captions, not its audio transcribed. */
+  fromCaptions: boolean;
 };
 
 async function insertTranscript(
   audioUploadId: UploadId,
-  { segments, language }: TranscriptToSave,
+  { segments, language, fromCaptions }: TranscriptToSave,
   executor: Executor = db,
 ) {
   const content = transcriptText(segments);
@@ -42,6 +44,7 @@ async function insertTranscript(
     content,
     segments: [...segments],
     language,
+    fromCaptions,
     charCount: content.length,
   });
 }
@@ -54,16 +57,10 @@ async function insertTranscript(
 async function saveCompletedTranscript(
   audioUploadId: UploadId,
   transcript: TranscriptToSave,
-  transcriptModelId: string | null,
   claimToken: string,
 ) {
   return db.transaction(async (tx) => {
-    const ownsJob = await jobs.completeAudioJob(
-      audioUploadId,
-      claimToken,
-      transcriptModelId,
-      tx,
-    );
+    const ownsJob = await jobs.completeAudioJob(audioUploadId, claimToken, tx);
     if (!ownsJob) return false;
 
     await insertTranscript(audioUploadId, transcript, tx);
@@ -77,40 +74,18 @@ async function saveCompletedTranscript(
  * matches YouTube transcripts, the text of a public video, and the caller
  * copies it into a job of its own rather than linking anyone to this one.
  *
- * Only a transcript the request would have made itself: one by the model the
- * server transcribes with now, or when it takes captions, the video's
- * captions too. A transcript by a model must have its language: one without
- * was made before Deepgram was asked to detect it, and may be English that
- * was never said.
+ * The video's captions are only for a request that takes them.
  */
 async function findYoutubeTranscript(
   youtubeVideoId: string,
-  {
-    transcriptModelId,
-    useCaptionsIfAvailable,
-  }: { transcriptModelId: string | undefined; useCaptionsIfAvailable: boolean },
+  { useCaptionsIfAvailable }: { useCaptionsIfAvailable: boolean },
 ) {
-  const madeByModel = transcriptModelId
-    ? and(
-        eq(AudioTranscriptionJobs.transcriptModelId, transcriptModelId),
-        isNotNull(TranscriptContents.language),
-      )
-    : undefined;
-  const madeFromCaptions = useCaptionsIfAvailable
-    ? isNull(AudioTranscriptionJobs.transcriptModelId)
-    : undefined;
-  const madeAsAsked =
-    madeByModel && madeFromCaptions
-      ? or(madeByModel, madeFromCaptions)
-      : (madeByModel ?? madeFromCaptions);
-  if (!madeAsAsked) return null;
-
   const [row] = await db
     .select({
-      transcriptModelId: AudioTranscriptionJobs.transcriptModelId,
       content: TranscriptContents.content,
       segments: TranscriptContents.segments,
       language: TranscriptContents.language,
+      fromCaptions: TranscriptContents.fromCaptions,
       charCount: TranscriptContents.charCount,
     })
     .from(AudioTranscriptionJobs)
@@ -125,7 +100,9 @@ async function findYoutubeTranscript(
       and(
         eq(AudioTranscriptionJobs.youtubeVideoId, youtubeVideoId),
         eq(AudioTranscriptionJobs.status, "completed"),
-        madeAsAsked,
+        useCaptionsIfAvailable
+          ? undefined
+          : eq(TranscriptContents.fromCaptions, false),
       ),
     )
     .limit(1);
@@ -140,21 +117,14 @@ type ReusableTranscript = NonNullable<
 /**
  * A YouTube job that starts out completed, with a copy of a transcript the
  * video already has, in one transaction. Nothing is fetched or transcribed
- * for it, so no audio is recorded for it either. It says what made the copy,
- * not what the request asked for.
+ * for it, so no audio is recorded for it either.
  */
 async function createReusedYoutubeJob(
-  job: Omit<
-    Parameters<typeof jobs.createAudioJob>[0],
-    "status" | "transcriptModelId"
-  >,
-  { transcriptModelId, ...transcript }: ReusableTranscript,
+  job: Omit<Parameters<typeof jobs.createAudioJob>[0], "status">,
+  transcript: ReusableTranscript,
 ) {
   await db.transaction(async (tx) => {
-    await jobs.createAudioJob(
-      { ...job, transcriptModelId, status: "completed" },
-      tx,
-    );
+    await jobs.createAudioJob({ ...job, status: "completed" }, tx);
     await tx.insert(TranscriptContents).values({
       audioUploadId: job.audioUploadId,
       ...transcript,
