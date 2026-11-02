@@ -48,7 +48,6 @@ async function writtenMessage() {
     fileName: "talk.mp3",
     mimeType: "audio/mpeg",
     sizeBytes: 5,
-    transcriptModelId: "small",
   });
   const job = await jobs.claimAudioJob(audioUploadId);
   await transcripts.saveCompletedTranscript(

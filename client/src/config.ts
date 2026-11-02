@@ -19,17 +19,16 @@ export const cloudServer: Server = {
   appPath: "/chat",
   alwaysOn: true,
   uploads: "signed",
-  defaultChatModelId: "openai/gpt-4o-mini",
-  defaultTranscribeModelId: "nova-3-general",
-  // OpenRouter's "~…-latest" ids follow each family's newest model, so this
-  // list doesn't go stale as models are released.
+  defaultChatModelId: "~openai/gpt-luna-latest",
+  // OpenRouter's "~…-latest" ids follow each family's newest model, but only
+  // while the provider keeps the family's name: OpenAI's "GPT Mini" became
+  // Luna, and its alias stopped moving.
   recommendedChatModelIds: [
-    "openai/gpt-4o-mini",
+    "~openai/gpt-luna-latest",
     "~anthropic/claude-sonnet-latest",
     "~anthropic/claude-haiku-latest",
     "~google/gemini-pro-latest",
     "~google/gemini-flash-latest",
-    "~openai/gpt-mini-latest",
     "~deepseek/deepseek-flash-latest",
   ],
 };
@@ -60,7 +59,6 @@ export const localServer: Server = {
   alwaysOn: false,
   uploads: "direct",
   defaultChatModelId: "sonnet",
-  defaultTranscribeModelId: "small",
   // Its catalog is a handful of Claude models already.
   recommendedChatModelIds: [],
 };
@@ -75,6 +73,10 @@ export function authMeEndpoint(): string {
 
 export function authRefreshEndpoint(): string {
   return `${cloudServer.baseUrl}/auth/refresh`;
+}
+
+export function authGuestEndpoint(): string {
+  return `${cloudServer.baseUrl}/auth/guest`;
 }
 
 export function authLogoutEndpoint(): string {

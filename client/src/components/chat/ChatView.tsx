@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, type DragEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   CHARS_PER_TOKEN,
+  findChatModel,
   meetsRequirements,
   resolveDefaultModel,
   type MessageRequirements,
@@ -9,6 +10,7 @@ import {
 import { useServerReady } from "../../hooks/server/useServerReady";
 import { useChatModelsQuery } from "../../hooks/queries/useModelsQuery";
 import { useServer } from "../../hooks/server/useServer";
+import { useIsGuest } from "../../hooks/auth/useIsGuest";
 import { sectionPath } from "../app/sections";
 import { MAX_CONTEXT_MESSAGES } from "../../api/messages";
 import { useMessagesQuery } from "../../hooks/queries/useMessagesQuery";
@@ -57,6 +59,7 @@ export function ChatView() {
   const navigate = useNavigate();
   const server = useServer();
   const ready = useServerReady();
+  const guest = useIsGuest();
   const draftKey = conversationId ?? NEW_CHAT_KEY;
 
   // Drafts are per chat: switching away and back keeps what you were writing,
@@ -120,17 +123,22 @@ export function ChatView() {
   }, [history, sources, text]);
 
   // Requirements narrow the list, so a pick made earlier can fall out of it.
-  const eligibleIds = useMemo(
+  const eligible = useMemo(
     () =>
-      chatModels.models
-        .filter((model) => meetsRequirements(model, requirements))
-        .map((model) => model.id),
+      chatModels.models.filter((model) =>
+        meetsRequirements(model, requirements),
+      ),
     [chatModels.models, requirements],
   );
+  const eligibleIds = eligible.map((model) => model.id);
+  // The default may name a model by alias, to follow its newest.
+  const defaultId =
+    findChatModel(eligible, server.defaultChatModelId)?.id ??
+    server.defaultChatModelId;
   const modelId =
     modelPick && eligibleIds.includes(modelPick)
       ? modelPick
-      : resolveDefaultModel(eligibleIds, server.defaultChatModelId);
+      : resolveDefaultModel(eligibleIds, defaultId);
 
   const replyInProgress = messagesQuery.data?.replyInProgress ?? null;
   const pending = conversationId
@@ -193,8 +201,9 @@ export function ChatView() {
     });
   };
 
+  // Guests chat in text only, so a dropped file is left to the browser.
   const handleDragEnter = (event: DragEvent) => {
-    if (!event.dataTransfer.types.includes("Files")) return;
+    if (guest || !event.dataTransfer.types.includes("Files")) return;
     dragDepth.current += 1;
     setDragging(true);
   };
@@ -203,6 +212,7 @@ export function ChatView() {
     if (dragDepth.current === 0) setDragging(false);
   };
   const handleDrop = (event: DragEvent) => {
+    if (guest) return;
     event.preventDefault();
     dragDepth.current = 0;
     setDragging(false);
@@ -214,7 +224,8 @@ export function ChatView() {
       className="relative flex min-h-0 flex-1 flex-col"
       onDragEnter={handleDragEnter}
       onDragOver={(event) => {
-        if (event.dataTransfer.types.includes("Files")) event.preventDefault();
+        if (!guest && event.dataTransfer.types.includes("Files"))
+          event.preventDefault();
       }}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}

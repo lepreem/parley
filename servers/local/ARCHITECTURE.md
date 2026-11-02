@@ -29,6 +29,11 @@ row first, then the file. Whatever a crash leaves between the two, and audio a
 YouTube fetch writes for a job deleted while it ran, is a file no row uses:
 startup removes those before anything else runs.
 
+A job's audio stays as long as the job does. The client plays it from the
+path `GET /jobs/transcribe/:audioUploadId/audio` answers with,
+`/jobs/transcribe/:audioUploadId/audio/file`, or from its own copy in the
+browser, and plays a YouTube job's video from YouTube.
+
 The client reads an image from `GET /upload/image/:imageUploadId`. The model is
 handed it inline, base64-encoded in the prompt (`chatImageInput`).
 
@@ -46,18 +51,22 @@ names the program when it isn't on PATH.
 
 ## Transcription
 
-Audio is transcribed on this machine by faster-whisper, in
-`core/ai/whisper.py`, which uv runs with the dependencies the script declares
-(`uv run --script`). The script prints each segment as it's transcribed;
-`transcribeAI` joins them into paragraphs, breaking where the speaker pauses
-or at a sentence end once a paragraph passes 500 characters, and gives up on
-a run that prints nothing for ten minutes. Models download into
-`DATA_DIR/models` the first time they're used, from Hugging Face. The build
-copies the script next to the bundle.
+Audio is transcribed on this machine by whisper.cpp, through the
+`@fugood/whisper.node` binding, whose prebuilt build for this platform npm
+installs (Metal on Apple Silicon, the CPU elsewhere). ffmpeg, from
+`ffmpeg-static`, decodes the file to 16kHz PCM (`core/ai/decodeAudio.ts`);
+Silero voice detection finds the speech, and only that is transcribed, with
+times mapped back to the original (`core/ai/speechOnly.ts`). The language is
+detected. The transcript is joined into paragraphs, breaking where the
+speaker pauses or at a sentence end once a paragraph passes 500 characters,
+and `transcribeAI` gives up on a run that finishes no segment for ten
+minutes. Models download into `DATA_DIR/models` the first time they're used,
+from Hugging Face at a fixed commit, and a download whose sha256 isn't the one
+pinned in `ai_transcribe_client.ts` is thrown away (`core/ai/modelFiles.ts`).
 
 ## External dependencies
 
-The programs the API runs: Claude Code (logged in), uv and yt-dlp. It runs a
+The programs the API runs: Claude Code (logged in), ffmpeg and yt-dlp, and it loads the whisper.cpp binding. It runs a
 **fail-fast preflight** on boot (`startup.ts` → `verifyServices`): if any of
 them can't run, it aborts instead of starting half-alive.
 

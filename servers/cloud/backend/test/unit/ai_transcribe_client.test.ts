@@ -26,10 +26,9 @@ vi.mock("../../src/memory/modelLists", async (importOriginal) => ({
 const runFetch = <T>(_name: unknown, fetch: () => Promise<T>) => fetch();
 
 import {
-  DEFAULT_TRANSCRIBE_MODEL,
   getTranscribeModelData,
   transcription,
-} from "../../src/ai/ai_transcribe_client";
+} from "../../src/ai/ai_transcribe_client/ai_transcribe_client";
 
 const sttResponse = {
   stt: [
@@ -49,10 +48,10 @@ const sttResponse = {
 };
 
 describe("transcribe", () => {
-  it("answers Deepgram's utterances as segments", async () => {
+  it("answers Deepgram's utterances as segments, in the language it detected", async () => {
     mockTranscribeUrl.mockResolvedValue({
       results: {
-        channels: [],
+        channels: [{ detected_language: "de" }],
         utterances: [
           { start: 0.5, end: 2, transcript: "Hello there." },
           { start: 4, end: 5.25, transcript: "Next." },
@@ -62,26 +61,30 @@ describe("transcribe", () => {
 
     expect(
       await transcription.transcribe("nova-3-general", "https://audio"),
-    ).toEqual([
-      { start: 0.5, end: 2, text: "Hello there." },
-      { start: 4, end: 5.25, text: "Next." },
-    ]);
+    ).toEqual({
+      segments: [
+        { start: 0.5, end: 2, text: "Hello there." },
+        { start: 4, end: 5.25, text: "Next." },
+      ],
+      language: "de",
+    });
     expect(mockTranscribeUrl).toHaveBeenCalledWith(
       expect.objectContaining({
         url: "https://audio",
         model: "nova-3-general",
+        detect_language: true,
         utterances: true,
       }),
       expect.anything(),
     );
   });
 
-  it("is empty when nothing was said", async () => {
+  it("is empty, in no language, when nothing was said", async () => {
     mockTranscribeUrl.mockResolvedValue({ results: { channels: [] } });
 
     expect(
       await transcription.transcribe("nova-3-general", "https://audio"),
-    ).toEqual([]);
+    ).toEqual({ segments: [], language: null });
   });
 });
 
@@ -110,8 +113,8 @@ describe("getTranscribeModelData", () => {
     const data = await getTranscribeModelData();
 
     expect(mockModelsList).toHaveBeenCalledTimes(1);
-    // Keyed by canonical_name.
-    expect(Object.keys(data)).toEqual(["nova-3-general", "nova-2-general"]);
+    // Keyed by canonical_name; nova-2-general doesn't say it serves batch.
+    expect(Object.keys(data)).toEqual(["nova-3-general"]);
     expect(data["nova-3-general"]).toMatchObject({
       name: "general",
       canonicalName: "nova-3-general",
@@ -120,54 +123,14 @@ describe("getTranscribeModelData", () => {
   });
 });
 
-describe("listTranscribeModels", () => {
+describe("model", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetOrSetCache.mockImplementation(runFetch);
     mockModelsList.mockResolvedValue(sttResponse);
   });
 
-  it("lists the offered models the catalog has, by canonical name", async () => {
-    expect(await transcription.listModels()).toEqual([
-      { id: "nova-3-general", name: "Nova 3" },
-      { id: "nova-2-general", name: "Nova 2" },
-    ]);
-  });
-
-  it("leaves out catalog models that aren't offered", async () => {
-    mockModelsList.mockResolvedValue({
-      stt: [
-        ...sttResponse.stt,
-        { name: "drivethru", canonical_name: "nova-2-drivethru", uuid: "u3" },
-      ],
-    });
-    const ids = (await transcription.listModels()).map((model) => model.id);
-    expect(ids).not.toContain("nova-2-drivethru");
-  });
-});
-
-describe("isValidTranscribeModel", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockGetOrSetCache.mockImplementation(runFetch);
-    mockModelsList.mockResolvedValue(sttResponse);
-  });
-
-  it("accepts a model by its canonical_name", async () => {
-    expect(await transcription.isValidModel("nova-3-general")).toBe(true);
-  });
-
-  it("rejects a display name, which repeats across generations", async () => {
-    expect(await transcription.isValidModel("general")).toBe(false);
-  });
-
-  it("accepts the default when display names differ from model IDs", async () => {
-    expect(await transcription.isValidModel(DEFAULT_TRANSCRIBE_MODEL)).toBe(
-      true,
-    );
-  });
-
-  it("rejects an offered model that is not in the catalog", async () => {
-    expect(await transcription.isValidModel("whisper-large")).toBe(false);
+  it("is Deepgram's current general model, by its canonical_name", async () => {
+    expect(await transcription.model()).toBe("nova-3-general");
   });
 });

@@ -54,6 +54,23 @@ export function setAuthCookies(
 }
 
 /**
+ * A guest has no refresh token, only the session cookie. It's kept for as
+ * long as the session lasts, closed browser or not: losing it loses the
+ * guest's chats.
+ */
+export function setGuestCookie(
+  c: Context,
+  token: string,
+  maxAgeSeconds: number,
+): void {
+  const { session } = AUTH_COOKIES;
+  setCookie(c, session.name, token, {
+    ...sessionCookieOptions(session.path),
+    maxAge: maxAgeSeconds,
+  });
+}
+
+/**
  * The attributes have to match the ones the cookie was set with, or the
  * browser treats this as a different cookie and keeps the original.
  */

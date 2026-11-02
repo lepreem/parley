@@ -10,7 +10,10 @@ import handlers
 from contract import QueueName, _Queues, contract
 
 MAX_BYTES = 1000
-CAPTIONS = [{"start": 0.0, "end": 1.5, "text": "the captions"}]
+CAPTIONS = {
+    "segments": [{"start": 0.0, "end": 1.5, "text": "the captions"}],
+    "language": "de",
+}
 
 
 @pytest.fixture(autouse=True)
@@ -179,7 +182,7 @@ class TestHandleYtFetchCaptions:
         audio_fetch.assert_not_called()
         publish.assert_called_once_with(
             QueueName("yt_save_captions"),
-            {"audioUploadId": "u1", "segments": CAPTIONS},
+            {"audioUploadId": "u1", **CAPTIONS},
         )
 
     def test_unavailable_captions_queue_the_audio_fetch(self, publish, monkeypatch):
@@ -308,14 +311,16 @@ class TestMalformedPayloads:
 
 
 class TestFetchCaptions:
-    def test_returns_the_first_available_caption_track(self, monkeypatch):
+    def test_returns_the_first_available_caption_track_and_its_language(
+        self, monkeypatch
+    ):
         fetched_transcript = [
             SimpleNamespace(text="First caption", start=0.5, duration=2.0),
             SimpleNamespace(text="  ", start=2.5, duration=1.0),
             SimpleNamespace(text="  Second caption  ", start=3.0, duration=1.5),
         ]
         selected_transcript = SimpleNamespace(
-            language_code="en",
+            language_code="de",
             fetch=MagicMock(return_value=fetched_transcript),
         )
         transcript_api = MagicMock()
@@ -323,13 +328,16 @@ class TestFetchCaptions:
         monkeypatch.setattr(
             handlers, "YouTubeTranscriptApi", MagicMock(return_value=transcript_api)
         )
-        segments = handlers._fetch_captions("https://youtu.be/dQw4w9WgXcQ")
+        captions = handlers._fetch_captions("https://youtu.be/dQw4w9WgXcQ")
 
         transcript_api.list.assert_called_once_with("dQw4w9WgXcQ")
-        assert segments == [
-            {"start": 0.5, "end": 2.5, "text": "First caption"},
-            {"start": 3.0, "end": 4.5, "text": "Second caption"},
-        ]
+        assert captions == {
+            "segments": [
+                {"start": 0.5, "end": 2.5, "text": "First caption"},
+                {"start": 3.0, "end": 4.5, "text": "Second caption"},
+            ],
+            "language": "de",
+        }
 
     def test_empty_caption_track_is_none(self, monkeypatch):
         selected_transcript = SimpleNamespace(

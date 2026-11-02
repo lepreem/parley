@@ -16,7 +16,7 @@
 # - Every container has a memory limit, so one runaway process can't starve
 #   the rest of the box, which other projects share.
 
-x-cloud-image: &cloud-image ghcr.io/abdelrahman-qazzaz/parley-cloud:${IMAGE_TAG:?set IMAGE_TAG}
+x-cloud-image: &cloud-image ghcr.io/lepreem/parley-cloud:${IMAGE_TAG:?set IMAGE_TAG}
 
 services:
   rabbitmq:
@@ -55,7 +55,7 @@ services:
 
   youtube-fetcher:
     build: !reset null
-    image: ghcr.io/abdelrahman-qazzaz/parley-youtube-fetcher:${IMAGE_TAG:?set IMAGE_TAG}
+    image: ghcr.io/lepreem/parley-youtube-fetcher:${IMAGE_TAG:?set IMAGE_TAG}
     environment:
       # The API's fixed port, above, whatever PORT the environment carries.
       - API_BASE_URL=http://api:3001

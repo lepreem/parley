@@ -1,6 +1,7 @@
 import { data } from "./data";
 import { logger } from "@parley/server-kit/runtime/logger";
 import { UPLOAD_CONFIRM_WINDOW_MS, uploads } from "./uploads";
+import { GUEST_SESSION_SECONDS } from "./auth/guestToken";
 
 const log = logger.child({ component: "sweeper" });
 
@@ -10,14 +11,20 @@ const log = logger.child({ component: "sweeper" });
  * window has long finished before the sweep can act on the same object.
  */
 const GRACE_MS = UPLOAD_CONFIRM_WINDOW_MS * 1.5;
+/**
+ * How long a finished job's uploaded audio stays on the server, for playing it
+ * back from another device. The client keeps its own copy for after that.
+ * Long enough, too, to replay a failed job's dead-lettered message by hand.
+ */
+const AUDIO_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const BATCH_SIZE = 500;
 const INTERVAL_MS = 60 * 60 * 1000;
 const LOCK_NAME = "storage-sweep";
 
 /**
- * Removes one batch of objects nothing uses — uploads never confirmed, and
- * objects marked deleted whose removal didn't finish — once they're past the
- * grace. Each object leaves storage before its record does, so a crash
+ * Removes one batch of objects nothing uses — uploads never confirmed, objects
+ * marked deleted whose removal didn't finish, and audio no job needs any more
+ * (markFinishedAudioDeleted) — once they're past the grace. Each object leaves storage before its record does, so a crash
  * mid-sweep leaves records to retry, never unrecorded objects.
  *
  * Returns how many were removed, or undefined when another process holds the
@@ -28,6 +35,12 @@ const LOCK_NAME = "storage-sweep";
  */
 async function sweepUnusedObjects() {
   return data.advisoryLock.withAdvisoryLock(LOCK_NAME, async () => {
+    const expired = await data.storageLedger.markFinishedAudioDeleted(
+      new Date(Date.now() - AUDIO_RETENTION_MS),
+    );
+    if (expired > 0)
+      log.info("Marked finished jobs' audio deleted", { expired });
+
     const objects = await data.storageLedger.findLedgerEntries({
       statuses: ["pending", "deleted"],
       createdBefore: new Date(Date.now() - GRACE_MS),
@@ -63,6 +76,25 @@ async function sweepUnusedObjects() {
 }
 
 /**
+ * A day past the longest a guest session lasts, so a guest still signed in
+ * is never swept, whatever the clocks.
+ */
+const GUEST_LIFETIME_MS = (GUEST_SESSION_SECONDS + 24 * 60 * 60) * 1000;
+
+/**
+ * Deletes guests whose sessions have all ended, and what they made. They
+ * own nothing in storage (guests chat in text only), so there's nothing to
+ * remove there first. Returns how many were deleted.
+ */
+async function sweepExpiredGuests() {
+  const deleted = await data.users.deleteGuestsCreatedBefore(
+    new Date(Date.now() - GUEST_LIFETIME_MS),
+  );
+  if (deleted > 0) log.info("Swept expired guests", { deleted });
+  return deleted;
+}
+
+/**
  * Sweeps now and then every interval. The returned function stops the
  * schedule and waits for a sweep in progress. A run still going when the next
  * is due is left to finish rather than joined by a second one.
@@ -72,9 +104,13 @@ function schedule(intervalMs = INTERVAL_MS) {
 
   const run = () => {
     if (inFlight) return;
-    inFlight = sweepUnusedObjects()
+    inFlight = Promise.all([
+      sweepUnusedObjects().catch((error) => log.error("Sweep failed", error)),
+      sweepExpiredGuests().catch((error) =>
+        log.error("Guest sweep failed", error),
+      ),
+    ])
       .then(() => undefined)
-      .catch((error) => log.error("Sweep failed", error))
       .finally(() => {
         inFlight = undefined;
       });
@@ -92,4 +128,5 @@ function schedule(intervalMs = INTERVAL_MS) {
 export const sweeper = {
   schedule,
   sweepUnusedObjects,
+  sweepExpiredGuests,
 };

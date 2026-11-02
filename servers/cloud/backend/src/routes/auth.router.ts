@@ -3,6 +3,7 @@ import * as authController from "../controllers/auth.controller";
 import { requireAuth } from "../middleware/auth.middleware";
 import {
   authCallbackRateLimiter,
+  authGuestRateLimiter,
   authLoginRateLimiter,
   authLogoutRateLimiter,
   authMeRateLimiter,
@@ -27,5 +28,11 @@ authRouter.post(
   "/refresh",
   authRefreshRateLimiter,
   authController.handleRefresh,
+);
+authRouter.get("/guest", authMeRateLimiter, authController.handleGuestStatus);
+authRouter.post(
+  "/guest",
+  authGuestRateLimiter,
+  authController.handleGuestSignIn,
 );
 authRouter.post("/logout", authLogoutRateLimiter, authController.handleLogout);

@@ -1,5 +1,12 @@
 import { COOKIE_KEYS } from "../../src/cookies/session";
+import { signGuestToken } from "../../src/auth/guestToken";
 import { signAccessToken } from "./accessTokens";
+
+/** A session cookie for a guest, signed as the server signs one. */
+export async function guestCookieHeader(guestUserId: string): Promise<string> {
+  const { token } = await signGuestToken(guestUserId);
+  return `${COOKIE_KEYS.session}=${token}`;
+}
 
 export async function sessionCookieHeader(
   userId: string,

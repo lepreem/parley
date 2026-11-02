@@ -36,6 +36,27 @@
       "when": 1792788563983,
       "tag": "0004_immutable_messages",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793269926893,
+      "tag": "0005_tolerate_owner_change",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793352363482,
+      "tag": "0006_youtube_video_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793507605526,
+      "tag": "0007_transcript_language",
+      "breakpoints": true
     }
   ]
 }

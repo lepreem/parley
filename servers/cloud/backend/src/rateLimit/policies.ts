@@ -22,6 +22,7 @@ type RateLimitPolicy = {
 };
 
 const FIFTEEN_MINUTES_MS = 15 * 60 * 1000;
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 export const RATE_LIMIT_POLICIES = {
   authLogin: { limit: 60, windowMs: FIFTEEN_MINUTES_MS, key: "clientIp" },
@@ -30,6 +31,8 @@ export const RATE_LIMIT_POLICIES = {
   authMe: { limit: 200, windowMs: FIFTEEN_MINUTES_MS, key: "clientIp" },
   /** Each signed-in user refreshes every few minutes, so this sits with /me. */
   authRefresh: { limit: 200, windowMs: FIFTEEN_MINUTES_MS, key: "clientIp" },
+  /** Starting a guest session makes a user row, and nothing else. */
+  authGuest: { limit: 10, windowMs: FIFTEEN_MINUTES_MS, key: "clientIp" },
 
   job: { limit: 100, windowMs: FIFTEEN_MINUTES_MS, key: "userId" },
   conversation: { limit: 100, windowMs: FIFTEEN_MINUTES_MS, key: "userId" },
@@ -40,6 +43,13 @@ export const RATE_LIMIT_POLICIES = {
    * can't use up a user's turns and turns aren't only bounded by reads.
    */
   chatTurn: { limit: 50, windowMs: FIFTEEN_MINUTES_MS, key: "userId" },
+  /**
+   * Guests' turns, on top of chatTurn, and by address: a new guest is one
+   * click away, so a per-user budget wouldn't hold anyone to it. What stops
+   * guest spending for good is the credit limit on OPENROUTER_GUEST_API_KEY;
+   * this keeps one address from using all of it.
+   */
+  guestChatTurn: { limit: 10, windowMs: ONE_DAY_MS, key: "clientIp" },
   model: { limit: 100, windowMs: FIFTEEN_MINUTES_MS, key: "userId" },
 
   /**

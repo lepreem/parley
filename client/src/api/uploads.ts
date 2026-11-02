@@ -20,7 +20,6 @@ const FORM_KEYS = {
   fileName: "fileName",
   file: "file",
   audioSource: "audioSource",
-  transcriptModelId: "transcriptModelId",
 } as const;
 
 /** A multipart request carrying `file` and the other fields given. */
@@ -113,7 +112,6 @@ export async function uploadAudio(
   upload: {
     file: File;
     source: "audio" | "video";
-    transcriptModelId: string;
   },
 ): Promise<UploadedAudio> {
   if (server.uploads === "direct") {
@@ -122,7 +120,6 @@ export async function uploadAudio(
       "/upload/audio",
       directUpload(upload.file, {
         [FORM_KEYS.audioSource]: upload.source,
-        [FORM_KEYS.transcriptModelId]: upload.transcriptModelId,
       }),
     );
   }
@@ -136,7 +133,6 @@ export async function uploadAudio(
       [FORM_KEYS.uploadId]: uploadId,
       [FORM_KEYS.fileName]: upload.file.name,
       [FORM_KEYS.audioSource]: upload.source,
-      [FORM_KEYS.transcriptModelId]: upload.transcriptModelId,
     }),
   );
 }
@@ -145,14 +141,14 @@ export async function uploadAudio(
 export async function requestYoutubeTranscript(
   server: Server,
   youtubeUrl: string,
-  transcriptModelId: string,
+  useCaptionsIfAvailable: boolean,
 ): Promise<QueuedYoutube> {
   return apiJson<QueuedYoutube>(
     server,
     "/upload/youtube",
     jsonRequest("POST", {
       youtubeUrl,
-      [FORM_KEYS.transcriptModelId]: transcriptModelId,
+      useCaptionsIfAvailable,
     } satisfies QueueYoutubeBody),
   );
 }

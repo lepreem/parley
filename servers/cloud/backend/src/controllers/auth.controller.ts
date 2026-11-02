@@ -1,12 +1,23 @@
 import type { Context } from "hono";
 import { getCookie } from "hono/cookie";
 
-import { getEnv } from "../env";
+import { getEnv, guestChatEnabled } from "../env";
 import { workos } from "../auth/auth";
 import { readAccessTokenExpiry, verifyAccessToken } from "../auth/accessToken";
+import {
+  GUEST_SESSION_SECONDS,
+  isGuestToken,
+  newGuestUserId,
+  signGuestToken,
+  verifyGuestToken,
+} from "../auth/guestToken";
 import { refreshSession } from "../auth/refreshSession";
-import { clearAuthCookies, setAuthCookies } from "../cookies/session";
-import { authed } from "../middleware/auth.middleware";
+import {
+  clearAuthCookies,
+  setAuthCookies,
+  setGuestCookie,
+} from "../cookies/session";
+import { authed, verifySessionToken } from "../middleware/auth.middleware";
 
 import { COOKIE_KEYS } from "../cookies/session";
 import { data } from "../data";
@@ -25,14 +36,55 @@ function expiresAt(epochSeconds: number) {
 
 /**
  * Who is signed in, and when their access token expires, so the client can
- * refresh it before then.
+ * refresh it before then. A guest's session can't be refreshed; it ends when
+ * it expires.
  */
 export const handleMe = authed.createHandlers(async (c) => {
   return c.json({
     userId: c.var.userId,
     expiresAt: expiresAt(c.var.sessionExpiresAtEpochSeconds),
+    isGuest: c.var.isGuest,
   });
 });
+
+/** Whether the landing page can offer to chat without signing in. */
+export function handleGuestStatus(c: Context) {
+  return c.json({ enabled: guestChatEnabled() });
+}
+
+/**
+ * Starts a guest session: a new user, under an id of this server's own, and
+ * the session cookie that names them. A request that already has a session,
+ * a second click say, gets that one back rather than another guest.
+ */
+export async function handleGuestSignIn(c: Context) {
+  if (!guestChatEnabled())
+    return c.json({ message: "Guest chat isn't available" }, 404);
+
+  const existing = getCookie(c, COOKIE_KEYS.session);
+  if (existing) {
+    try {
+      const session = await verifySessionToken(existing);
+      return c.json({
+        userId: session.userId,
+        expiresAt: expiresAt(session.expiresAtEpochSeconds),
+        isGuest: session.isGuest,
+      });
+    } catch {
+      // An expired or foreign token: start a new guest.
+    }
+  }
+
+  const userId = newGuestUserId();
+  await data.users.ensureUser(userId);
+  const { token, expiresAtEpochSeconds } = await signGuestToken(userId);
+  setGuestCookie(c, token, GUEST_SESSION_SECONDS);
+  return c.json({
+    userId,
+    expiresAt: expiresAt(expiresAtEpochSeconds),
+    isGuest: true,
+  });
+}
 
 /**
  * Whether WorkOS turned the refresh token down, as opposed to failing to
@@ -111,7 +163,35 @@ export async function handleCallback(c: Context) {
     await workos.getAuthSessionFromCode(code);
 
   await data.users.ensureUser(userId);
+  await adoptSignedInGuest(c, userId);
   setAuthCookies(c, { accessToken, refreshToken });
 
   return c.redirect(getEnv().CLIENT_URL);
+}
+
+/**
+ * A guest signing in keeps what they made: the session cookie they arrive
+ * with still names the guest, so their chats move to the account. Failing to
+ * move them doesn't fail the sign-in, which has already spent WorkOS's code;
+ * the guest is left as it was, for the sweeper.
+ */
+async function adoptSignedInGuest(c: Context, userId: string) {
+  const token = getCookie(c, COOKIE_KEYS.session);
+  if (!token || !isGuestToken(token) || !guestChatEnabled()) return;
+
+  let guestUserId: string;
+  try {
+    ({ userId: guestUserId } = await verifyGuestToken(token));
+  } catch {
+    return;
+  }
+
+  try {
+    await data.users.adoptGuest(guestUserId, userId);
+  } catch (error) {
+    log.error("Failed to move a guest's chats to their account", error, {
+      guestUserId,
+      userId,
+    });
+  }
 }

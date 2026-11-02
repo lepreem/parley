@@ -25,6 +25,8 @@ const FALLBACK_CONVERSATION_TITLE_CHARS = 80;
 /** One user turn to answer, as the request asked for it. */
 export type TurnRequest = {
   userId: string;
+  /** A guest's turn: guest models only, billed to the guest key. */
+  guest: boolean;
   conversationId: string;
   content: string;
   chosenModelId: string;
@@ -37,7 +39,7 @@ export type TurnRequest = {
 };
 
 export function turnRequestFrom(
-  userId: string,
+  { userId, isGuest }: { userId: string; isGuest: boolean },
   conversationId: string,
   {
     messageContent,
@@ -48,6 +50,7 @@ export function turnRequestFrom(
 ): TurnRequest {
   return {
     userId,
+    guest: isGuest,
     conversationId,
     content: messageContent,
     chosenModelId,
@@ -197,6 +200,11 @@ export async function prepareTurn(
         })
       : new TurnRejected(404, { message: "Conversation not found" });
   }
+  if (request.guest && !(await chat.isGuestModel(request.chosenModelId))) {
+    throw new TurnRejected(400, {
+      message: "Invalid model: sign in to use this model",
+    });
+  }
   if (newTurnResolvedImages.length !== request.imageUploadIds.length) {
     throw new TurnRejected(404, { message: "Image not found" });
   }
@@ -307,14 +315,19 @@ export async function rewindTo(
   );
 }
 
-async function titleForFirstTurn(content: string, conversationId: string) {
+async function titleForFirstTurn(request: TurnRequest) {
+  const { content, conversationId } = request;
   const fallback = content
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, FALLBACK_CONVERSATION_TITLE_CHARS);
 
   try {
-    return (await chat.generateTitle("conversation", content)) || fallback;
+    return (
+      (await chat.generateTitle("conversation", content, {
+        guest: request.guest,
+      })) || fallback
+    );
   } catch (error) {
     log.warn("Conversation title generation failed", {
       conversationId,
@@ -345,7 +358,7 @@ export async function answerTurn(
 ) {
   const conversationTitle =
     request.expectedLastMessageId === null
-      ? titleForFirstTurn(request.content, request.conversationId)
+      ? titleForFirstTurn(request)
       : Promise.resolve(undefined);
 
   let assistantContent: string;
@@ -362,6 +375,7 @@ export async function answerTurn(
         maxOutputTokens: MAX_RESPONSE_TOKENS,
         sessionId: request.conversationId,
         signal: entry.signal,
+        guest: request.guest,
       },
     );
   } catch (error) {

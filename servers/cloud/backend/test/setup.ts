@@ -13,6 +13,9 @@ process.env.WORKOS_CLIENT_ID = "client_test";
 process.env.CLIENT_URL = "http://localhost:5173";
 process.env.API_BASE_URL = "http://localhost:3001";
 process.env.PORT = "3001";
+// Guest chat is on, as in production once its settings are set.
+process.env.GUEST_SESSION_SECRET = "test-guest-session-secret-of-32-chars";
+process.env.OPENROUTER_GUEST_API_KEY = "test-guest-key";
 
 // Access tokens are verified against keys the tests sign with, not WorkOS's.
 vi.mock("../src/auth/workosKeys", async () => {

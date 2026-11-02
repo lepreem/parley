@@ -17,6 +17,18 @@ jobsRouter.get(
   jobsController.handleGetTranscribeJob,
 );
 
+jobsRouter.get(
+  `/transcribe/:${CTX_KEYS.audioUploadId}/audio`,
+  validateReqParams(jobReqParamSchema),
+  jobsController.handleGetTranscribeJobAudio,
+);
+
+jobsRouter.get(
+  `/transcribe/:${CTX_KEYS.audioUploadId}/audio/file`,
+  validateReqParams(jobReqParamSchema),
+  jobsController.handleGetTranscribeJobAudioFile,
+);
+
 jobsRouter.delete(
   `/transcribe/:${CTX_KEYS.audioUploadId}`,
   validateReqParams(jobReqParamSchema),

@@ -1,4 +1,4 @@
-import { DEFAULT_TRANSCRIBE_MODEL, transcription } from "./ai";
+import { transcription, type Transcription } from "./ai";
 import { sign } from "./storage";
 import { data } from "./data";
 import { logger } from "@parley/server-kit/runtime/logger";
@@ -57,16 +57,22 @@ type ClaimedJob = NonNullable<
   Awaited<ReturnType<typeof data.jobs.claimAudioJob>>
 >;
 
-/** The job's audio, transcribed. */
-async function transcribeAudio(job: ClaimedJob) {
+/** The job's audio, transcribed, and the model that did it. */
+async function transcribeAudio(
+  job: ClaimedJob,
+): Promise<Transcription & { transcriptModelId: string }> {
+  const transcriptModelId = await transcription.model();
+  if (!transcriptModelId) {
+    throw new Error("Deepgram offers no transcription model");
+  }
   const audioUrl = await sign.url(job.userId, {
     kind: "audio",
     uploadId: job.audioUploadId,
   });
-  return transcription.transcribe(
-    job.transcriptModelId ?? DEFAULT_TRANSCRIBE_MODEL,
-    audioUrl,
-  );
+  return {
+    ...(await transcription.transcribe(transcriptModelId, audioUrl)),
+    transcriptModelId,
+  };
 }
 
 /**
@@ -114,16 +120,19 @@ async function settleFailedJob(
 }
 
 /**
- * Stores a job's transcript: the video's captions when the message carries
- * them (yt_save_captions), otherwise its audio transcribed (transcribe_audio).
+ * Stores a job's transcript, with its language: the video's captions when the
+ * message carries them (yt_save_captions), otherwise its audio transcribed
+ * (transcribe_audio).
  */
 export async function handleTranscribeJob(
   {
     audioUploadId,
     segments: captions,
+    language: captionsLanguage,
   }: {
     audioUploadId: UploadId;
     segments?: TranscriptSegment[];
+    language?: string;
   },
   { attempt, lastAttempt, redelivered }: DeliveryMetadata,
 ) {
@@ -134,7 +143,14 @@ export async function handleTranscribeJob(
     if (!job) return;
     const { claimToken } = job;
 
-    const segments = captions ?? (await transcribeAudio(job));
+    // The job records what made its transcript: no model for captions.
+    const { segments, language, transcriptModelId } = captions
+      ? {
+          segments: captions,
+          language: captionsLanguage ?? null,
+          transcriptModelId: null,
+        }
+      : await transcribeAudio(job);
     if (!segments.some((segment) => segment.text.trim())) {
       throw new NoSpeechError();
     }
@@ -146,7 +162,8 @@ export async function handleTranscribeJob(
 
     const saved = await data.transcripts.saveCompletedTranscript(
       audioUploadId,
-      segments,
+      { segments, language },
+      transcriptModelId,
       claimToken,
     );
     if (!saved) {

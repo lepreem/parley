@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockPublish, mockIsValidTranscribeModel } = vi.hoisted(() => ({
+const { mockPublish } = vi.hoisted(() => ({
   mockPublish: vi.fn(),
-  mockIsValidTranscribeModel: vi.fn(),
 }));
 
 vi.mock("../../core/db", async () =>
@@ -14,15 +13,6 @@ vi.mock("../../core/files", async (importActual) => ({
   ...(await importActual<typeof import("../../core/files")>()),
   MAX_AUDIO_BYTES: 1024,
 }));
-
-vi.mock("../../core/ai/ai_transcribe_client", async (importActual) => {
-  const actual =
-    await importActual<typeof import("../../core/ai/ai_transcribe_client")>();
-  return {
-    ...actual, // preserves DEFAULT_TRANSCRIBE_MODEL
-    isValidTranscribeModel: mockIsValidTranscribeModel,
-  };
-});
 
 vi.mock("../../core/message-queue/messageQueue", async (importActual) => {
   const { QUEUES } =
@@ -64,7 +54,6 @@ const talk = () => new File([SOUND], "talk.mp3", { type: "audio/mpeg" });
 
 beforeEach(async () => {
   vi.clearAllMocks();
-  mockIsValidTranscribeModel.mockResolvedValue(true);
   await deleteAllRows(db);
 });
 
@@ -111,7 +100,6 @@ describe("POST /upload/audio", () => {
         audioUploadId: body.audioUploadId,
         source: "video",
         status: "queued",
-        transcriptModelId: "small",
       }),
     ]);
     expect(mockPublish).toHaveBeenCalledWith("transcribe", {
@@ -164,17 +152,6 @@ describe("POST /upload/audio", () => {
     },
   );
 
-  it("refuses an unusable transcription model", async () => {
-    mockIsValidTranscribeModel.mockResolvedValue(false);
-
-    const res = await uploadAudio(talk(), { transcriptModelId: "nope" });
-
-    expect(res.status).toBe(400);
-    expect(await res.json()).toEqual({
-      message: "Invalid transcription model",
-    });
-  });
-
   it("refuses a body far over the limit without reading it", async () => {
     const res = await uploadAudio(
       // Past the limit and the room left for the rest of the form.
@@ -206,16 +183,37 @@ describe("POST /upload/youtube", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { audioUploadId: string };
     expect(body).toMatchObject({ source: "youtube", url: YT_URL });
-    // The row keeps the origin URL, for history and for fetching again after
-    // a restart.
+    // The row keeps the video, for fetching it again after a restart.
     expect(await db.select().from(AudioTranscriptionJobs)).toEqual([
       expect.objectContaining({
         audioUploadId: body.audioUploadId,
         source: "youtube",
-        YT_sourceUrl: YT_URL,
+        youtubeVideoId: "dQw4w9WgXcQ",
         YT_useCaptionsIfAvailable: false,
       }),
     ]);
+    expect(mockPublish).toHaveBeenCalledWith("yt_fetch", {
+      audioUploadId: body.audioUploadId,
+      url: YT_URL,
+      useCaptionsIfAvailable: false,
+    });
+  });
+
+  it("returns 400 for a YouTube link that isn't to one video", async () => {
+    const res = await postYoutube({
+      youtubeUrl: "https://www.youtube.com/playlist?list=PL123",
+    });
+
+    expect(res.status).toBe(400);
+    expect(mockPublish).not.toHaveBeenCalled();
+  });
+
+  it("hands the fetch only the video, not the rest of the link", async () => {
+    const res = await postYoutube({
+      youtubeUrl: "https://youtu.be/dQw4w9WgXcQ?list=PL123&t=90",
+    });
+
+    const body = (await res.json()) as { audioUploadId: string };
     expect(mockPublish).toHaveBeenCalledWith("yt_fetch", {
       audioUploadId: body.audioUploadId,
       url: YT_URL,

@@ -9,16 +9,24 @@ export type Session = {
   userId: string;
   /** Epoch milliseconds. */
   expiresAt: number;
+  /**
+   * Chatting without an account. A guest's session isn't refreshed: it ends
+   * when it expires, or when they sign in and their chats move to the account.
+   */
+  isGuest: boolean;
 };
 
-/** Reads `{ userId, expiresAt }` as /auth/me and /auth/refresh answer it. */
+/**
+ * Reads `{ userId, expiresAt, isGuest }` as /auth/me, /auth/guest and
+ * /auth/refresh answer it.
+ */
 export function parseSession(data: unknown): Session {
   if (data && typeof data === "object") {
-    const { userId, expiresAt } = data as Record<string, unknown>;
+    const { userId, expiresAt, isGuest } = data as Record<string, unknown>;
     const expiresAtMs =
       typeof expiresAt === "string" ? Date.parse(expiresAt) : NaN;
     if (typeof userId === "string" && Number.isFinite(expiresAtMs)) {
-      return { userId, expiresAt: expiresAtMs };
+      return { userId, expiresAt: expiresAtMs, isGuest: isGuest === true };
     }
   }
   throw new Error("Invalid session response");

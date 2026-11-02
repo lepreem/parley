@@ -5,7 +5,11 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { authLogoutEndpoint, authMeEndpoint } from "../../config";
+import {
+  authGuestEndpoint,
+  authLogoutEndpoint,
+  authMeEndpoint,
+} from "../../config";
 import {
   onSessionChange,
   parseSession,
@@ -62,7 +66,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => onSessionChange(setSession), []);
 
   useEffect(() => {
-    if (!session) return;
+    // A guest's session has nothing to refresh it with, and its month is
+    // past what setTimeout can wait: the timer would fire at once.
+    if (!session || session.isGuest) return;
     const timer = setTimeout(
       () => {
         // A failure leaves the next request's 401 to refresh.
@@ -74,14 +80,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [session]);
 
   // Only a different user is a new user: a refresh keeps the same object.
+  const continueAsGuest = useCallback(async () => {
+    const res = await fetch(authGuestEndpoint(), {
+      method: "POST",
+      credentials: "include",
+    });
+    if (!res.ok) throw new Error("Couldn't start a guest chat");
+    setSession(parseSession(await res.json()));
+  }, []);
+
+  // Only a different user is a new user: a refresh keeps the same object.
   const userId = session?.userId;
+  const isGuest = session?.isGuest ?? false;
   const user = useMemo<AuthUser | null>(
-    () => (userId ? { userId } : null),
-    [userId],
+    () => (userId ? { userId, isGuest } : null),
+    [userId, isGuest],
   );
 
   return (
-    <AuthContext.Provider value={{ user, loading, refresh, signOut }}>
+    <AuthContext.Provider
+      value={{ user, loading, refresh, signOut, continueAsGuest }}
+    >
       {children}
     </AuthContext.Provider>
   );

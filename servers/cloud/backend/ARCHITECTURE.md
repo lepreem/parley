@@ -117,6 +117,18 @@ order. There is no second job pipeline: the prompt contains the linked
 transcripts plus whatever the user types, and the reply streams over the same
 SSE endpoint every other chat turn uses.
 
+**Audio is kept for a week, a YouTube job's not at all.** Once a job has
+its transcript nothing on the server reads its audio, so the hourly storage
+sweep (`src/sweeper.ts`) marks it deleted in the ledger
+(`markFinishedAudioDeleted`) and then removes it like any other unused object:
+a YouTube job's as soon as it's transcribed, since the video plays from
+YouTube; any other finished job's, failed ones included, a week after its
+upload, which is also how long a dead-lettered job's audio stays to replay.
+The job and its transcript stay. Until then the client plays the audio from
+`GET /jobs/transcribe/:audioUploadId/audio`, a signed link, or null once the
+ledger no longer has it confirmed. After that it plays the copy it keeps in
+the browser, or the original file the user picks again.
+
 Job state transitions are **claimed atomically**. A fresh delivery can claim
 only a queued job; a broker redelivery can reclaim a processing job. Every claim
 gets a new token, which prevents an older delivery from writing a stale result if
@@ -144,6 +156,38 @@ There are two kinds of stream, and both are read with fetch, not EventSource
 | The hub behind it                          | `@parley/server-kit/sse/hub`                              |
 | Event names and payloads                   | `ReplyStreamEvents`, `ServerEvents` in `@parley/contract` |
 | The client side                            | `client/src/sse/`                                         |
+
+## Guests
+
+Someone can chat without an account. A guest is a user like any other, under
+an id the API makes (`guest_<uuid>`), and its session cookie holds a token the
+API signs itself (`src/auth/guestToken.ts`) rather than one from WorkOS.
+`requireAuth` accepts either and sets `isGuest`; everything behind it works
+by `userId` as before.
+
+Signing in keeps what a guest made. The guest's cookie is still there when
+WorkOS sends them back to `/auth/callback`, which moves the guest's
+conversations and messages to their account and deletes the guest, in one
+transaction (`users.adoptGuest`). The account can be new or years old.
+
+What a guest can't do, because it costs money nobody is accountable for:
+
+- **Upload.** Guests chat in text only (`refuseGuests` on `/upload`). Each
+  stored object's key starts with its owner's id, so letting guests upload
+  means moving their objects in storage when they sign in; see
+  `users.adoptGuest`.
+- **Use a model that costs more than $0.10 in / $0.50 out** per million
+  tokens, GPT-6 Luna's price (`chat.listGuestModels`).
+- **Spend from the main OpenRouter key.** Guest turns, titles included, go
+  through `OPENROUTER_GUEST_API_KEY`, whose credit limit in OpenRouter is the
+  hard cap on guest spending. Without it, and `GUEST_SESSION_SECRET`, there is
+  no guest chat.
+- **Send more than ten turns a day from one address** (`guestChatTurn` in
+  `src/rateLimit/policies.ts`), counted across guests, since a new guest is
+  one click away.
+
+A guest session lasts thirty days from when it starts, and nothing extends it.
+The sweeper deletes guests a day past that, with what they made.
 
 ## Deployment & scaling
 
@@ -186,6 +230,15 @@ would have let this cache serve the old text, fails instead. Deletes, cascades
 included, are unaffected. A table with a foreign key to `chat_messages`, however
 indirect, is part of a message and needs the trigger too;
 `test/unit/immutableTables.test.ts` fails, naming the table, until it has one.
+
+A trigger can name columns it tolerates changes to
+(`refuse_update('user_id')`, `drizzle/0005_tolerate_owner_change.sql`): an
+UPDATE that changes only those goes through, and any other column is still
+refused. The list says what may change, never what may not, so a new column is
+guarded without anyone remembering to. `chat_messages` tolerates `user_id`, so
+a guest's messages can move to their account. A column belongs on the list only
+if changing it leaves the text as it was; the same test holds each trigger to
+the list it keeps (`TOLERATED_UPDATES`).
 
 ### Schema changes
 

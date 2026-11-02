@@ -1,6 +1,11 @@
-import { Link } from "react-router-dom";
-import { authLoginUrl } from "../../config";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Link, useNavigate } from "react-router-dom";
+import { authGuestEndpoint, authLoginUrl, cloudServer } from "../../config";
+import { useAuth } from "../../hooks/auth/useAuth";
 import { useTheme } from "../../hooks/theme/useTheme";
+import { useToast } from "../../hooks/toast/useToast";
+import { queryKeys } from "../../lib/queryClient";
 import { Icon } from "../ui/Icon";
 import { Meter } from "../ui/Meter";
 
@@ -44,7 +49,7 @@ function ComposerPreview() {
       <div className="flex items-center gap-2 px-1">
         <Icon name="plus" className="h-5 w-5 text-faint" />
         <span className="font-mono text-[11px] text-faint">
-          anthropic/claude-sonnet-5
+          any-provider/any-model
         </span>
         <span className="flex-1" />
         <span className="rounded-full bg-line p-2 text-faint">
@@ -52,6 +57,56 @@ function ComposerPreview() {
         </span>
       </div>
     </div>
+  );
+}
+
+/** Whether the cloud lets people chat without signing in. */
+async function fetchGuestChatEnabled(): Promise<boolean> {
+  const res = await fetch(authGuestEndpoint(), { credentials: "include" });
+  if (!res.ok) return false;
+  const { enabled } = (await res.json()) as { enabled?: unknown };
+  return enabled === true;
+}
+
+/**
+ * Chat on the cloud as a guest, in text only. Signing in later keeps what
+ * they wrote: the server moves it to their account.
+ */
+function GuestButton() {
+  const { continueAsGuest } = useAuth();
+  const navigate = useNavigate();
+  const toast = useToast();
+  const [starting, setStarting] = useState(false);
+  const enabled = useQuery({
+    queryKey: queryKeys.guestChat(cloudServer.id),
+    queryFn: fetchGuestChatEnabled,
+    staleTime: Infinity,
+  });
+  if (!enabled.data) return null;
+
+  const start = async () => {
+    setStarting(true);
+    try {
+      await continueAsGuest();
+      navigate(cloudServer.appPath, { replace: true });
+    } catch {
+      toast.show({
+        kind: "error",
+        message: "Couldn't start a guest chat. Try again in a moment.",
+      });
+      setStarting(false);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={() => void start()}
+      disabled={starting}
+      className="inline-flex items-center rounded-lg border border-line px-5 py-2.5 text-sm font-medium text-muted transition-colors hover:border-signal hover:text-ink disabled:opacity-60"
+    >
+      Try it without an account
+    </button>
   );
 }
 
@@ -94,6 +149,7 @@ export function LandingPage() {
             >
               Sign in
             </a>
+            <GuestButton />
             {/* No account needed: the local server runs on the user's machine. */}
             <Link
               to="/local"

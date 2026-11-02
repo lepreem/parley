@@ -76,9 +76,9 @@ export const AudioTranscriptionJobs = sqliteTable(
         onDelete: "cascade",
       }),
     source: text("source", { enum: jobSources }).notNull(),
-    // Origin URL for 'youtube' jobs; null for direct uploads. Stored for history
-    // display and to enable transcript caching by video id later.
-    YT_sourceUrl: text("YT_source_url"),
+    // The video a 'youtube' job transcribes; null for direct uploads, and for
+    // YouTube jobs from before it was kept.
+    youtubeVideoId: text("youtube_video_id"),
     // Whether a 'youtube' job's fetch tries the video's captions before its
     // audio; null for direct uploads. Kept so the fetch can run again after a
     // restart.
@@ -96,8 +96,6 @@ export const AudioTranscriptionJobs = sqliteTable(
       .default(now)
       .$onUpdate(() => new Date())
       .notNull(),
-    // Model used to transcribe the audio. Null falls back to the default
-    transcriptModelId: text("transcription_model_id"),
   },
   (table) => [
     check("audio_transcription_jobs_status", oneOf(table.status, jobStatuses)),

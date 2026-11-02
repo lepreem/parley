@@ -60,7 +60,11 @@ describe("saveCompletedTranscript", () => {
 
     const saved = await transcripts.saveCompletedTranscript(
       audioUploadId,
-      [{ start: 0, end: 1, text: "stale transcript" }],
+      {
+        segments: [{ start: 0, end: 1, text: "stale transcript" }],
+        language: "en",
+      },
+      "nova-3-general",
       claimToken,
     );
 
@@ -68,6 +72,7 @@ describe("saveCompletedTranscript", () => {
     expect(mockCompleteAudioJob).toHaveBeenCalledWith(
       audioUploadId,
       claimToken,
+      "nova-3-general",
       transactionExecutor,
     );
     expect(mockInsert).not.toHaveBeenCalled();
@@ -78,7 +83,11 @@ describe("saveCompletedTranscript", () => {
 
     const saved = await transcripts.saveCompletedTranscript(
       audioUploadId,
-      [{ start: 65, end: 70, text: "current transcript" }],
+      {
+        segments: [{ start: 65, end: 70, text: "current transcript" }],
+        language: "de",
+      },
+      "nova-3-general",
       claimToken,
     );
 
@@ -87,6 +96,7 @@ describe("saveCompletedTranscript", () => {
       audioUploadId,
       content: "[1:05] current transcript",
       segments: [{ start: 65, end: 70, text: "current transcript" }],
+      language: "de",
       charCount: 25,
     });
   });

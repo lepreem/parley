@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { objectPath, storage, supabase } from "./core";
+import { isNotFound, objectPath, storage, supabase } from "./core";
 import {
   BUCKET_SETTINGS,
   KINDS,
@@ -139,15 +139,6 @@ function tokenLifetimeMs(token: string) {
     throw new Error("Upload token carries no lifetime");
   }
   return (exp - iat) * 1000;
-}
-
-/** Storage reports a missing object or bucket as a 400 whose body carries "404". */
-function isNotFound(error: unknown) {
-  const { status, statusCode } = error as {
-    status?: number;
-    statusCode?: string;
-  };
-  return status === 404 || statusCode === "404";
 }
 
 /**

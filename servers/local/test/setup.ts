@@ -7,8 +7,8 @@ process.env.PORT = "3002";
 // one make their own.
 process.env.CLIENT_DIR = "/nonexistent/client";
 
-// createApp() runs a fail-fast preflight that runs Claude Code, uv and yt-dlp.
-// Tests don't need them, so stub the preflight to a no-op.
+// createApp() runs a fail-fast preflight that runs Claude Code, Whisper,
+// ffmpeg and yt-dlp. Tests don't need them, so stub the preflight to a no-op.
 vi.mock("../api/startup", () => ({
   verifyApiServices: vi.fn(async () => {}),
 }));

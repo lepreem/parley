@@ -2,11 +2,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { CACHE_KEYS } from "../../src/memory/modelLists";
 import { CLAIM_LEASE_MS } from "../../src/data/conversations.data";
 
-const { mockGetOrSetCache, mockModelsList, mockChatSend } = vi.hoisted(() => ({
-  mockGetOrSetCache: vi.fn(),
-  mockModelsList: vi.fn(),
-  mockChatSend: vi.fn(),
-}));
+const { mockGetOrSetCache, mockModelsList, mockChatSend, sentWithKeys } =
+  vi.hoisted(() => ({
+    mockGetOrSetCache: vi.fn(),
+    mockModelsList: vi.fn(),
+    mockChatSend: vi.fn(),
+    /** The API key of the client each chat request went through. */
+    sentWithKeys: [] as string[],
+  }));
 
 vi.mock("../../src/memory/modelLists", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../src/memory/modelLists")>()),
@@ -18,12 +21,21 @@ const runFetch = <T>(_name: unknown, fetch: () => Promise<T>) => fetch();
 
 vi.mock("@openrouter/sdk", () => ({
   OpenRouter: class {
+    constructor(private readonly options: { apiKey: string }) {}
     models = { list: mockModelsList };
-    chat = { send: mockChatSend };
+    chat = {
+      send: (...args: unknown[]) => {
+        sentWithKeys.push(this.options.apiKey);
+        return mockChatSend(...args);
+      },
+    };
   },
 }));
 
-import { buildUserTurn, chat } from "../../src/ai/ai_chat_client";
+import {
+  buildUserTurn,
+  chat,
+} from "../../src/ai/ai_chat_client/ai_chat_client";
 
 const MODEL_ID = "openai/gpt-4o-mini";
 
@@ -33,6 +45,10 @@ const sampleModel = {
   name: "GPT-4o Mini",
   contextTokens: 128000,
   acceptsImages: true,
+  released: "2024-07-18",
+  aliases: [],
+  replacedBy: null,
+  retires: null,
   pricing: { inputPerMillionTokens: 0.15, outputPerMillionTokens: 0.6 },
 };
 
@@ -40,6 +56,7 @@ const openRouterListModel = {
   id: MODEL_ID,
   name: "GPT-4o Mini",
   description: "Fast chat model",
+  created: 1721260800,
   contextLength: 128000,
   knowledgeCutoff: null,
   topProvider: { contextLength: 128000, isModerated: true },
@@ -55,6 +72,13 @@ const openRouterListModel = {
 describe("listChatModels", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // The fixtures are from 2024; the catalog leaves out models a year old.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2024-08-01"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("serves the catalog through its cache entry", async () => {
@@ -103,6 +127,10 @@ describe("listChatModels", () => {
         name: "Text only",
         contextTokens: null,
         acceptsImages: false,
+        released: "2024-07-18",
+        aliases: [],
+        replacedBy: null,
+        retires: null,
         pricing: { inputPerMillionTokens: 0.15, outputPerMillionTokens: 0.6 },
       },
       {
@@ -110,25 +138,46 @@ describe("listChatModels", () => {
         name: "Auto Router",
         contextTokens: 128000,
         acceptsImages: true,
+        released: "2024-07-18",
+        aliases: [],
+        replacedBy: null,
+        retires: null,
         pricing: null,
       },
     ]);
     // Only text-output models are relevant here; transcription is Deepgram's.
     expect(mockModelsList).toHaveBeenCalledWith({ outputModalities: "text" });
   });
+});
 
-  it("leaves out batch-only variants, which can't stream a reply", async () => {
-    mockGetOrSetCache.mockImplementationOnce(runFetch);
-    mockModelsList.mockResolvedValueOnce({
-      result: {
-        data: [
-          openRouterListModel,
-          { ...openRouterListModel, id: `${openRouterListModel.id}:batch` },
-        ],
-      },
-    });
+describe("listGuestModels", () => {
+  const priced = (id: string, input: number, output: number) => ({
+    ...sampleModel,
+    id,
+    pricing: { inputPerMillionTokens: input, outputPerMillionTokens: output },
+  });
 
-    expect(await chat.listModels()).toEqual([sampleModel]);
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("offers what costs no more than $0.10/$0.50, for input and output both", async () => {
+    mockGetOrSetCache.mockResolvedValue([
+      priced("at-ceiling/model", 0.1, 0.5),
+      priced("cheap/model", 0.05, 0.2),
+      priced("free/model:free", 0, 0),
+      priced("dear-input/model", 0.15, 0.4),
+      priced("dear-output/model", 0.05, 0.6),
+      { ...sampleModel, id: "openrouter/auto", pricing: null },
+    ]);
+
+    expect((await chat.listGuestModels()).map((model) => model.id)).toEqual([
+      "at-ceiling/model",
+      "cheap/model",
+      "free/model:free",
+    ]);
+    expect(await chat.isGuestModel("cheap/model")).toBe(true);
+    expect(await chat.isGuestModel("dear-output/model")).toBe(false);
   });
 });
 
@@ -174,6 +223,25 @@ describe("buildUserTurn", () => {
 describe("chatAI", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sentWithKeys.length = 0;
+  });
+
+  it("bills a guest's call to the guest key, and anyone else's to the main one", async () => {
+    mockChatSend.mockResolvedValue({
+      choices: [{ message: { content: "hi" } }],
+    });
+
+    await chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
+      guest: true,
+    });
+    await chat.complete(MODEL_ID, [{ role: "user", content: "yo" }]);
+    await chat.generateTitle("conversation", "yo", { guest: true });
+
+    expect(sentWithKeys).toEqual([
+      process.env.OPENROUTER_GUEST_API_KEY,
+      process.env.OPENROUTER_API_KEY,
+      process.env.OPENROUTER_GUEST_API_KEY,
+    ]);
   });
 
   it("routes for low latency and pins the session for prompt-cache hits", async () => {
@@ -374,7 +442,7 @@ describe("generateTitle", () => {
     vi.clearAllMocks();
   });
 
-  it("uses the default model and returns a trimmed title", async () => {
+  it("uses the title model, without reasoning, and returns a trimmed title", async () => {
     mockChatSend.mockResolvedValueOnce({
       choices: [{ message: { content: "  Quarterly planning  " } }],
     });
@@ -388,7 +456,7 @@ describe("generateTitle", () => {
     expect(mockChatSend).toHaveBeenCalledWith(
       {
         chatRequest: expect.objectContaining({
-          model: MODEL_ID,
+          model: "~openai/gpt-luna-latest",
           messages: [
             {
               role: "user",
@@ -398,6 +466,7 @@ describe("generateTitle", () => {
             },
           ],
           maxCompletionTokens: 24,
+          reasoning: { effort: "none" },
         }),
       },
       { signal: expect.any(AbortSignal) },

@@ -6,9 +6,15 @@ import {
   useRenameConversationMutation,
 } from "../../hooks/queries/useConversationQueries";
 import { useAuth } from "../../hooks/auth/useAuth";
+import { useIsGuest } from "../../hooks/auth/useIsGuest";
 import { useServer } from "../../hooks/server/useServer";
 import { useServerReady } from "../../hooks/server/useServerReady";
-import { cloudServer, localServer, servedByLocalServer } from "../../config";
+import {
+  authLoginUrl,
+  cloudServer,
+  localServer,
+  servedByLocalServer,
+} from "../../config";
 import { useTheme } from "../../hooks/theme/useTheme";
 import { Icon } from "../ui/Icon";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
@@ -83,6 +89,7 @@ export function Sidebar() {
   const server = useServer();
   const { user, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const guest = useIsGuest();
   const { sidebarOpen, setSidebarOpen, setSourcesOpen } = useShell();
   const ready = useServerReady();
   const conversationsQuery = useConversationsQuery(ready);
@@ -149,17 +156,20 @@ export function Sidebar() {
             <Icon name="plus" className="h-4 w-4" />
             New chat
           </Link>
-          <button
-            type="button"
-            onClick={() => {
-              setSidebarOpen(false);
-              setSourcesOpen(true);
-            }}
-            className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-muted transition-colors hover:bg-surface hover:text-ink"
-          >
-            <Icon name="library" className="h-4 w-4" />
-            Sources
-          </button>
+          {/* Guests chat in text only, so have no sources. */}
+          {!guest && (
+            <button
+              type="button"
+              onClick={() => {
+                setSidebarOpen(false);
+                setSourcesOpen(true);
+              }}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-muted transition-colors hover:bg-surface hover:text-ink"
+            >
+              <Icon name="library" className="h-4 w-4" />
+              Sources
+            </button>
+          )}
         </div>
 
         <nav className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
@@ -205,7 +215,19 @@ export function Sidebar() {
         </nav>
 
         <div className="flex items-center gap-2 border-t border-line px-3 py-3">
-          {server.signIn === "session" ? (
+          {guest ? (
+            // A guest can't sign out, only lose their chats: signing in
+            // keeps them, so that's what's offered.
+            <a
+              href={authLoginUrl()}
+              className="flex-1 rounded-lg px-2 py-1.5 text-sm text-muted transition-colors hover:bg-surface hover:text-ink"
+            >
+              <span className="block font-medium text-ink">Sign in</span>
+              <span className="block text-xs text-faint">
+                to keep your chats and add files
+              </span>
+            </a>
+          ) : server.signIn === "session" ? (
             <>
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface text-xs font-semibold text-muted">
                 {user?.userId.slice(0, 2).toUpperCase()}

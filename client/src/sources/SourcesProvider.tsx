@@ -13,9 +13,8 @@ import {
   uploadImage,
 } from "../api/uploads";
 import { errorMessage } from "../api/http";
-import { resolveDefaultModel } from "../api/models";
-import { extractAudioFromVideo } from "../media/extractAudio";
-import { compressAudioForSpeech } from "../media/compressAudio";
+import { audioCopies } from "../media/audioCopies";
+import { prepareSpeech } from "../media/speech";
 import {
   classifyFile,
   formatBytes,
@@ -27,8 +26,6 @@ import {
 import { youtubeLabel } from "../media/youtube";
 import { useServer } from "../hooks/server/useServer";
 import { useToast } from "../hooks/toast/useToast";
-import { useTranscriptionModelsQuery } from "../hooks/queries/useModelsQuery";
-import { useServerReady } from "../hooks/server/useServerReady";
 import { SourcesContext, type ExistingSource } from "./context";
 import { stageSource, type StagedSource } from "./types";
 import { useTranscriptWatcher } from "./useTranscriptWatcher";
@@ -49,29 +46,20 @@ function releasePreview(source: StagedSource) {
 export function SourcesProvider({ children }: { children: ReactNode }) {
   const toast = useToast();
   const server = useServer();
-  const ready = useServerReady();
-  const { models: transcriptionModels } = useTranscriptionModelsQuery(ready);
   const [drafts, setDrafts] = useState<Drafts>({});
-  const [transcriptModelPick, setTranscriptModelPick] = useState<string | null>(
-    null,
-  );
-
-  const transcriptModelId =
-    transcriptModelPick ??
-    resolveDefaultModel(
-      transcriptionModels.map((model) => model.id),
-      server.defaultTranscribeModelId,
-    );
+  // On by default: a video's captions are free and immediate, where
+  // transcribing its audio is billed.
+  const [useCaptionsIfAvailable, setUseCaptionsIfAvailable] = useState(true);
 
   // Mirrors read by the async upload runs and by callbacks that must not change
   // identity every time a draft does. Synced after commit, which is always
   // before the next event handler or resumed upload can read them.
   const draftsRef = useRef<Drafts>(drafts);
-  const transcriptModelRef = useRef(transcriptModelId);
+  const captionsRef = useRef(useCaptionsIfAvailable);
   useEffect(() => {
     draftsRef.current = drafts;
-    transcriptModelRef.current = transcriptModelId;
-  }, [drafts, transcriptModelId]);
+    captionsRef.current = useCaptionsIfAvailable;
+  }, [drafts, useCaptionsIfAvailable]);
 
   const patchSource = useCallback(
     (draftKey: string, localId: string, patch: Partial<StagedSource>) => {
@@ -149,9 +137,7 @@ export function SourcesProvider({ children }: { children: ReactNode }) {
         }
 
         patch({ status: "preparing" });
-        const speech = await compressAudioForSpeech(
-          kind === "video" ? await extractAudioFromVideo(file) : file,
-        );
+        const speech = await prepareSpeech(file, kind);
 
         if (speech.size > MAX_AUDIO_BYTES) {
           patch({
@@ -165,13 +151,13 @@ export function SourcesProvider({ children }: { children: ReactNode }) {
         const uploaded = await uploadAudio(server, {
           file: speech,
           source: kind,
-          transcriptModelId:
-            transcriptModelRef.current ?? server.defaultTranscribeModelId,
         });
         patch({
           status: "transcribing",
           sourceUploadId: uploaded.audioUploadId,
         });
+        // What plays the source once the server no longer keeps its audio.
+        void audioCopies.save(uploaded.audioUploadId, speech).catch(() => {});
       } catch (error) {
         patch({
           status: "failed",
@@ -190,7 +176,7 @@ export function SourcesProvider({ children }: { children: ReactNode }) {
         const queued = await requestYoutubeTranscript(
           server,
           url,
-          transcriptModelRef.current ?? server.defaultTranscribeModelId,
+          captionsRef.current,
         );
         patch({
           status: "transcribing",
@@ -392,8 +378,8 @@ export function SourcesProvider({ children }: { children: ReactNode }) {
       retrySource,
       takeDraft,
       restoreDraft,
-      transcriptModelId,
-      setTranscriptModelId: setTranscriptModelPick,
+      useCaptionsIfAvailable,
+      setUseCaptionsIfAvailable,
     }),
     [
       drafts,
@@ -404,7 +390,7 @@ export function SourcesProvider({ children }: { children: ReactNode }) {
       retrySource,
       takeDraft,
       restoreDraft,
-      transcriptModelId,
+      useCaptionsIfAvailable,
     ],
   );
 
