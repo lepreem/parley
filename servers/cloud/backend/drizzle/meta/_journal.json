@@ -57,6 +57,13 @@
       "when": 1793507605526,
       "tag": "0007_transcript_language",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793654542355,
+      "tag": "0008_transcript_from_captions",
+      "breakpoints": true
     }
   ]
 }

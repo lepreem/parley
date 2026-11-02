@@ -44,24 +44,6 @@ vi.mock("../../src/ai/ai_chat_client/ai_chat_client", async (importActual) => {
   };
 });
 
-// The model a YouTube transcript is reused by, without asking Deepgram.
-vi.mock(
-  "../../src/ai/ai_transcribe_client/ai_transcribe_client",
-  async (importActual) => {
-    const actual =
-      await importActual<
-        typeof import("../../src/ai/ai_transcribe_client/ai_transcribe_client")
-      >();
-    return {
-      ...actual,
-      transcription: {
-        ...actual.transcription,
-        model: async () => "nova-3-general",
-      },
-    };
-  },
-);
-
 vi.mock("../../src/db", async () => ({
   db: {
     insert: mockInsert,
@@ -698,12 +680,11 @@ describe("POST /upload/youtube", () => {
       content: "[00:00] Never gonna give you up",
       segments: [{ start: 0, end: 2, text: "Never gonna give you up" }],
       language: "en",
+      // The video's captions, which this request takes.
+      fromCaptions: true,
       charCount: 31,
     };
-    // Made from the video's captions, which this request takes.
-    mockSelectRows.mockReturnValue([
-      { transcriptModelId: null, ...transcript },
-    ]);
+    mockSelectRows.mockReturnValue([transcript]);
 
     const res = await postJson("/upload/youtube", {
       youtubeUrl: `https://m.youtube.com/watch?v=${VIDEO_ID}&t=12`,
@@ -719,8 +700,6 @@ describe("POST /upload/youtube", () => {
         source: "youtube",
         youtubeVideoId: VIDEO_ID,
         status: "completed",
-        // What made the copy, not the model the server transcribes with.
-        transcriptModelId: null,
       }),
     );
     expect(mockValues).toHaveBeenCalledWith({

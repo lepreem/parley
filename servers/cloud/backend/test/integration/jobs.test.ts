@@ -59,7 +59,6 @@ function youtubeJob(owner = userId) {
     fileName: "YouTube audio",
     mimeType: null,
     sizeBytes: 0,
-    transcriptModelId: "nova-3-general",
   };
 }
 
@@ -70,31 +69,26 @@ async function createJob() {
 }
 
 /**
- * A YouTube job for the video, taken through to completed with `text` in
- * `language`, made by `transcriptModelId` (null: the video's captions).
+ * A YouTube job for the video, taken through to completed with `text`: its
+ * audio transcribed, unless `fromCaptions`.
  */
 async function transcribeVideo(
   text: string,
-  transcriptModelId: string | null = "nova-3-general",
-  language: string | null = "en",
+  { fromCaptions = false, language = "en" as string | null } = {},
 ) {
   const audioUploadId = await createJob();
   const claimed = await jobs.claimAudioJob(audioUploadId);
   await transcripts.saveCompletedTranscript(
     audioUploadId,
-    { segments: [{ start: 0, end: 2, text }], language },
-    transcriptModelId,
+    { segments: [{ start: 0, end: 2, text }], language, fromCaptions },
     claimed!.claimToken,
   );
   return audioUploadId;
 }
 
-/** What a request with captions off and the default model would reuse. */
-const nova3 = {
-  transcriptModelId: "nova-3-general",
-  useCaptionsIfAvailable: false,
-};
-const nova3OrCaptions = { ...nova3, useCaptionsIfAvailable: true };
+/** What a request with captions off, and with them on, would reuse. */
+const noCaptions = { useCaptionsIfAvailable: false };
+const orCaptions = { useCaptionsIfAvailable: true };
 
 async function readJob(audioUploadId: string) {
   const [row] = await db
@@ -102,7 +96,6 @@ async function readJob(audioUploadId: string) {
       status: AudioTranscriptionJobs.status,
       claimToken: AudioTranscriptionJobs.claimToken,
       error: AudioTranscriptionJobs.error,
-      transcriptModelId: AudioTranscriptionJobs.transcriptModelId,
     })
     .from(AudioTranscriptionJobs)
     .where(eq(AudioTranscriptionJobs.audioUploadId, audioUploadId));
@@ -134,41 +127,15 @@ describe.skipIf(!testState.databaseUrl)("audio jobs in PostgreSQL", () => {
     it("finds the transcript a completed job made of the video", async () => {
       await transcribeVideo("Never gonna give you up");
 
-      expect(await transcripts.findYoutubeTranscript(videoId, nova3)).toEqual({
-        transcriptModelId: "nova-3-general",
+      expect(
+        await transcripts.findYoutubeTranscript(videoId, noCaptions),
+      ).toEqual({
         content: expect.stringContaining("Never gonna give you up"),
         segments: [{ start: 0, end: 2, text: "Never gonna give you up" }],
         language: "en",
+        fromCaptions: false,
         charCount: expect.any(Number),
       });
-    });
-
-    it("finds nothing a model made before the language was detected", async () => {
-      // It may be English that was never said.
-      await transcribeVideo("Never gonna give you up", "nova-3-general", null);
-
-      expect(
-        await transcripts.findYoutubeTranscript(videoId, nova3OrCaptions),
-      ).toBeNull();
-    });
-
-    it("finds captions without a language", async () => {
-      await transcribeVideo("Never gonna give you up", null, null);
-
-      expect(
-        await transcripts.findYoutubeTranscript(videoId, nova3OrCaptions),
-      ).toMatchObject({ transcriptModelId: null, language: null });
-    });
-
-    it("finds only captions while there's no model to match", async () => {
-      await transcribeVideo("Never gonna give you up");
-
-      expect(
-        await transcripts.findYoutubeTranscript(videoId, {
-          transcriptModelId: undefined,
-          useCaptionsIfAvailable: true,
-        }),
-      ).toBeNull();
     });
 
     it("finds nothing for a video no job has finished", async () => {
@@ -176,70 +143,56 @@ describe.skipIf(!testState.databaseUrl)("audio jobs in PostgreSQL", () => {
       await jobs.claimAudioJob(audioUploadId);
 
       expect(
-        await transcripts.findYoutubeTranscript(videoId, nova3),
+        await transcripts.findYoutubeTranscript(videoId, orCaptions),
       ).toBeNull();
       expect(
-        await transcripts.findYoutubeTranscript("aaaaaaaaaaa", nova3),
-      ).toBeNull();
-    });
-
-    it("finds nothing made by another model", async () => {
-      await transcribeVideo("Never gonna give you up", "nova-2-general");
-
-      expect(
-        await transcripts.findYoutubeTranscript(videoId, nova3),
-      ).toBeNull();
-      expect(
-        await transcripts.findYoutubeTranscript(videoId, nova3OrCaptions),
+        await transcripts.findYoutubeTranscript("aaaaaaaaaaa", orCaptions),
       ).toBeNull();
     });
 
     it("finds captions only for a request that takes them", async () => {
-      await transcribeVideo("Never gonna give you up", null);
+      await transcribeVideo("Never gonna give you up", { fromCaptions: true });
 
       expect(
-        await transcripts.findYoutubeTranscript(videoId, nova3),
+        await transcripts.findYoutubeTranscript(videoId, noCaptions),
       ).toBeNull();
       expect(
-        await transcripts.findYoutubeTranscript(videoId, nova3OrCaptions),
-      ).toMatchObject({ transcriptModelId: null });
+        await transcripts.findYoutubeTranscript(videoId, orCaptions),
+      ).toMatchObject({ fromCaptions: true });
     });
 
-    it("finds the model's transcript for a request that takes captions", async () => {
+    it("finds captions without a language", async () => {
+      await transcribeVideo("Never gonna give you up", {
+        fromCaptions: true,
+        language: null,
+      });
+
+      expect(
+        await transcripts.findYoutubeTranscript(videoId, orCaptions),
+      ).toMatchObject({ fromCaptions: true, language: null });
+    });
+
+    it("finds a transcribed one for a request that takes captions", async () => {
       await transcribeVideo("Never gonna give you up");
 
       expect(
-        await transcripts.findYoutubeTranscript(videoId, nova3OrCaptions),
-      ).toMatchObject({ transcriptModelId: "nova-3-general" });
-    });
-
-    it("records what made a transcript on its job", async () => {
-      const transcribed = await transcribeVideo("Never gonna give you up");
-      const captioned = await transcribeVideo("Never gonna give you up", null);
-
-      expect(await readJob(transcribed)).toMatchObject({
-        transcriptModelId: "nova-3-general",
-      });
-      expect(await readJob(captioned)).toMatchObject({
-        transcriptModelId: null,
-      });
+        await transcripts.findYoutubeTranscript(videoId, orCaptions),
+      ).toMatchObject({ fromCaptions: false });
     });
 
     it("gives another user a completed job of their own with a copy", async () => {
-      await transcribeVideo("Never gonna give you up", null);
+      await transcribeVideo("Never gonna give you up", { fromCaptions: true });
       const found = await transcripts.findYoutubeTranscript(
         videoId,
-        nova3OrCaptions,
+        orCaptions,
       );
       const job = youtubeJob(otherUserId);
 
       await transcripts.createReusedYoutubeJob(job, found!);
 
-      // Made by what made the original, not by the model the request named.
       expect(await readJob(job.audioUploadId)).toMatchObject({
         status: "completed",
         claimToken: null,
-        transcriptModelId: null,
       });
       const theirs = await transcripts.findTranscripts(otherUserId, [
         job.audioUploadId,
@@ -247,20 +200,26 @@ describe.skipIf(!testState.databaseUrl)("audio jobs in PostgreSQL", () => {
       expect(theirs.get(job.audioUploadId)).toBe(found!.content);
     });
 
-    it("copies the transcript's language", async () => {
-      await transcribeVideo("Guten Morgen", "nova-3-general", "de");
+    it("keeps what the copy is: its language, and that it's captions", async () => {
+      await transcribeVideo("Guten Morgen", {
+        fromCaptions: true,
+        language: "de",
+      });
       const job = youtubeJob(otherUserId);
 
       await transcripts.createReusedYoutubeJob(
         job,
-        (await transcripts.findYoutubeTranscript(videoId, nova3))!,
+        (await transcripts.findYoutubeTranscript(videoId, orCaptions))!,
       );
 
       const [copy] = await db
-        .select({ language: TranscriptContents.language })
+        .select({
+          language: TranscriptContents.language,
+          fromCaptions: TranscriptContents.fromCaptions,
+        })
         .from(TranscriptContents)
         .where(eq(TranscriptContents.audioUploadId, job.audioUploadId));
-      expect(copy).toEqual({ language: "de" });
+      expect(copy).toEqual({ language: "de", fromCaptions: true });
     });
 
     it("keeps the copy when the original's owner deletes theirs", async () => {
@@ -268,7 +227,7 @@ describe.skipIf(!testState.databaseUrl)("audio jobs in PostgreSQL", () => {
       const job = youtubeJob(otherUserId);
       await transcripts.createReusedYoutubeJob(
         job,
-        (await transcripts.findYoutubeTranscript(videoId, nova3))!,
+        (await transcripts.findYoutubeTranscript(videoId, noCaptions))!,
       );
 
       await jobs.deleteAudioJob(userId, original);
@@ -281,7 +240,7 @@ describe.skipIf(!testState.databaseUrl)("audio jobs in PostgreSQL", () => {
       );
       // The copy is a transcript of the video too, so it's found in turn.
       expect(
-        await transcripts.findYoutubeTranscript(videoId, nova3),
+        await transcripts.findYoutubeTranscript(videoId, noCaptions),
       ).not.toBeNull();
     });
   });
@@ -310,11 +269,7 @@ describe.skipIf(!testState.databaseUrl)("audio jobs in PostgreSQL", () => {
     it("leaves a completed job completed", async () => {
       const audioUploadId = await createJob();
       const claimed = await jobs.claimAudioJob(audioUploadId);
-      await jobs.completeAudioJob(
-        audioUploadId,
-        claimed!.claimToken,
-        "nova-3-general",
-      );
+      await jobs.completeAudioJob(audioUploadId, claimed!.claimToken);
 
       await jobs.failAudioJobById(audioUploadId, "late fetch failure");
 
@@ -363,11 +318,7 @@ describe.skipIf(!testState.databaseUrl)("audio jobs in PostgreSQL", () => {
     it("leaves a completed job completed", async () => {
       const audioUploadId = await createJob();
       const claimed = await jobs.claimAudioJob(audioUploadId);
-      await jobs.completeAudioJob(
-        audioUploadId,
-        claimed!.claimToken,
-        "nova-3-general",
-      );
+      await jobs.completeAudioJob(audioUploadId, claimed!.claimToken);
 
       const unclaimed = await jobs.unclaimAndResetAudioJob(
         audioUploadId,

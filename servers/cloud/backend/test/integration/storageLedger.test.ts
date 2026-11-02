@@ -712,7 +712,6 @@ describe.skipIf(!testState.databaseUrl)("storage ledger in PostgreSQL", () => {
         fileName: "a.webm",
         mimeType: "audio/webm",
         sizeBytes: 1,
-        transcriptModelId: "nova-3",
       };
       if (source === "youtube") {
         await jobs.createYoutubeAudioJob({

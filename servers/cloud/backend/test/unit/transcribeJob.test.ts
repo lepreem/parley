@@ -49,7 +49,6 @@ describe("handleTranscribeJob", () => {
     vi.clearAllMocks();
     mocks.claimAudioJob.mockResolvedValue({
       audioUploadId,
-      transcriptModelId: null,
       userId: "user_01",
       claimToken,
     });
@@ -81,8 +80,7 @@ describe("handleTranscribeJob", () => {
       expect(mocks.transcribeAI).not.toHaveBeenCalled();
       expect(mocks.saveCompletedTranscript).toHaveBeenCalledWith(
         audioUploadId,
-        { segments: captions, language: "ar" },
-        null,
+        { segments: captions, language: "ar", fromCaptions: true },
         claimToken,
       );
     });
@@ -95,8 +93,7 @@ describe("handleTranscribeJob", () => {
 
       expect(mocks.saveCompletedTranscript).toHaveBeenCalledWith(
         audioUploadId,
-        { segments: captions, language: null },
-        null,
+        { segments: captions, language: null, fromCaptions: true },
         claimToken,
       );
     });
@@ -114,8 +111,7 @@ describe("handleTranscribeJob", () => {
       );
       expect(mocks.saveCompletedTranscript).toHaveBeenCalledWith(
         audioUploadId,
-        { segments: transcribed, language: "de" },
-        "nova-3-general",
+        { segments: transcribed, language: "de", fromCaptions: false },
         claimToken,
       );
     });
