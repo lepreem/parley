@@ -9,4 +9,3 @@ import { repliesInProgress } from "./repliesInProgress";
 export const memory = { historyText, modelLists, repliesInProgress };
 
 export { CACHE_KEYS } from "./modelLists";
-export { replyKey } from "./repliesInProgress";

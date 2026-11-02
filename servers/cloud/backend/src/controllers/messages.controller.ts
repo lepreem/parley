@@ -14,7 +14,7 @@ import {
   withPreparationMetrics,
 } from "../preparationMetrics";
 import { uploads } from "../uploads";
-import { memory, replyKey } from "../memory";
+import { memory } from "../memory";
 import { streamTurn, type TurnMetrics } from "../chat/replyStream";
 import { authed } from "../middleware/auth.middleware";
 import { validate } from "../middleware/validate.middleware";
@@ -69,7 +69,8 @@ export const handleListMessages = authed.createHandlers(
     // until the replyFinished it sends has the client read again, rather than
     // in neither, with nothing to say it's missing.
     const replyInProgress = memory.repliesInProgress.find(
-      replyKey(userId, conversationId),
+      userId,
+      conversationId,
     );
 
     // Ownership check and the rows themselves are independent reads; the rows
@@ -182,7 +183,7 @@ export const handleStopReply = authed.createHandlers(
   validate("param", conversationReqParamSchema),
   (c) => {
     const { conversationId } = c.req.valid("param");
-    return memory.repliesInProgress.stop(replyKey(c.var.userId, conversationId))
+    return memory.repliesInProgress.stop(c.var.userId, conversationId)
       ? c.body(null, 204)
       : c.json({ message: "No reply in progress" }, 404);
   },
