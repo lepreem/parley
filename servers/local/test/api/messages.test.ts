@@ -421,6 +421,51 @@ describe("POST /conversations/:conversationId/messages", () => {
     );
   }
 
+  describe("with a reasoning effort", () => {
+    const offersEfforts = () =>
+      mockFindChatModel.mockResolvedValue({
+        id: modelId,
+        contextTokens: null,
+        acceptsImages: true,
+        reasoning: { efforts: ["low", "high"], defaultEffort: null },
+      });
+
+    it("runs the model at it", async () => {
+      offersEfforts();
+      mockChatAI.mockResolvedValueOnce("Answer");
+
+      const res = await postMessage({
+        messageContent: "Hi",
+        chosenModelId: modelId,
+        reasoningEffort: "high",
+      });
+      await res.text();
+
+      expect(res.status).toBe(200);
+      expect(mockChatAI).toHaveBeenCalledWith(
+        modelId,
+        expect.anything(),
+        expect.objectContaining({ effort: "high" }),
+      );
+    });
+
+    it("refuses one the model doesn't offer", async () => {
+      offersEfforts();
+
+      const res = await postMessage({
+        messageContent: "Hi",
+        chosenModelId: modelId,
+        reasoningEffort: "max",
+      });
+
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({
+        message: "Invalid effort: this model doesn't offer it",
+      });
+      expect(mockChatAI).not.toHaveBeenCalled();
+    });
+  });
+
   it("rejects an attachment that cannot be reserved before starting either model call", async () => {
     mockResolveImages.mockResolvedValueOnce([resolvedImage]);
     mockClaimAttachments.mockResolvedValueOnce(false);

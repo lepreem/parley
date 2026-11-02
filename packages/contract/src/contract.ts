@@ -107,6 +107,11 @@ export type SendMessageBody = {
   attachments: MessageAttachmentInput[];
   /** The conversation's head as the client last saw it. */
   lastMessageId: string | null;
+  /**
+   * How hard the model thinks: one of its `reasoning.efforts`. Left out, it
+   * thinks as hard as it does by default.
+   */
+  reasoningEffort?: ReasoningEffort;
 };
 
 /** One timed step of a turn, in milliseconds from the turn's start. */
@@ -195,6 +200,18 @@ export type ChatModel = {
    * whose price depends on the model it picks, or a subscription.
    */
   pricing: ModelPricing | null;
+  /** How hard it can be asked to think, or null when that isn't a choice. */
+  reasoning: ModelReasoning | null;
+};
+
+export type ReasoningEffort =
+  "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+
+export type ModelReasoning = {
+  /** The levels it offers, least thinking first. */
+  efforts: ReasoningEffort[];
+  /** The level it uses when none is chosen, when known. */
+  defaultEffort: ReasoningEffort | null;
 };
 
 /** A chat model's price, in US dollars per million tokens. */

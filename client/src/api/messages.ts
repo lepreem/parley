@@ -124,6 +124,9 @@ export async function streamMessage(
     jsonRequest(input.replacesMessageId ? "PATCH" : "POST", {
       messageContent: input.messageContent,
       chosenModelId: input.chosenModelId,
+      ...(input.reasoningEffort
+        ? { reasoningEffort: input.reasoningEffort }
+        : {}),
       attachments: input.attachments,
       lastMessageId: input.lastMessageId,
     } satisfies SendMessageBody),

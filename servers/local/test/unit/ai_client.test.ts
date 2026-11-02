@@ -107,6 +107,10 @@ describe("listChatModels", () => {
         replacedBy: null,
         retires: null,
         pricing: null,
+        reasoning: {
+          efforts: ["none", "low", "medium", "high", "xhigh", "max"],
+          defaultEffort: null,
+        },
       },
       {
         id: "sonnet",
@@ -119,6 +123,10 @@ describe("listChatModels", () => {
         replacedBy: null,
         retires: null,
         pricing: null,
+        reasoning: {
+          efforts: ["none", "low", "medium", "high", "xhigh", "max"],
+          defaultEffort: null,
+        },
       },
       {
         id: "haiku",
@@ -131,6 +139,10 @@ describe("listChatModels", () => {
         replacedBy: null,
         retires: null,
         pricing: null,
+        reasoning: {
+          efforts: ["none", "low", "medium", "high", "xhigh", "max"],
+          defaultEffort: null,
+        },
       },
     ]);
   });
@@ -269,16 +281,29 @@ describe("chatAI", () => {
     expect(deltas).toEqual(["Hel", "lo"]);
   });
 
-  it("lets the model think unless told not to", async () => {
+  it("leaves the effort to Claude Code unless told one", async () => {
     mockSpawn.mockImplementation(answers("hi"));
 
     await chatAI("sonnet", [{ role: "user", content: "yo" }]);
     await chatAI("sonnet", [{ role: "user", content: "yo" }], {
-      thinking: false,
+      effort: "xhigh",
     });
 
+    expect(runOf(0).args).not.toContain("--effort");
     expect(runOf(0).options.env?.MAX_THINKING_TOKENS).toBeUndefined();
-    expect(runOf(1).options.env?.MAX_THINKING_TOKENS).toBe("0");
+    expect(valueOf(runOf(1).args, "--effort")).toBe("xhigh");
+    expect(runOf(1).options.env?.MAX_THINKING_TOKENS).toBeUndefined();
+  });
+
+  it("turns thinking off at no effort, which Claude Code has no level for", async () => {
+    mockSpawn.mockImplementation(answers("hi"));
+
+    await chatAI("sonnet", [{ role: "user", content: "yo" }], {
+      effort: "none",
+    });
+
+    expect(runOf().args).not.toContain("--effort");
+    expect(runOf().options.env?.MAX_THINKING_TOKENS).toBe("0");
   });
 
   it("fails with Claude Code's own message when it answers with an error", async () => {
@@ -344,7 +369,7 @@ describe("chatAI timeouts", () => {
   });
 
   const TOTAL_TIMEOUT_MS = 8 * 60_000;
-  const FIRST_TOKEN_TIMEOUT_MS = 2 * 60_000;
+  const FIRST_TOKEN_TIMEOUT_MS = 6 * 60_000;
   const BETWEEN_CHUNKS_TIMEOUT_MS = 30_000;
   const TITLE_TIMEOUT_MS = 15_000;
 
@@ -376,7 +401,7 @@ describe("chatAI timeouts", () => {
     await vi.advanceTimersByTimeAsync(FIRST_TOKEN_TIMEOUT_MS - 1);
     expect(outcome.settled).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
-    expect(outcome.value).toEqual(timedOut("No progress within 120000 ms"));
+    expect(outcome.value).toEqual(timedOut("No progress within 360000 ms"));
   });
 
   it("keeps waiting for the first token while the model thinks", async () => {

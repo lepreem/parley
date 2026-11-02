@@ -9,6 +9,7 @@
     "./http/cursor": "./src/http/cursor.ts",
     "./http/takesBody": "./src/http/takesBody.ts",
     "./ids": "./src/ids.ts",
+    "./reasoningEfforts": "./src/reasoningEfforts.ts",
     "./runtime/logger": "./src/runtime/logger.ts",
     "./runtime/parseEnv": "./src/runtime/parseEnv.ts",
     "./runtime/preflight": "./src/runtime/preflight.ts",

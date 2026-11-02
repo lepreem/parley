@@ -7,6 +7,7 @@ import { streamSSE } from "hono/streaming";
 import type {
   ChatMessage,
   MessagesResponse,
+  ReasoningEffort,
   ReplyStreamEvents,
 } from "@parley/contract";
 import { SSEEventQueue } from "@parley/server-kit/sse/eventQueue";
@@ -256,6 +257,7 @@ type MessageRequest = {
   conversationId: string;
   content: string;
   chosenModelId: string;
+  reasoningEffort: ReasoningEffort | undefined;
   attachmentIds: string[];
   imageUploadIds: string[];
   audioUploadIds: string[];
@@ -270,6 +272,7 @@ function messageRequestFrom(c: Context): MessageRequest {
     conversationId: c.get(CTX_KEYS.conversationId),
     content: c.get(CTX_KEYS.messageContent),
     chosenModelId: c.get(CTX_KEYS.chosenModelId),
+    reasoningEffort: c.get(CTX_KEYS.reasoningEffort),
     attachmentIds: attachments.map((attachment) =>
       attachment.type === "image"
         ? attachment.imageUploadId
@@ -540,6 +543,7 @@ async function writeReply({
           entry.append(delta);
           sseEvents.push("delta", { delta });
         },
+        effort: messageInput.reasoningEffort,
         signal: entry.signal,
       });
     } catch (error) {

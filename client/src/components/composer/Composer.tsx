@@ -5,7 +5,11 @@ import {
   type ClipboardEvent,
   type KeyboardEvent,
 } from "react";
-import type { ChatModel, MessageRequirements } from "../../api/models";
+import type {
+  ChatModel,
+  MessageRequirements,
+  ReasoningEffort,
+} from "../../api/models";
 import { useShell } from "../app/shellContext";
 import { useIsGuest } from "../../hooks/auth/useIsGuest";
 import { findYoutubeUrl } from "../../media/youtube";
@@ -13,6 +17,7 @@ import { useSources } from "../../sources/useSources";
 import { Icon } from "../ui/Icon";
 import { Meter } from "../ui/Meter";
 import { AttachMenu } from "./AttachMenu";
+import { EffortPicker } from "./EffortPicker";
 import { ModelPicker } from "./ModelPicker";
 import { SourceChip } from "./SourceChip";
 import { YoutubeOffer } from "./YoutubeOffer";
@@ -27,6 +32,8 @@ type ComposerProps = {
   models: ChatModel[];
   modelId: string | null;
   onModelChange: (modelId: string) => void;
+  effort: ReasoningEffort | null;
+  onEffortChange: (effort: ReasoningEffort | null) => void;
   modelsLoading: boolean;
   modelsError: string | null;
   requirements: MessageRequirements;
@@ -47,6 +54,8 @@ export function Composer({
   models,
   modelId,
   onModelChange,
+  effort,
+  onEffortChange,
   modelsLoading,
   modelsError,
   requirements,
@@ -174,6 +183,16 @@ export function Composer({
               loading={modelsLoading}
               error={modelsError}
             />
+            {!guest && (
+              <EffortPicker
+                reasoning={
+                  models.find((model) => model.id === modelId)?.reasoning ??
+                  null
+                }
+                value={effort}
+                onChange={onEffortChange}
+              />
+            )}
             <span className="flex-1" />
             {sending ? (
               <button

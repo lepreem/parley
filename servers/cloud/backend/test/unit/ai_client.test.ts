@@ -52,6 +52,7 @@ const sampleModel = {
   replacedBy: null,
   retires: null,
   pricing: { inputPerMillionTokens: 0.15, outputPerMillionTokens: 0.6 },
+  reasoning: null,
 };
 
 const openRouterListModel = {
@@ -135,6 +136,7 @@ describe("listChatModels", () => {
         replacedBy: null,
         retires: null,
         pricing: { inputPerMillionTokens: 0.15, outputPerMillionTokens: 0.6 },
+        reasoning: null,
       },
       {
         id: "openrouter/auto",
@@ -147,6 +149,7 @@ describe("listChatModels", () => {
         replacedBy: null,
         retires: null,
         pricing: null,
+        reasoning: null,
       },
     ]);
     // Only text-output models are relevant here; transcription is Deepgram's.

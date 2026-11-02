@@ -421,6 +421,28 @@ describe("a guest's turn", () => {
     expect(mockUnclaimConversationTurn).toHaveBeenCalled();
   });
 
+  it("is refused a choice of effort", async () => {
+    mockFindChatModel.mockResolvedValue({
+      id: modelId,
+      contextTokens: null,
+      acceptsImages: true,
+      reasoning: { efforts: ["low", "high"], defaultEffort: "low" },
+    });
+
+    const res = await postAsGuest({
+      messageContent: "Hi there",
+      chosenModelId: modelId,
+      reasoningEffort: "high",
+    });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      message: "Invalid effort: sign in to choose one",
+    });
+    expect(mockChatAI).not.toHaveBeenCalled();
+    expect(mockUnclaimConversationTurn).toHaveBeenCalled();
+  });
+
   it("gets ten turns a day from one address, across guests", async () => {
     for (let i = 0; i < 10; i++) {
       const res = await postAsGuest({
@@ -671,6 +693,88 @@ describe("POST /conversations/:conversationId/messages", () => {
 
     finishGeneration("Summary");
     expect(await response.text()).toContain("event: done");
+  });
+
+  describe("with a reasoning effort", () => {
+    const offersEfforts = () =>
+      mockFindChatModel.mockResolvedValue({
+        id: modelId,
+        contextTokens: null,
+        acceptsImages: true,
+        maxOutputTokens: null,
+        reasoning: { efforts: ["low", "high"], defaultEffort: "low" },
+      });
+
+    it("asks the model for it, with room for that much thinking", async () => {
+      offersEfforts();
+      mockChatAI.mockResolvedValueOnce("Answer");
+
+      const res = await postMessage({
+        messageContent: "Hi",
+        chosenModelId: modelId,
+        reasoningEffort: "high",
+      });
+      await res.text();
+
+      expect(res.status).toBe(200);
+      expect(mockChatAI).toHaveBeenCalledWith(
+        modelId,
+        expect.anything(),
+        expect.objectContaining({
+          reasoningEffort: "high",
+          maxOutputTokens: 20_000,
+        }),
+      );
+    });
+
+    it("leaves it to the model when none is chosen", async () => {
+      offersEfforts();
+      mockChatAI.mockResolvedValueOnce("Answer");
+
+      const res = await postMessage({
+        messageContent: "Hi",
+        chosenModelId: modelId,
+      });
+      await res.text();
+
+      expect(mockChatAI).toHaveBeenCalledWith(
+        modelId,
+        expect.anything(),
+        expect.objectContaining({
+          reasoningEffort: undefined,
+          maxOutputTokens: 8_000,
+        }),
+      );
+    });
+
+    it("refuses one the model doesn't offer", async () => {
+      offersEfforts();
+
+      const res = await postMessage({
+        messageContent: "Hi",
+        chosenModelId: modelId,
+        reasoningEffort: "max",
+      });
+
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({
+        message: "Invalid effort: this model doesn't offer it",
+      });
+      expect(mockChatAI).not.toHaveBeenCalled();
+    });
+
+    it("refuses one that isn't a level at all", async () => {
+      offersEfforts();
+
+      const res = await postMessage({
+        messageContent: "Hi",
+        chosenModelId: modelId,
+        reasoningEffort: "ludicrous",
+      });
+
+      expect(res.status).toBe(400);
+      expect(mockChatAI).not.toHaveBeenCalled();
+    });
   });
 
   it("says so when the model thought until it had no room to reply", async () => {
@@ -1486,7 +1590,9 @@ describe("POST /conversations/:conversationId/messages", () => {
     const [, turns, opts] = mockChatAI.mock.calls[0];
     const labels = turns.map((t: { content: string }) => t.content.slice(0, 6));
     expect(labels).toEqual(["middle", "newest", "Hi the"]);
-    expect(opts.maxOutputTokens).toBe(completionTokenCeiling(null));
+    expect(opts.maxOutputTokens).toBe(
+      completionTokenCeiling(undefined, undefined),
+    );
     expect(mockPersistAndUnclaimChatTurn).toHaveBeenCalledWith(
       expect.objectContaining({ contextWindowMessageCount: 4 }),
     );

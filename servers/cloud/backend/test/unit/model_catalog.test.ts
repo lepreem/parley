@@ -73,7 +73,43 @@ describe("offeredModels", () => {
       pricing: { inputPerMillionTokens: 0.1, outputPerMillionTokens: 0.5 },
       replacedBy: null,
       retires: "2027-09-22",
+      reasoning: null,
     });
+  });
+
+  it("lists the efforts it knows, least thinking first, with the default", () => {
+    const reasoningOf = (reasoning: Model["reasoning"]) =>
+      offeredModels(
+        [listed("a/model", "2026-09-22", [1, 1], { reasoning })],
+        Date.parse("2026-10-31"),
+      )[0]?.reasoning;
+
+    expect(
+      reasoningOf({
+        mandatory: true,
+        supportedEfforts: ["max", "new-level", null, "low"],
+        defaultEffort: "low",
+      } as Model["reasoning"]),
+    ).toEqual({ efforts: ["low", "max"], defaultEffort: "low" });
+    expect(
+      reasoningOf({
+        mandatory: false,
+        supportedEfforts: ["high", "none"],
+      }),
+    ).toEqual({ efforts: ["none", "high"], defaultEffort: null });
+  });
+
+  it("offers no choice of effort with fewer than two levels", () => {
+    const reasoningOf = (reasoning: Model["reasoning"]) =>
+      offeredModels(
+        [listed("a/model", "2026-09-22", [1, 1], { reasoning })],
+        Date.parse("2026-10-31"),
+      )[0]?.reasoning;
+
+    expect(
+      reasoningOf({ mandatory: true, supportedEfforts: ["high"] }),
+    ).toBeNull();
+    expect(reasoningOf({ mandatory: false })).toBeNull();
   });
 
   it("leaves out batch-only variants, which can't stream a reply", () => {

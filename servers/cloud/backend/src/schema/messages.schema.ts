@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { SendMessageBody } from "@parley/contract";
 import { takesBody } from "@parley/server-kit/http/takesBody";
+import { REASONING_EFFORTS } from "@parley/server-kit/reasoningEfforts";
 import { chat } from "../ai";
 
 const MAX_MESSAGE_LENGTH = 50_000;
@@ -57,6 +58,7 @@ export const messageCreateBodySchema = takesBody<SendMessageBody>()(
         .min(1, "Message must not be empty")
         .max(MAX_MESSAGE_LENGTH, "Message is too long"),
       chosenModelId: z.string().min(1),
+      reasoningEffort: z.enum(REASONING_EFFORTS).optional(),
       attachments: z
         .array(messageAttachmentSchema)
         .optional()
@@ -81,6 +83,16 @@ export const messageCreateBodySchema = takesBody<SendMessageBody>()(
           path: ["chosenModelId"],
         });
         return;
+      }
+      if (
+        data.reasoningEffort &&
+        !model.reasoning?.efforts.includes(data.reasoningEffort)
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Invalid effort: this model doesn't offer it",
+          path: ["reasoningEffort"],
+        });
       }
       const imageCount = data.attachments.filter(
         (attachment) => attachment.type === "image",

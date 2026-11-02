@@ -86,7 +86,7 @@ const TITLE_TIMEOUT_MS = 15 * 1000; // 15 seconds
 export class NoRoomToReply extends Error {
   constructor() {
     super(
-      "The model used up its token limit thinking and wrote no reply. Try again, or pick another model.",
+      "The model used up its token limit thinking and wrote no reply. Try a lower effort, or another model.",
     );
     this.name = "NoRoomToReply";
   }

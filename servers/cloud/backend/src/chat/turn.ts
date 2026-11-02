@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import type { TurnStats } from "@parley/contract";
+import type { ReasoningEffort, TurnStats } from "@parley/contract";
 import type { ReplyInProgressEntry } from "@parley/server-kit/memory/repliesInProgress";
 import { logger, messageOf } from "@parley/server-kit/runtime/logger";
 import { data, type HistoryCandidate, type HistoryTranscript } from "../data";
@@ -30,6 +30,8 @@ export type TurnRequest = {
   conversationId: string;
   content: string;
   chosenModelId: string;
+  /** How hard the model thinks; left to the model when undefined. */
+  reasoningEffort: ReasoningEffort | undefined;
   /** Every attachment, images and transcripts, in the order they were sent. */
   attachmentIds: string[];
   imageUploadIds: string[];
@@ -44,6 +46,7 @@ export function turnRequestFrom(
   {
     messageContent,
     chosenModelId,
+    reasoningEffort,
     attachments,
     lastMessageId,
   }: z.output<typeof messageCreateBodySchema>,
@@ -54,6 +57,7 @@ export function turnRequestFrom(
     conversationId,
     content: messageContent,
     chosenModelId,
+    reasoningEffort,
     attachmentIds: attachments.map((attachment) =>
       attachment.type === "image"
         ? attachment.imageUploadId
@@ -203,6 +207,13 @@ export async function prepareTurn(
   if (request.guest && !(await chat.isGuestModel(request.chosenModelId))) {
     throw new TurnRejected(400, {
       message: "Invalid model: sign in to use this model",
+    });
+  }
+  // Thinking is paid for, and only the guest key's credit limit stops guests
+  // spending, so they leave it to the model.
+  if (request.guest && request.reasoningEffort) {
+    throw new TurnRejected(400, {
+      message: "Invalid effort: sign in to choose one",
     });
   }
   if (newTurnResolvedImages.length !== request.imageUploadIds.length) {
@@ -374,7 +385,8 @@ export async function answerTurn(
           entry.append(delta);
           onDelta(delta);
         },
-        maxOutputTokens: completionTokenCeiling(model?.maxOutputTokens),
+        maxOutputTokens: completionTokenCeiling(model, request.reasoningEffort),
+        reasoningEffort: request.reasoningEffort,
         sessionId: request.conversationId,
         signal: entry.signal,
         guest: request.guest,

@@ -1,8 +1,13 @@
-import type { ChatModel, ModelPricing, ModelsResponse } from "@parley/contract";
+import type {
+  ChatModel,
+  ModelPricing,
+  ModelsResponse,
+  ReasoningEffort,
+} from "@parley/contract";
 import { apiJson } from "./http";
 import type { Server } from "./server";
 
-export type { ChatModel, ModelPricing };
+export type { ChatModel, ModelPricing, ReasoningEffort };
 
 async function fetchModels<T>(server: Server, path: string): Promise<T[]> {
   const data = await apiJson<ModelsResponse<T>>(server, path);

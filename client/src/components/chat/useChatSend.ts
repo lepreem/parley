@@ -11,6 +11,7 @@ import {
   type MessagesResponse,
   type TurnStats,
 } from "../../api/messages";
+import type { ReasoningEffort } from "../../api/models";
 import { queryKeys } from "../../lib/queryClient";
 import { useServer } from "../../hooks/server/useServer";
 import { useToast } from "../../hooks/toast/useToast";
@@ -202,6 +203,8 @@ function toPendingTurn(
 type TurnInput = {
   content: string;
   modelId: string;
+  /** Null leaves it to the model. */
+  reasoningEffort: ReasoningEffort | null;
   sources: StagedSource[];
   lastMessageId: string | null;
   /** Puts the message back in the composer when the turn didn't take. */
@@ -327,6 +330,9 @@ export function useChatSend() {
             conversationId: target,
             messageContent: input.content,
             chosenModelId: input.modelId,
+            ...(input.reasoningEffort
+              ? { reasoningEffort: input.reasoningEffort }
+              : {}),
             attachments: messageAttachmentsOf(input.sources),
             lastMessageId: input.lastMessageId,
             ...(replaces ? { replacesMessageId: replaces.storedId } : {}),
