@@ -14,6 +14,7 @@ import { uploadRouter } from "./routes/upload.router";
 import { authRouter } from "./routes/auth.router";
 import { modelsRouter } from "./routes/models.router";
 import { conversationsRouter } from "./routes/conversations.router";
+import { speechRouter } from "./routes/speech.router";
 import { handleEvents } from "./sse/events.controller";
 import { requireAuth } from "./middleware/auth.middleware";
 
@@ -22,6 +23,8 @@ import { verifyApiServices } from "./startup";
 import { mq } from "./message-queue/messageQueue";
 
 const MAX_REQUEST_BODY_BYTES = 1024 * 1024;
+/** The one route a file comes through; it holds its body to its own limit. */
+const DICTATION_PATH = "/speech/transcribe";
 
 export async function createApp() {
   const env = getEnv();
@@ -41,15 +44,15 @@ export async function createApp() {
   // covered by tests, because buffering the reply stream would be invisible
   // here and obvious to every user.
   app.use("*", compress());
-  // Nothing has a reason to send more: a message is at most 50k characters,
-  // and files go straight to storage, never through here. Without a limit a
-  // request body is read whole into memory, however large.
-  app.use(
-    "*",
-    bodyLimit({
-      maxSize: MAX_REQUEST_BODY_BYTES,
-      onError: (c) => c.json({ message: "Request body is too large" }, 413),
-    }),
+  // Nothing else has a reason to send more: a message is at most 50k
+  // characters, and files go straight to storage, never through here. Without
+  // a limit a request body is read whole into memory, however large.
+  const requestBodyLimit = bodyLimit({
+    maxSize: MAX_REQUEST_BODY_BYTES,
+    onError: (c) => c.json({ message: "Request body is too large" }, 413),
+  });
+  app.use("*", (c, next) =>
+    c.req.path === DICTATION_PATH ? next() : requestBodyLimit(c, next),
   );
 
   // Every other answer the client gets is JSON with a `message`; an error no
@@ -87,6 +90,7 @@ export async function createApp() {
   app.route("/jobs", jobsRouter);
   app.route("/models", modelsRouter);
   app.route("/conversations", conversationsRouter);
+  app.route("/speech", speechRouter);
 
   // The built client, on the API's own origin, so the session cookie is
   // first-party. Under `npm run dev` it isn't built and Vite serves it.
