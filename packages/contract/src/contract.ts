@@ -201,7 +201,7 @@ export type ModelPricing = {
   outputPerMillionTokens: number;
 };
 
-/** GET /models/chat and GET /models/transcription */
+/** GET /models/chat */
 export type ModelsResponse<Model> = { models: Model[] };
 
 /* -------------------------------------------------------------------- jobs */
