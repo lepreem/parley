@@ -2,6 +2,8 @@ const file = "file";
 const fileName = "fileName";
 const audioSource = "audioSource";
 const chosenModelId = "chosenModelId";
+const reasoningEffort = "reasoningEffort";
+const webSearch = "webSearch";
 const youtubeUrl = "youtubeUrl";
 const youtubeVideoId = "youtubeVideoId";
 const useCaptionsIfAvailable = "useCaptionsIfAvailable";
@@ -26,6 +28,8 @@ export const CTX_KEYS = {
   file,
   fileName,
   chosenModelId,
+  reasoningEffort,
+  webSearch,
   audioSource,
   youtubeUrl,
   youtubeVideoId,

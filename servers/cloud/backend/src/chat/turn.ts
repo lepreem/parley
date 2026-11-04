@@ -1,7 +1,12 @@
 import type { z } from "zod";
-import type { TurnStats } from "@parley/contract";
+import type {
+  MessageSource,
+  ReasoningEffort,
+  TurnStats,
+} from "@parley/contract";
 import type { ReplyInProgressEntry } from "@parley/server-kit/memory/repliesInProgress";
 import { logger, messageOf } from "@parley/server-kit/runtime/logger";
+import { addSource } from "@parley/server-kit/webSources";
 import { data, type HistoryCandidate, type HistoryTranscript } from "../data";
 import { buildUserTurn, chat, type ChatTurn } from "../ai";
 import { measurePreparation } from "../preparationMetrics";
@@ -10,8 +15,8 @@ import type { messageCreateBodySchema } from "../schema/messages.schema";
 import {
   MAX_CONTEXT_CHARS,
   MAX_HISTORY_MESSAGES,
-  MAX_RESPONSE_TOKENS,
   admitHistory,
+  completionTokenCeiling,
   countMessagesInContextWindow,
 } from "./contextWindow";
 import { memory } from "../memory";
@@ -30,6 +35,10 @@ export type TurnRequest = {
   conversationId: string;
   content: string;
   chosenModelId: string;
+  /** How hard the model thinks; left to the model when undefined. */
+  reasoningEffort: ReasoningEffort | undefined;
+  /** Whether the model may search the web. */
+  webSearch: boolean;
   /** Every attachment, images and transcripts, in the order they were sent. */
   attachmentIds: string[];
   imageUploadIds: string[];
@@ -44,6 +53,8 @@ export function turnRequestFrom(
   {
     messageContent,
     chosenModelId,
+    reasoningEffort,
+    webSearch,
     attachments,
     lastMessageId,
   }: z.output<typeof messageCreateBodySchema>,
@@ -54,6 +65,8 @@ export function turnRequestFrom(
     conversationId,
     content: messageContent,
     chosenModelId,
+    reasoningEffort,
+    webSearch: webSearch ?? false,
     attachmentIds: attachments.map((attachment) =>
       attachment.type === "image"
         ? attachment.imageUploadId
@@ -203,6 +216,19 @@ export async function prepareTurn(
   if (request.guest && !(await chat.isGuestModel(request.chosenModelId))) {
     throw new TurnRejected(400, {
       message: "Invalid model: sign in to use this model",
+    });
+  }
+  // Thinking is paid for, and only the guest key's credit limit stops guests
+  // spending, so they leave it to the model.
+  if (request.guest && request.reasoningEffort) {
+    throw new TurnRejected(400, {
+      message: "Invalid effort: sign in to choose one",
+    });
+  }
+  // Searches are charged on top of the tokens, so they're for signed-in users.
+  if (request.guest && request.webSearch) {
+    throw new TurnRejected(400, {
+      message: "Web search: sign in to use it",
     });
   }
   if (newTurnResolvedImages.length !== request.imageUploadIds.length) {
@@ -361,6 +387,9 @@ export async function answerTurn(
       ? titleForFirstTurn(request)
       : Promise.resolve(undefined);
 
+  const model = await chat.findModel(request.chosenModelId);
+  const sources: MessageSource[] = [];
+
   let assistantContent: string;
   let stopped = false;
   try {
@@ -372,7 +401,15 @@ export async function answerTurn(
           entry.append(delta);
           onDelta(delta);
         },
-        maxOutputTokens: MAX_RESPONSE_TOKENS,
+        maxOutputTokens: completionTokenCeiling(model, request.reasoningEffort),
+        reasoningEffort: request.reasoningEffort,
+        ...(request.webSearch
+          ? {
+              webSearch: true,
+              onSource: (url: unknown, title: unknown) =>
+                addSource(sources, url, title),
+            }
+          : {}),
         sessionId: request.conversationId,
         signal: entry.signal,
         guest: request.guest,
@@ -399,6 +436,7 @@ export async function answerTurn(
         chosenModelId: request.chosenModelId,
         assistantContent,
         stopped,
+        sources,
         conversationTitle: title,
         contextWindowMessageCount: countMessagesInContextWindow([
           assistantContent.length,
@@ -415,5 +453,5 @@ export async function answerTurn(
     assistantMessageId: saved.assistantMessageId,
     assistantContent,
   });
-  return { lastMessageId: saved.assistantMessageId, stopped };
+  return { lastMessageId: saved.assistantMessageId, stopped, sources };
 }

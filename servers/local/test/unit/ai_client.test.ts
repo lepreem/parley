@@ -100,34 +100,52 @@ describe("listChatModels", () => {
         id: "opus",
         name: "Claude Opus",
         contextTokens: 200_000,
+        maxOutputTokens: null,
         acceptsImages: true,
         released: null,
         aliases: [],
         replacedBy: null,
         retires: null,
         pricing: null,
+        reasoning: {
+          efforts: ["none", "low", "medium", "high", "xhigh", "max"],
+          defaultEffort: null,
+        },
+        searchesWeb: true,
       },
       {
         id: "sonnet",
         name: "Claude Sonnet",
         contextTokens: 200_000,
+        maxOutputTokens: null,
         acceptsImages: true,
         released: null,
         aliases: [],
         replacedBy: null,
         retires: null,
         pricing: null,
+        reasoning: {
+          efforts: ["none", "low", "medium", "high", "xhigh", "max"],
+          defaultEffort: null,
+        },
+        searchesWeb: true,
       },
       {
         id: "haiku",
         name: "Claude Haiku",
         contextTokens: 200_000,
+        maxOutputTokens: null,
         acceptsImages: true,
         released: null,
         aliases: [],
         replacedBy: null,
         retires: null,
         pricing: null,
+        reasoning: {
+          efforts: ["none", "low", "medium", "high", "xhigh", "max"],
+          defaultEffort: null,
+        },
+        searchesWeb: true,
       },
     ]);
   });
@@ -266,16 +284,83 @@ describe("chatAI", () => {
     expect(deltas).toEqual(["Hel", "lo"]);
   });
 
-  it("lets the model think unless told not to", async () => {
+  it("gives the model only WebSearch, and only when asked", async () => {
     mockSpawn.mockImplementation(answers("hi"));
 
     await chatAI("sonnet", [{ role: "user", content: "yo" }]);
     await chatAI("sonnet", [{ role: "user", content: "yo" }], {
-      thinking: false,
+      webSearch: true,
     });
 
+    expect(valueOf(runOf(0).args, "--tools")).toBe("");
+    expect(runOf(0).args).not.toContain("--allowedTools");
+    expect(valueOf(runOf(1).args, "--tools")).toBe("WebSearch");
+    expect(valueOf(runOf(1).args, "--allowedTools")).toBe("WebSearch");
+  });
+
+  it("hands over the pages a search lists, skipping its summaries", async () => {
+    const pages: unknown[][] = [];
+    mockSpawn.mockImplementation(
+      fakeProcess([
+        {
+          line: {
+            type: "user",
+            tool_use_result: {
+              query: "node lts",
+              results: [
+                {
+                  tool_use_id: "srvtoolu_1",
+                  content: [
+                    { title: "Node.js", url: "https://nodejs.org/" },
+                    { title: "Blog", url: "https://example.com/blog" },
+                  ],
+                },
+                "A summary of what the search found.",
+              ],
+            },
+          },
+        },
+        { line: { type: "user" } },
+        { line: textLine("hi") },
+        { line: resultLine("hi") },
+      ]),
+    );
+
+    const answer = await chatAI("sonnet", [{ role: "user", content: "yo" }], {
+      webSearch: true,
+      onSource: (url, title) => pages.push([url, title]),
+    });
+
+    expect(answer).toBe("hi");
+    expect(pages).toEqual([
+      ["https://nodejs.org/", "Node.js"],
+      ["https://example.com/blog", "Blog"],
+    ]);
+  });
+
+  it("leaves the effort to Claude Code unless told one", async () => {
+    mockSpawn.mockImplementation(answers("hi"));
+
+    await chatAI("sonnet", [{ role: "user", content: "yo" }]);
+    await chatAI("sonnet", [{ role: "user", content: "yo" }], {
+      effort: "xhigh",
+    });
+
+    expect(runOf(0).args).not.toContain("--effort");
     expect(runOf(0).options.env?.MAX_THINKING_TOKENS).toBeUndefined();
-    expect(runOf(1).options.env?.MAX_THINKING_TOKENS).toBe("0");
+    expect(valueOf(runOf(1).args, "--effort")).toBe("xhigh");
+    expect(runOf(1).options.env?.MAX_THINKING_TOKENS).toBeUndefined();
+  });
+
+  it("turns thinking off at no effort, which Claude Code has no level for", async () => {
+    mockSpawn.mockImplementation(answers("hi"));
+
+    await chatAI("sonnet", [{ role: "user", content: "yo" }], {
+      effort: "none",
+    });
+
+    expect(runOf().args).not.toContain("--effort");
+    expect(runOf().options.env?.MAX_THINKING_TOKENS).toBe("0");
   });
 
   it("fails with Claude Code's own message when it answers with an error", async () => {
@@ -341,7 +426,7 @@ describe("chatAI timeouts", () => {
   });
 
   const TOTAL_TIMEOUT_MS = 8 * 60_000;
-  const FIRST_TOKEN_TIMEOUT_MS = 2 * 60_000;
+  const FIRST_TOKEN_TIMEOUT_MS = 6 * 60_000;
   const BETWEEN_CHUNKS_TIMEOUT_MS = 30_000;
   const TITLE_TIMEOUT_MS = 15_000;
 
@@ -373,7 +458,7 @@ describe("chatAI timeouts", () => {
     await vi.advanceTimersByTimeAsync(FIRST_TOKEN_TIMEOUT_MS - 1);
     expect(outcome.settled).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
-    expect(outcome.value).toEqual(timedOut("No progress within 120000 ms"));
+    expect(outcome.value).toEqual(timedOut("No progress within 360000 ms"));
   });
 
   it("keeps waiting for the first token while the model thinks", async () => {
