@@ -313,6 +313,31 @@ describe("chatAI", () => {
       { signal: expect.any(AbortSignal) },
     );
   });
+
+  it("reports the usage that ends a stream", async () => {
+    const usage = {
+      promptTokens: 3_000,
+      completionTokens: 20,
+      promptTokensDetails: { cachedTokens: 2_900 },
+    };
+    mockChatSend.mockResolvedValueOnce(
+      (async function* () {
+        yield { choices: [{ delta: { content: "hi" } }] };
+        yield { choices: [], usage };
+      })(),
+    );
+    const onUsage = vi.fn();
+
+    const reply = await chat.complete(
+      MODEL_ID,
+      [{ role: "user", content: "yo" }],
+      { onDelta: () => {}, onUsage },
+    );
+
+    expect(reply).toBe("hi");
+    expect(onUsage).toHaveBeenCalledOnce();
+    expect(onUsage).toHaveBeenCalledWith(usage);
+  });
 });
 
 type SendOptions = { signal: AbortSignal };

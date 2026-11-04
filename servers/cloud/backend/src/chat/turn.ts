@@ -20,7 +20,7 @@ import {
   countMessagesInContextWindow,
 } from "./contextWindow";
 import { memory } from "../memory";
-import { buildPrompt, containsImageInput, withTranscripts } from "./prompt";
+import { buildPrompt, countImageInputs, withTranscripts } from "./prompt";
 import type { TurnClaim } from "./turnClaim";
 
 const log = logger.child({ component: "chat-turn" });
@@ -270,7 +270,7 @@ export async function prepareTurn(
   // The request schema already turned away new images for a text-only
   // model, before anything was claimed; this also covers replayed ones.
   if (
-    containsImageInput(prompt) &&
+    countImageInputs(prompt) > 0 &&
     !(await chat.findModel(request.chosenModelId))?.acceptsImages
   ) {
     throw new TurnRejected(400, {
@@ -401,6 +401,18 @@ export async function answerTurn(
           entry.append(delta);
           onDelta(delta);
         },
+        onUsage: (usage) =>
+          log.info("Chat turn usage", {
+            conversationId: request.conversationId,
+            model: request.chosenModelId,
+            imageCount: countImageInputs(prepared.prompt),
+            promptTokens: usage.promptTokens,
+            cachedTokens: usage.promptTokensDetails?.cachedTokens,
+            cacheWriteTokens: usage.promptTokensDetails?.cacheWriteTokens,
+            completionTokens: usage.completionTokens,
+            reasoningTokens: usage.completionTokensDetails?.reasoningTokens,
+            cost: usage.cost,
+          }),
         maxOutputTokens: completionTokenCeiling(model, request.reasoningEffort),
         reasoningEffort: request.reasoningEffort,
         ...(request.webSearch
