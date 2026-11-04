@@ -14,6 +14,11 @@ files:
 extraResources:
   - from: build/server
     to: server
+  # electron-builder leaves out anything under a node_modules folder, however
+  # it's asked, unless that's the folder it's given. Without these the server
+  # finds nothing, or, from inside this repo, this repo's own packages.
+  - from: build/server/node_modules
+    to: server/node_modules
   - from: build/client
     to: client
   - from: build/bin
