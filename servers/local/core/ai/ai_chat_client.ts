@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { createInterface } from "node:readline";
 import type {
   ChatModel,
@@ -104,7 +104,7 @@ export async function chatImageInput(
  * the app keeps its own (edits and deletes rewrite it), so every run is handed
  * the whole conversation as one message. This says how to read it.
  */
-const CHAT_INSTRUCTIONS = `You are a helpful assistant in a chat app. The user's message holds the conversation so far, oldest first, with each turn wrapped in <user> or <assistant> tags. Reply to the last user turn, as the assistant, without the tags.`;
+const CHAT_INSTRUCTIONS = `This conversation reaches you through a chat app. The user's message holds the conversation so far, oldest first, with each turn wrapped in <user> or <assistant> tags. Reply to the last user turn, as the assistant, without the tags.`;
 
 type ContentBlock =
   | { type: "text"; text: string }
@@ -151,43 +151,91 @@ function promptOf(turns: readonly ChatTurn[]): ContentBlock[] {
   return blocks;
 }
 
+/** How the app talks to a run; nothing here changes what Claude Code may do. */
+const STREAM_ARGS = [
+  "--print",
+  "--input-format",
+  "stream-json",
+  "--output-format",
+  "stream-json",
+  // stream-json output requires it.
+  "--verbose",
+  "--include-partial-messages",
+];
+
 /**
- * Claude Code as a plain chat model: the app's instructions in place of the
- * coding agent's system prompt, and no tools, MCP servers, slash commands or
- * settings, so none of the user's CLAUDE.md, hooks or plugins reach the
- * conversation. Nothing is saved as a session; the app keeps the history.
+ * A chat turn runs the user's Claude Code as they've set it up: their settings,
+ * permissions, CLAUDE.md, MCP servers and hooks decide what it can do, as they
+ * would in their terminal. The app adds only what it needs to carry the
+ * conversation, and what the person picked in the app for this message. With
+ * --print nothing can answer a permission prompt, so a tool their settings don't
+ * already allow is refused.
  */
 function chatArgs(
   model: string,
-  instructions: string,
   effort: ReasoningEffort | undefined,
   webSearch: boolean,
 ) {
   return [
-    "--print",
+    ...STREAM_ARGS,
+    "--model",
+    model,
+    "--append-system-prompt",
+    CHAT_INSTRUCTIONS,
+    webSearch ? "--allowedTools" : "--disallowedTools",
+    "WebSearch",
+    // It has no "none": turning thinking off is an environment variable.
+    ...(effort && effort !== "none" ? ["--effort", effort] : []),
+  ];
+}
+
+/**
+ * A small job the app does for itself, like naming a conversation, rather than
+ * a turn the person asked for: Claude Code as a plain model, which can't act on
+ * the text it's given, and fires none of the person's hooks or saved sessions.
+ */
+function helperArgs(
+  model: string,
+  instructions: string,
+  effort: ReasoningEffort | undefined,
+) {
+  return [
+    ...STREAM_ARGS,
     "--model",
     model,
     "--system-prompt",
     instructions,
-    "--input-format",
-    "stream-json",
-    "--output-format",
-    "stream-json",
-    // stream-json output requires it.
-    "--verbose",
-    "--include-partial-messages",
     "--tools",
-    webSearch ? "WebSearch" : "",
-    // Run with --print, nothing can answer a request for permission to use it.
-    ...(webSearch ? ["--allowedTools", "WebSearch"] : []),
+    "",
     "--strict-mcp-config",
     "--setting-sources",
     "",
     "--disable-slash-commands",
     "--no-session-persistence",
-    // It has no "none": turning thinking off is an environment variable.
     ...(effort && effort !== "none" ? ["--effort", effort] : []),
   ];
+}
+
+/**
+ * This server's own settings, which a command Claude Code runs mustn't inherit:
+ * under NODE_ENV=production, `npm install` skips dev packages, and PORT would
+ * move the person's own dev server. ELECTRON_RUN_AS_NODE breaks any Electron app.
+ */
+const SERVER_ONLY_ENV = [
+  "ELECTRON_RUN_AS_NODE",
+  "NODE_ENV",
+  "PORT",
+  "DATA_DIR",
+  "CLIENT_DIR",
+  "CLAUDE_PATH",
+  "YT_DLP_PATH",
+];
+
+function claudeEnv(effort: ReasoningEffort | undefined): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  for (const name of SERVER_ONLY_ENV) delete env[name];
+  if (effort === "none") env.MAX_THINKING_TOKENS = "0";
+  return env;
 }
 
 /** The lines of Claude Code's stream-json output that a run reads. */
@@ -196,15 +244,16 @@ type OutputLine =
       type: "stream_event";
       event: { type: string; delta?: { type: string; text?: string } };
     }
-  | { type: "user"; tool_use_result?: { results?: unknown[] } }
+  | { type: "user"; tool_use_result?: { results?: unknown } }
   | { type: "result"; is_error: boolean; result?: string }
   | { type: "other" };
 
 /** Hands over the pages one WebSearch result lists. */
 function readSources(
-  results: readonly unknown[],
+  results: unknown,
   onSource: (url: unknown, title: unknown) => void,
 ) {
+  if (!Array.isArray(results)) return;
   for (const result of results) {
     if (typeof result !== "object" || result === null) continue;
     const { content } = result as { content?: unknown };
@@ -212,6 +261,15 @@ function readSources(
     for (const page of content as { url?: unknown; title?: unknown }[]) {
       onSource(page.url, page.title);
     }
+  }
+}
+
+/** One line of output, or nothing for a line that isn't JSON, like a hook's. */
+function parseLine(line: string): OutputLine | undefined {
+  try {
+    return JSON.parse(line) as OutputLine;
+  } catch {
+    return undefined;
   }
 }
 
@@ -236,22 +294,22 @@ async function runChat(
     effort: ReasoningEffort | undefined;
     webSearch: boolean;
     onSource: (url: unknown, title: unknown) => void;
-    instructions: string;
+    /** Makes this a helper's run rather than a chat turn. */
+    instructions: string | undefined;
   },
 ): Promise<string> {
   const child = spawn(
     getBaseEnv().CLAUDE_PATH,
-    chatArgs(model, instructions, effort, webSearch),
+    instructions === undefined
+      ? chatArgs(model, effort, webSearch)
+      : helperArgs(model, instructions, effort),
     {
       windowsHide: true,
-      // Claude Code tells the model which folder it runs in, and the app's own
-      // would steer answers towards it; the temp folder says nothing.
-      cwd: tmpdir(),
+      // Where a terminal opens. A helper needs no folder, and Claude Code would
+      // tell the model about one.
+      cwd: instructions === undefined ? homedir() : tmpdir(),
       stdio: ["pipe", "pipe", "pipe"],
-      env:
-        effort === "none"
-          ? { ...process.env, MAX_THINKING_TOKENS: "0" }
-          : process.env,
+      env: claudeEnv(effort),
       signal: abortSignal,
     },
   );
@@ -275,22 +333,32 @@ async function runChat(
 
   let answer = "";
   let result: Extract<OutputLine, { type: "result" }> | undefined;
+  /** A tool ran since the last text, so the next is a new paragraph. */
+  let afterTool = false;
 
   try {
     for await (const line of createInterface({ input: child.stdout })) {
-      const output = JSON.parse(line) as OutputLine;
+      const output = parseLine(line);
+      if (!output) continue;
 
       if (output.type === "result") result = output;
       else if (output.type === "user") {
-        readSources(output.tool_use_result?.results ?? [], onSource);
+        readSources(output.tool_use_result?.results, onSource);
+      } else if (
+        output.type === "stream_event" &&
+        output.event.type === "message_start"
+      ) {
+        afterTool = answer !== "";
       } else if (
         output.type === "stream_event" &&
         output.event.type === "content_block_delta" &&
         output.event.delta?.type === "text_delta" &&
         output.event.delta.text
       ) {
-        answer += output.event.delta.text;
-        await onText(output.event.delta.text);
+        const text = `${afterTool ? "\n\n" : ""}${output.event.delta.text}`;
+        afterTool = false;
+        answer += text;
+        await onText(text);
       }
     }
     const code = await closed;
@@ -319,9 +387,9 @@ const CHAT_TOTAL_TIMEOUT_MS = 8 * 60 * 1000; // 8 minutes
 // Claude Code takes a few seconds to start, and at a high effort a model can
 // think for minutes before its first token.
 const CHAT_FIRST_TOKEN_TIMEOUT_MS = 6 * 60 * 1000; // 6 minutes
-const CHAT_BETWEEN_CHUNKS_TIMEOUT_MS = 30 * 1000; // 30 seconds
-// A model can stop partway through a reply to search and read what it finds.
-const CHAT_BETWEEN_CHUNKS_SEARCHING_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
+// A model can stop partway through a reply to run a tool, which prints nothing
+// until it's done.
+const CHAT_BETWEEN_CHUNKS_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 const TITLE_TIMEOUT_MS = 15 * 1000; // 15 seconds
 
 type ChatOptions = {
@@ -336,8 +404,8 @@ type ChatOptions = {
   /** Each page a search finds, as Claude Code describes it. */
   onSource?: ((url: unknown, title: unknown) => void) | undefined;
   /**
-   * The system prompt: what the model is for. Defaults to replying in a chat,
-   * to a conversation in <user> and <assistant> tags.
+   * Makes this a helper's job, and is its whole system prompt. Without it this
+   * is a chat turn, on the person's own Claude Code setup.
    */
   instructions?: string | undefined;
   /** Ceiling on the whole call. Defaults to CHAT_TOTAL_TIMEOUT_MS. */
@@ -355,11 +423,7 @@ export async function chatAI(
   const timeoutOptions = {
     timeoutMs: opts.timeoutMs ?? CHAT_TOTAL_TIMEOUT_MS,
     firstProgressTimeoutMs: onDelta ? CHAT_FIRST_TOKEN_TIMEOUT_MS : undefined,
-    progressTimeoutMs: !onDelta
-      ? undefined
-      : opts.webSearch
-        ? CHAT_BETWEEN_CHUNKS_SEARCHING_TIMEOUT_MS
-        : CHAT_BETWEEN_CHUNKS_TIMEOUT_MS,
+    progressTimeoutMs: onDelta ? CHAT_BETWEEN_CHUNKS_TIMEOUT_MS : undefined,
     signal: opts.signal,
   };
 
@@ -369,7 +433,7 @@ export async function chatAI(
       effort: opts.effort,
       webSearch: opts.webSearch ?? false,
       onSource: opts.onSource ?? (() => {}),
-      instructions: opts.instructions ?? CHAT_INSTRUCTIONS,
+      instructions: opts.instructions,
       // Only text counts: a model can think silently for longer than the
       // between-chunk limit before it starts answering.
       onText: async (text) => {

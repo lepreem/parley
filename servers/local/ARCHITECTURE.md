@@ -40,9 +40,14 @@ handed it inline, base64-encoded in the prompt (`chatImageInput`).
 ## Chat
 
 Chat runs on the user's own Claude Code (`core/ai/ai_chat_client.ts`): each
-turn is one `claude --print` run, with the app's system prompt and no tools,
-MCP servers, slash commands or settings, so none of the user's own setup
-reaches the conversation. Claude Code keeps history only in its own sessions,
+turn is one `claude --print` run from the home folder, on the user's own setup:
+their settings, permissions, CLAUDE.md, MCP servers and hooks decide what it can
+do, as in their terminal. Nothing can answer a permission prompt under
+`--print`, so a tool their settings don't allow is refused. The app adds only
+instructions for reading the conversation and what the person picked for that
+message: model, effort and web search. Its own small jobs, like titles, run as a
+plain model with no tools or settings, since they read text they shouldn't act
+on. Claude Code keeps history only in its own sessions,
 while the app's changes under edits and deletes, so each run is handed the
 whole conversation as one message: every turn in `<user>` or `<assistant>`
 tags, its images in place. The models are Claude Code's aliases (`opus`,
