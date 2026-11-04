@@ -31,22 +31,24 @@ export function EffortPicker({
 
   if (!reasoning) return null;
 
-  const defaultLabel = reasoning.defaultEffort
-    ? `Default (${EFFORT_LABELS[reasoning.defaultEffort]})`
-    : "Default";
+  const { defaultEffort } = reasoning;
+  // What the model will actually use: no pick means its default.
+  const current = value ?? defaultEffort;
 
   const option = (label: string, effort: ReasoningEffort | null) => (
     <button
       key={label}
       type="button"
       onClick={() => {
-        onChange(effort);
+        // The default level clears the pick, so the next model chosen starts
+        // on its own default rather than inheriting this one's.
+        onChange(effort === defaultEffort ? null : effort);
         setOpen(false);
       }}
       className="flex w-full items-center justify-between gap-3 px-3 py-1.5 text-left text-[12px] text-ink transition-colors hover:bg-sunk"
     >
       <span className="truncate">{label}</span>
-      {effort === value && (
+      {effort === current && (
         <Icon name="check" className="h-4 w-4 shrink-0 text-signal" />
       )}
     </button>
@@ -56,13 +58,14 @@ export function EffortPicker({
     <div className="relative">
       <button
         type="button"
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => setOpen((isOpen) => !isOpen)}
         aria-label="Choose how hard the model thinks"
         aria-expanded={open}
         className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-[12px] text-muted transition-colors hover:bg-sunk hover:text-ink"
       >
+        <Icon name="gauge" className="h-4 w-4 shrink-0" />
         <span className="truncate">
-          {value ? EFFORT_LABELS[value] : "Effort"}
+          {current ? EFFORT_LABELS[current] : "Default"}
         </span>
         <Icon name="chevronDown" className="h-3.5 w-3.5 shrink-0" />
       </button>
@@ -72,9 +75,15 @@ export function EffortPicker({
           ref={menuRef}
           className="absolute bottom-10 left-0 z-30 w-48 overflow-hidden rounded-xl border border-line bg-surface py-1 shadow-xl"
         >
-          {option(defaultLabel, null)}
+          {/* A model that doesn't say what its default is has no level to mark. */}
+          {!defaultEffort && option("Default", null)}
           {reasoning.efforts.map((effort) =>
-            option(EFFORT_LABELS[effort], effort),
+            option(
+              effort === defaultEffort
+                ? `${EFFORT_LABELS[effort]} (default)`
+                : EFFORT_LABELS[effort],
+              effort,
+            ),
           )}
           <p className="border-t border-line px-3 pb-1 pt-2 text-[11px] text-faint">
             More effort takes longer and uses more.
