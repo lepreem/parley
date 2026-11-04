@@ -24,7 +24,7 @@ export const canDictate = () =>
 
 function microphoneError(error: unknown) {
   return error instanceof DOMException && error.name === "NotAllowedError"
-    ? "Microphone access is blocked. Allow it in your browser's site settings."
+    ? "Microphone access is blocked. Allow it in your browser or system settings."
     : "Couldn't start the microphone.";
 }
 
