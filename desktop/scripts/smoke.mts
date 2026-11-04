@@ -68,8 +68,47 @@ async function poll<T>(
   throw new Error(`Timed out waiting for ${what}`);
 }
 
+/** What the window is showing and what the server said, for a failed run. */
+async function reportState(dataDir: string) {
+  try {
+    const response = await fetch(`http://127.0.0.1:${DEBUG_PORT}/json/list`);
+    const pages = (await response.json()) as {
+      url: string;
+      webSocketDebuggerUrl: string;
+    }[];
+    for (const page of pages) {
+      console.error(`The window shows ${page.url}`);
+      const socket = new WebSocket(page.webSocketDebuggerUrl);
+      await new Promise((resolve) => (socket.onopen = resolve));
+      socket.send(
+        JSON.stringify({
+          id: 1,
+          method: "Runtime.evaluate",
+          params: { expression: "document.body.innerText" },
+        }),
+      );
+      const answer = await new Promise<string>((resolve) => {
+        socket.onmessage = (event) => resolve(String(event.data));
+      });
+      const { result } = JSON.parse(answer) as {
+        result: { result: { value: string } };
+      };
+      console.error(result.result.value);
+      socket.close();
+    }
+  } catch (error) {
+    console.error("Couldn't read the window:", error);
+  }
+  const log = await readFile(
+    path.join(dataDir, "logs", "server.log"),
+    "utf8",
+  ).catch(() => "(no server log)");
+  console.error(log);
+}
+
 const scratch = await mkdtemp(path.join(tmpdir(), "parley-smoke-"));
 await fakeClaude(scratch);
+const dataDir = path.join(scratch, "data");
 
 const app = spawn(
   appBinary(),
@@ -83,7 +122,7 @@ const app = spawn(
     stdio: ["ignore", "inherit", "inherit"],
     env: {
       ...process.env,
-      DATA_DIR: path.join(scratch, "data"),
+      DATA_DIR: dataDir,
       PATH: `${scratch}${path.delimiter}${process.env.PATH ?? ""}`,
       ELECTRON_RUN_AS_NODE: "",
     },
@@ -155,6 +194,7 @@ try {
 } catch (error) {
   failed = true;
   console.error(error);
+  await reportState(dataDir);
 } finally {
   app.kill();
   await rm(scratch, { recursive: true, force: true }).catch(() => {});
