@@ -19,10 +19,11 @@ describe("transcribeDictation", () => {
   it("sends the recording to Whisper, named for its type", async () => {
     const fetchMock = answering(200, { text: "Hello." });
 
-    await transcribeDictation(clip, "audio/webm;codecs=opus");
+    await transcribeDictation("dictation-key", clip, "audio/webm;codecs=opus");
 
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(String(url)).toMatch(/\/audio\/transcriptions$/);
+    expect(init!.headers).toEqual({ Authorization: "Bearer dictation-key" });
     const form = init!.body as FormData;
     expect(form.get("model")).toBe("openai/whisper-large-v3-turbo");
     const file = form.get("file") as File;
@@ -33,7 +34,7 @@ describe("transcribeDictation", () => {
   it("names Safari's recordings mp4", async () => {
     const fetchMock = answering(200, { text: "Hello." });
 
-    await transcribeDictation(clip, "audio/mp4");
+    await transcribeDictation("dictation-key", clip, "audio/mp4");
 
     const form = fetchMock.mock.calls[0]![1]!.body as FormData;
     expect((form.get("file") as File).name).toBe("recording.mp4");
@@ -42,7 +43,7 @@ describe("transcribeDictation", () => {
   it("tidies the spacing Whisper leaves", async () => {
     answering(200, { text: " One sentence?  Another one." });
 
-    expect(await transcribeDictation(clip, "audio/webm")).toBe(
+    expect(await transcribeDictation("dictation-key", clip, "audio/webm")).toBe(
       "One sentence? Another one.",
     );
   });
@@ -50,14 +51,16 @@ describe("transcribeDictation", () => {
   it("answers empty when nobody spoke", async () => {
     answering(200, { text: "" });
 
-    expect(await transcribeDictation(clip, "audio/webm")).toBe("");
+    expect(await transcribeDictation("dictation-key", clip, "audio/webm")).toBe(
+      "",
+    );
   });
 
   it("throws when OpenRouter refuses", async () => {
     answering(402, { error: { message: "Insufficient credits" } });
 
-    await expect(transcribeDictation(clip, "audio/webm")).rejects.toThrow(
-      "HTTP 402",
-    );
+    await expect(
+      transcribeDictation("dictation-key", clip, "audio/webm"),
+    ).rejects.toThrow("HTTP 402");
   });
 });

@@ -20,10 +20,11 @@ function extensionOf(contentType: string): string {
 
 /** A short recording, as text; empty if nobody spoke. */
 export async function transcribeDictation(
+  apiKey: string,
   clip: Uint8Array<ArrayBuffer>,
   contentType: string,
 ): Promise<string> {
-  const { OPENROUTER_API_KEY, OPENROUTER_BASE_URL } = getEnv();
+  const { OPENROUTER_BASE_URL } = getEnv();
   const form = new FormData();
   form.append(
     "file",
@@ -37,7 +38,7 @@ export async function transcribeDictation(
     `${OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1"}/audio/transcriptions`,
     {
       method: "POST",
-      headers: { Authorization: `Bearer ${OPENROUTER_API_KEY}` },
+      headers: { Authorization: `Bearer ${apiKey}` },
       body: form,
       signal: AbortSignal.timeout(DICTATION_TIMEOUT_MS),
     },

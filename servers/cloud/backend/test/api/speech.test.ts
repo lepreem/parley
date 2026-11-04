@@ -1,9 +1,18 @@
 import { MAX_DICTATION_BYTES } from "@parley/contract/limits";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockTranscribeDictation } = vi.hoisted(() => ({
+const { mockTranscribeDictation, envOverrides } = vi.hoisted(() => ({
   mockTranscribeDictation: vi.fn(),
+  envOverrides: {} as { OPENROUTER_DICTATION_API_KEY?: undefined },
 }));
+
+vi.mock("../../src/env", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/env")>();
+  return {
+    ...actual,
+    getEnv: () => ({ ...actual.getEnv(), ...envOverrides }),
+  };
+});
 
 vi.mock("../../src/db", async () => ({
   db: {},
@@ -36,6 +45,7 @@ async function post(
 beforeEach(() => {
   vi.clearAllMocks();
   resetRateLimits();
+  delete envOverrides.OPENROUTER_DICTATION_API_KEY;
   mockTranscribeDictation.mockResolvedValue("Hello there.");
 });
 
@@ -46,9 +56,20 @@ describe("POST /speech/transcribe", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ text: "Hello there." });
     expect(mockTranscribeDictation).toHaveBeenCalledWith(
+      "test-dictation-key",
       clip,
       "audio/webm;codecs=opus",
     );
+  });
+
+  it("refuses without a key of its own, rather than spend chat's", async () => {
+    envOverrides.OPENROUTER_DICTATION_API_KEY = undefined;
+
+    const res = await post(await authedHeaders("user_01"));
+
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ message: "Dictation isn't available" });
+    expect(mockTranscribeDictation).not.toHaveBeenCalled();
   });
 
   it("takes a recording past the 1 MB every other route is held to", async () => {
