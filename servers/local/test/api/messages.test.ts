@@ -421,6 +421,125 @@ describe("POST /conversations/:conversationId/messages", () => {
     );
   }
 
+  describe("with web search", () => {
+    it("lets the model search, and saves and reports what it found", async () => {
+      mockFindChatModel.mockResolvedValue({
+        id: modelId,
+        contextTokens: null,
+        acceptsImages: true,
+        searchesWeb: true,
+      });
+      mockChatAI.mockImplementationOnce(
+        async (
+          _model: string,
+          _turns: unknown,
+          opts: { onSource: (url: unknown, title: unknown) => void },
+        ) => {
+          opts.onSource("https://a.example/page", "A page");
+          opts.onSource("javascript:alert(1)", "Not a page");
+          return "Answer";
+        },
+      );
+
+      const res = await postMessage({
+        messageContent: "Hi",
+        chosenModelId: modelId,
+        webSearch: true,
+      });
+      const body = await res.text();
+
+      const sources = [{ url: "https://a.example/page", title: "A page" }];
+      expect(mockChatAI).toHaveBeenCalledWith(
+        modelId,
+        expect.anything(),
+        expect.objectContaining({ webSearch: true }),
+      );
+      expect(mockPersistAndUnclaimChatTurn).toHaveBeenCalledWith(
+        expect.objectContaining({ sources }),
+      );
+      expect(body).toContain(`"sources":${JSON.stringify(sources)}`);
+    });
+
+    it("doesn't let the model search unless asked", async () => {
+      mockChatAI.mockResolvedValueOnce("Answer");
+
+      const res = await postMessage({
+        messageContent: "Hi",
+        chosenModelId: modelId,
+      });
+      await res.text();
+
+      expect(mockChatAI).toHaveBeenCalledWith(
+        modelId,
+        expect.anything(),
+        expect.objectContaining({ webSearch: false }),
+      );
+    });
+
+    it("refuses it for a model that can't search", async () => {
+      mockFindChatModel.mockResolvedValue({
+        id: modelId,
+        contextTokens: null,
+        acceptsImages: true,
+        searchesWeb: false,
+      });
+
+      const res = await postMessage({
+        messageContent: "Hi",
+        chosenModelId: modelId,
+        webSearch: true,
+      });
+
+      expect(res.status).toBe(400);
+      expect(mockChatAI).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("with a reasoning effort", () => {
+    const offersEfforts = () =>
+      mockFindChatModel.mockResolvedValue({
+        id: modelId,
+        contextTokens: null,
+        acceptsImages: true,
+        reasoning: { efforts: ["low", "high"], defaultEffort: null },
+      });
+
+    it("runs the model at it", async () => {
+      offersEfforts();
+      mockChatAI.mockResolvedValueOnce("Answer");
+
+      const res = await postMessage({
+        messageContent: "Hi",
+        chosenModelId: modelId,
+        reasoningEffort: "high",
+      });
+      await res.text();
+
+      expect(res.status).toBe(200);
+      expect(mockChatAI).toHaveBeenCalledWith(
+        modelId,
+        expect.anything(),
+        expect.objectContaining({ effort: "high" }),
+      );
+    });
+
+    it("refuses one the model doesn't offer", async () => {
+      offersEfforts();
+
+      const res = await postMessage({
+        messageContent: "Hi",
+        chosenModelId: modelId,
+        reasoningEffort: "max",
+      });
+
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({
+        message: "Invalid effort: this model doesn't offer it",
+      });
+      expect(mockChatAI).not.toHaveBeenCalled();
+    });
+  });
+
   it("rejects an attachment that cannot be reserved before starting either model call", async () => {
     mockResolveImages.mockResolvedValueOnce([resolvedImage]);
     mockClaimAttachments.mockResolvedValueOnce(false);
@@ -871,7 +990,11 @@ describe("POST /conversations/:conversationId/messages", () => {
     expect(body).toContain(JSON.stringify({ delta: "world" }));
     expect(body).toContain("event: done");
     expect(body).toContain(
-      JSON.stringify({ lastMessageId: assistantRow.id, stopped: false }),
+      JSON.stringify({
+        lastMessageId: assistantRow.id,
+        stopped: false,
+        sources: [],
+      }),
     );
     expect(body).not.toContain("event: error");
     // The persisted head trails the tokens the client rendered.
@@ -1539,7 +1662,11 @@ describe("PATCH /conversations/:conversationId/messages/:messageId", () => {
     expect(response.status).toBe(200);
     expect(body).toContain("event: delta");
     expect(body).toContain(
-      JSON.stringify({ lastMessageId: assistantRow.id, stopped: false }),
+      JSON.stringify({
+        lastMessageId: assistantRow.id,
+        stopped: false,
+        sources: [],
+      }),
     );
 
     // The history stops before the edited message.
@@ -1804,7 +1931,11 @@ describe("stopping a reply", () => {
     const body = await (await sendTurn()).text();
 
     expect(body).toContain(
-      JSON.stringify({ lastMessageId: assistantRow.id, stopped: true }),
+      JSON.stringify({
+        lastMessageId: assistantRow.id,
+        stopped: true,
+        sources: [],
+      }),
     );
     expect(mockPersistAndUnclaimChatTurn).toHaveBeenCalledWith(
       expect.objectContaining({ assistantContent: "Hello ", stopped: true }),

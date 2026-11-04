@@ -1,6 +1,7 @@
 export {
   buildUserTurn,
   chat,
+  NoRoomToReply,
   type ChatTurn,
 } from "./ai_chat_client/ai_chat_client";
 export {

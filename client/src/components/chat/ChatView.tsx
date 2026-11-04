@@ -1,11 +1,13 @@
 import { useMemo, useRef, useState, type DragEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useWebSearchPreference } from "../composer/useWebSearchPreference";
 import {
   CHARS_PER_TOKEN,
   findChatModel,
   meetsRequirements,
   resolveDefaultModel,
   type MessageRequirements,
+  type ReasoningEffort,
 } from "../../api/models";
 import { useServerReady } from "../../hooks/server/useServerReady";
 import { useChatModelsQuery } from "../../hooks/queries/useModelsQuery";
@@ -74,6 +76,8 @@ export function ChatView() {
   const messagesQuery = useMessagesQuery(conversationId);
   const chatModels = useChatModelsQuery(ready);
   const [modelPick, setModelPick] = useState<string | null>(null);
+  const [effortPick, setEffortPick] = useState<ReasoningEffort | null>(null);
+  const [webSearchOn, setWebSearchOn] = useWebSearchPreference();
   const {
     pendingTurns,
     sendingKeys,
@@ -139,6 +143,16 @@ export function ChatView() {
     modelPick && eligibleIds.includes(modelPick)
       ? modelPick
       : resolveDefaultModel(eligibleIds, defaultId);
+  const chosenModel = eligible.find((model) => model.id === modelId);
+  // Kept across models, but only sent to one that offers it. Guests can't
+  // choose; the server refuses it.
+  const effort =
+    !guest && effortPick && chosenModel?.reasoning?.efforts.includes(effortPick)
+      ? effortPick
+      : null;
+  // Likewise: guests can't search, and not every model can.
+  const canSearchWeb = !guest && !!chosenModel?.searchesWeb;
+  const webSearch = canSearchWeb && webSearchOn;
 
   const replyInProgress = messagesQuery.data?.replyInProgress ?? null;
   const pending = conversationId
@@ -162,6 +176,8 @@ export function ChatView() {
       conversationId,
       content,
       modelId,
+      reasoningEffort: effort,
+      webSearch,
       sources: staged,
       lastMessageId: conversationId
         ? (messagesQuery.data?.lastMessageId ?? null)
@@ -192,6 +208,8 @@ export function ChatView() {
       message,
       content,
       modelId,
+      reasoningEffort: effort,
+      webSearch,
       sources: sourcesOfMessage(message),
       lastMessageId: messagesQuery.data?.lastMessageId ?? null,
       onRestore: (restoredContent, restoredSources, restoreKey) => {
@@ -256,6 +274,11 @@ export function ChatView() {
         models={chatModels.models}
         modelId={modelId}
         onModelChange={setModelPick}
+        effort={effort}
+        onEffortChange={setEffortPick}
+        canSearchWeb={canSearchWeb}
+        webSearch={webSearch}
+        onWebSearchChange={setWebSearchOn}
         modelsLoading={chatModels.loading}
         modelsError={chatModels.error}
         requirements={requirements}

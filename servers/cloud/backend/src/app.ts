@@ -116,6 +116,10 @@ export async function createApp() {
     app.get("/", page);
     app.get("/chat", page);
     app.get("/chat/*", page);
+    app.get("/download", page);
+    // Where "This computer" used to live; the client sends it to /download.
+    app.get("/local", page);
+    app.get("/local/*", page);
   }
   return app;
 }

@@ -1,3 +1,5 @@
+import type { ChatModel, ReasoningEffort } from "@parley/contract";
+
 /**
  * Bounds on what one turn can cost, and which past turns fit inside them. The
  * message cap alone isn't one: 50 turns of the 50k chars the schema allows is
@@ -10,7 +12,45 @@ const MAX_CONTEXT_MESSAGES = 50;
 export const MAX_HISTORY_MESSAGES = MAX_CONTEXT_MESSAGES - 1;
 
 export const MAX_CONTEXT_CHARS = 100_000;
-export const MAX_RESPONSE_TOKENS = 4_000;
+
+/** Room for the reply a person reads. */
+const MAX_RESPONSE_TOKENS = 4_000;
+
+/**
+ * Room for thinking on top of it. Providers count a model's thinking against
+ * the same ceiling as its reply, so with no room for it, a model that thinks
+ * hard spends the ceiling doing so and writes nothing.
+ *
+ * About twice what GPT-6 Luna spent on a hard question at each level (1,200 at
+ * low, 4,400 at medium, 7,800 at high). The top levels stop at what the 8-minute
+ * limit on a call leaves time for.
+ */
+const THINKING_TOKENS: Record<ReasoningEffort, number> = {
+  none: 0,
+  minimal: 2_000,
+  low: 4_000,
+  medium: 8_000,
+  high: 16_000,
+  xhigh: 32_000,
+  max: 32_000,
+};
+
+/**
+ * The ceiling on one turn's completion, thinking and reply together, within
+ * what the model can write. Any unspent thinking room can go to the reply, as
+ * providers don't count the two apart. With no effort chosen, it's the model's
+ * own default that needs the room, and a model that doesn't say gets plenty.
+ */
+export function completionTokenCeiling(
+  model: Partial<Pick<ChatModel, "maxOutputTokens" | "reasoning">> | undefined,
+  chosenEffort: ReasoningEffort | undefined,
+) {
+  const effort = chosenEffort ?? model?.reasoning?.defaultEffort ?? "high";
+  return Math.min(
+    MAX_RESPONSE_TOKENS + THINKING_TOKENS[effort],
+    model?.maxOutputTokens ?? Number.POSITIVE_INFINITY,
+  );
+}
 
 /**
  * Images in one prompt, the new turn's included. Attachments outlive the turn

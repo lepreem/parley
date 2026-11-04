@@ -1,0 +1,1 @@
+ALTER TABLE `chat_messages` ADD `sources` text DEFAULT '[]' NOT NULL;

@@ -422,6 +422,21 @@ describe("POST /upload/audio/confirm", () => {
     expect(mockSendEvent).not.toHaveBeenCalled();
   });
 
+  it("gives a client no say in the transcription model", async () => {
+    const res = await postJson(
+      "/upload/audio/confirm",
+      confirmBody({ transcriptModelId: "nova-3-pharma" }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(JSON.stringify(mockValues.mock.calls)).not.toContain(
+      "nova-3-pharma",
+    );
+    expect(mockSendEvent).toHaveBeenCalledWith("transcribe_audio", {
+      audioUploadId: UPLOAD_ID,
+    });
+  });
+
   it("confirms the upload with the job's rows, then queues transcription", async () => {
     const res = await postJson("/upload/audio/confirm", confirmBody());
 
@@ -659,6 +674,24 @@ describe("POST /upload/youtube", () => {
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ message: "Not a valid YouTube URL" });
     expect(mockInsert).not.toHaveBeenCalled();
+  });
+
+  it("gives a client no say in the transcription model", async () => {
+    const res = await postJson("/upload/youtube", {
+      youtubeUrl: YT_URL,
+      transcriptModelId: "nova-3-pharma",
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { audioUploadId: string };
+    expect(JSON.stringify(mockValues.mock.calls)).not.toContain(
+      "nova-3-pharma",
+    );
+    expect(mockSendEvent).toHaveBeenCalledWith("yt_fetch_audio", {
+      audioUploadId: body.audioUploadId,
+      url: YT_URL,
+      userId: "user_01",
+    });
   });
 
   it("hands the fetcher only the video, not the rest of the link", async () => {

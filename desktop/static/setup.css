@@ -1,0 +1,80 @@
+:root {
+  color-scheme: light dark;
+  --surface: #fbfbf9;
+  --text: #1d1d1f;
+  --muted: #6b6b70;
+  --line: #deded9;
+  --signal: oklch(0.52 0.086 187);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #1b1b1f;
+    --text: #ececea;
+    --muted: #a0a0a5;
+    --line: #36363b;
+    --signal: oklch(0.6 0.088 187);
+  }
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: var(--surface);
+  color: var(--text);
+  font:
+    15px/1.5 system-ui,
+    sans-serif;
+}
+
+main {
+  width: min(520px, calc(100vw - 48px));
+}
+
+h1 {
+  margin: 0 0 8px;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+p {
+  margin: 0 0 20px;
+  color: var(--muted);
+}
+
+pre {
+  max-height: 240px;
+  margin: 0 0 20px;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+#actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+button {
+  padding: 9px 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+button.primary {
+  border-color: var(--signal);
+  background: var(--signal);
+  color: white;
+}

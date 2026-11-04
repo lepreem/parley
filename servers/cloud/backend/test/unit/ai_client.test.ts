@@ -20,6 +20,7 @@ vi.mock("../../src/memory/modelLists", async (importOriginal) => ({
 const runFetch = <T>(_name: unknown, fetch: () => Promise<T>) => fetch();
 
 vi.mock("@openrouter/sdk", () => ({
+  HTTPClient: class {},
   OpenRouter: class {
     constructor(private readonly options: { apiKey: string }) {}
     models = { list: mockModelsList };
@@ -35,6 +36,7 @@ vi.mock("@openrouter/sdk", () => ({
 import {
   buildUserTurn,
   chat,
+  NoRoomToReply,
 } from "../../src/ai/ai_chat_client/ai_chat_client";
 
 const MODEL_ID = "openai/gpt-4o-mini";
@@ -44,12 +46,15 @@ const sampleModel = {
   id: MODEL_ID,
   name: "GPT-4o Mini",
   contextTokens: 128000,
+  maxOutputTokens: null,
   acceptsImages: true,
   released: "2024-07-18",
   aliases: [],
   replacedBy: null,
   retires: null,
   pricing: { inputPerMillionTokens: 0.15, outputPerMillionTokens: 0.6 },
+  reasoning: null,
+  searchesWeb: false,
 };
 
 const openRouterListModel = {
@@ -126,23 +131,29 @@ describe("listChatModels", () => {
         id: "vendor/text-only",
         name: "Text only",
         contextTokens: null,
+        maxOutputTokens: null,
         acceptsImages: false,
         released: "2024-07-18",
         aliases: [],
         replacedBy: null,
         retires: null,
         pricing: { inputPerMillionTokens: 0.15, outputPerMillionTokens: 0.6 },
+        reasoning: null,
+        searchesWeb: false,
       },
       {
         id: "openrouter/auto",
         name: "Auto Router",
         contextTokens: 128000,
+        maxOutputTokens: null,
         acceptsImages: true,
         released: "2024-07-18",
         aliases: [],
         replacedBy: null,
         retires: null,
         pricing: null,
+        reasoning: null,
+        searchesWeb: false,
       },
     ]);
     // Only text-output models are relevant here; transcription is Deepgram's.
@@ -244,6 +255,37 @@ describe("chatAI", () => {
     ]);
   });
 
+  it("offers the search tool, within its limits, only when asked", async () => {
+    mockChatSend.mockResolvedValue((async function* () {})());
+
+    await chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
+      onDelta: () => {},
+    });
+    await chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
+      onDelta: () => {},
+      webSearch: true,
+      onSource: () => {},
+    });
+
+    const requestOf = (call: number) =>
+      (mockChatSend.mock.calls[call]?.[0] as { chatRequest: object })
+        .chatRequest;
+    expect(requestOf(0)).toMatchObject({ tools: undefined });
+    expect(requestOf(1)).toMatchObject({
+      tools: [
+        {
+          type: "openrouter:web_search",
+          parameters: {
+            engine: "exa",
+            maxUses: 3,
+            maxResults: 3,
+            maxTotalResults: 9,
+          },
+        },
+      ],
+    });
+  });
+
   it("routes for low latency and pins the session for prompt-cache hits", async () => {
     mockChatSend.mockResolvedValueOnce({
       choices: [{ message: { content: "hi" } }],
@@ -335,7 +377,7 @@ describe("chatAI timeouts", () => {
   });
 
   const TOTAL_TIMEOUT_MS = 8 * 60_000;
-  const FIRST_TOKEN_TIMEOUT_MS = 2 * 60_000;
+  const FIRST_TOKEN_TIMEOUT_MS = 6 * 60_000;
   const BETWEEN_CHUNKS_TIMEOUT_MS = 30_000;
   const TITLE_TIMEOUT_MS = 15_000;
 
@@ -363,7 +405,48 @@ describe("chatAI timeouts", () => {
     await vi.advanceTimersByTimeAsync(FIRST_TOKEN_TIMEOUT_MS - 1);
     expect(outcome.settled).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
-    expect(outcome.value).toEqual(timedOut("No progress within 120000 ms"));
+    expect(outcome.value).toEqual(timedOut("No progress within 360000 ms"));
+  });
+
+  it("waits longer between chunks when the model can stop to search", async () => {
+    mockChatSend.mockImplementationOnce(
+      streamingSend([{ afterMs: 1_000, content: "hello" }]),
+    );
+    const outcome = track(
+      chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
+        onDelta: () => {},
+        webSearch: true,
+        onSource: () => {},
+      }),
+    );
+
+    await vi.advanceTimersByTimeAsync(1_000 + 2 * 60_000 - 1);
+    expect(outcome.settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(outcome.value).toEqual(timedOut("No progress for 120000 ms"));
+  });
+
+  it("fails when the model reaches its ceiling before writing anything", async () => {
+    mockChatSend.mockImplementationOnce(async () =>
+      (async function* () {
+        yield { choices: [{ delta: { content: "" }, finishReason: "length" }] };
+      })(),
+    );
+
+    await expect(streamChat()).rejects.toBeInstanceOf(NoRoomToReply);
+  });
+
+  it("keeps what the model wrote before reaching its ceiling", async () => {
+    mockChatSend.mockImplementationOnce(async () =>
+      (async function* () {
+        yield { choices: [{ delta: { content: "cut " } }] };
+        yield {
+          choices: [{ delta: { content: "off" }, finishReason: "length" }],
+        };
+      })(),
+    );
+
+    await expect(streamChat()).resolves.toBe("cut off");
   });
 
   it("keeps waiting for the first token after an empty chunk", async () => {

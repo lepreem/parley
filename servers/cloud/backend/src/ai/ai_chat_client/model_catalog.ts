@@ -1,5 +1,6 @@
 import type { Model, PublicPricing } from "@openrouter/sdk/models";
 import type { ChatModel, ModelPricing } from "@parley/contract";
+import { REASONING_EFFORTS } from "@parley/server-kit/reasoningEfforts";
 
 /**
  * Which of OpenRouter's models the app offers, and which of those it archives.
@@ -85,6 +86,24 @@ function isOpenAIProMode(id: string, ids: ReadonlySet<string>): boolean {
 }
 
 /**
+ * How hard the model can be asked to think. Null without at least two levels
+ * to choose between, or when OpenRouter doesn't list them.
+ */
+function reasoningOf(model: Model): ChatModel["reasoning"] {
+  const supported: readonly unknown[] = model.reasoning?.supportedEfforts ?? [];
+  const efforts = REASONING_EFFORTS.filter((effort) =>
+    supported.includes(effort),
+  );
+  if (efforts.length < 2) return null;
+  return {
+    efforts,
+    defaultEffort:
+      efforts.find((effort) => effort === model.reasoning?.defaultEffort) ??
+      null,
+  };
+}
+
+/**
  * The models OpenRouter lists that the app offers, each with the aliases
  * that name it and, when it's archived, why.
  *
@@ -121,12 +140,16 @@ export function offeredModels(
       id: model.id,
       name: model.name,
       contextTokens: model.contextLength,
+      maxOutputTokens: model.topProvider.maxCompletionTokens ?? null,
       acceptsImages: model.architecture.inputModalities.includes("image"),
       released: new Date(model.created * 1000).toISOString().slice(0, 10),
       aliases: aliases.get(model.id) ?? [],
       pricing: toPricing(model.pricing),
       replacedBy: null,
       retires: model.expirationDate ?? null,
+      reasoning: reasoningOf(model),
+      // The search is a tool OpenRouter runs, so the model has to take tools.
+      searchesWeb: model.supportedParameters.includes("tools"),
     }));
 
   const replacements = replacementsOf(offered);

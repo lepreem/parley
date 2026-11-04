@@ -69,7 +69,11 @@ export type ChatMessage = {
   transcriptAttachments: MessageTranscript[];
   /** An assistant reply someone stopped before it finished. */
   stopped: boolean;
+  /** The web pages a search found for this reply; empty when none ran. */
+  sources: MessageSource[];
 };
+
+export type MessageSource = { url: string; title: string };
 
 /**
  * A turn the server is answering right now. Neither message is stored until
@@ -107,6 +111,13 @@ export type SendMessageBody = {
   attachments: MessageAttachmentInput[];
   /** The conversation's head as the client last saw it. */
   lastMessageId: string | null;
+  /**
+   * How hard the model thinks: one of its `reasoning.efforts`. Left out, it
+   * thinks as hard as it does by default.
+   */
+  reasoningEffort?: ReasoningEffort;
+  /** Lets the model search the web, if it decides it needs to. */
+  webSearch?: boolean;
 };
 
 /** One timed step of a turn, in milliseconds from the turn's start. */
@@ -157,7 +168,12 @@ export type ReplyStreamEvents = {
    * the turn went, for anyone curious; a server that doesn't time its turns
    * leaves it out.
    */
-  done: { lastMessageId: string; stopped: boolean; stats?: TurnStats };
+  done: {
+    lastMessageId: string;
+    stopped: boolean;
+    sources: MessageSource[];
+    stats?: TurnStats;
+  };
   /** Stopped before any of the reply came, so nothing was saved. */
   cancelled: Record<string, never>;
   error: ErrorBody;
@@ -171,6 +187,8 @@ export type ChatModel = {
   name: string;
   /** The longest prompt it takes, in tokens, when known. */
   contextTokens: number | null;
+  /** The most it can write in one go, thinking included, when known. */
+  maxOutputTokens: number | null;
   /** Whether a turn may carry images. */
   acceptsImages: boolean;
   /** The day the provider listed it, as YYYY-MM-DD, when known. */
@@ -193,6 +211,20 @@ export type ChatModel = {
    * whose price depends on the model it picks, or a subscription.
    */
   pricing: ModelPricing | null;
+  /** How hard it can be asked to think, or null when that isn't a choice. */
+  reasoning: ModelReasoning | null;
+  /** Whether a turn may let it search the web. */
+  searchesWeb: boolean;
+};
+
+export type ReasoningEffort =
+  "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+
+export type ModelReasoning = {
+  /** The levels it offers, least thinking first. */
+  efforts: ReasoningEffort[];
+  /** The level it uses when none is chosen, when known. */
+  defaultEffort: ReasoningEffort | null;
 };
 
 /** A chat model's price, in US dollars per million tokens. */
@@ -201,7 +233,7 @@ export type ModelPricing = {
   outputPerMillionTokens: number;
 };
 
-/** GET /models/chat and GET /models/transcription */
+/** GET /models/chat */
 export type ModelsResponse<Model> = { models: Model[] };
 
 /* -------------------------------------------------------------------- jobs */

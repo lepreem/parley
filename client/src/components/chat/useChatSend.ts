@@ -8,9 +8,11 @@ import {
   streamMessage,
   type ChatMessage,
   type MessageAttachmentInput,
+  type MessageSource,
   type MessagesResponse,
   type TurnStats,
 } from "../../api/messages";
+import type { ReasoningEffort } from "../../api/models";
 import { queryKeys } from "../../lib/queryClient";
 import { useServer } from "../../hooks/server/useServer";
 import { useToast } from "../../hooks/toast/useToast";
@@ -94,7 +96,12 @@ function messageAttachmentsOf(
 function toStoredTurns(
   input: { content: string; modelId: string; sources: StagedSource[] },
   conversationId: string,
-  assistant: { id: string; content: string; stopped: boolean },
+  assistant: {
+    id: string;
+    content: string;
+    stopped: boolean;
+    sources: MessageSource[];
+  },
 ): ChatMessage[] {
   const createdAt = new Date().toISOString();
   const user: ChatMessage = {
@@ -125,6 +132,7 @@ function toStoredTurns(
         : [],
     ),
     stopped: false,
+    sources: [],
   };
   return [
     user,
@@ -202,6 +210,9 @@ function toPendingTurn(
 type TurnInput = {
   content: string;
   modelId: string;
+  /** Null leaves it to the model. */
+  reasoningEffort: ReasoningEffort | null;
+  webSearch: boolean;
   sources: StagedSource[];
   lastMessageId: string | null;
   /** Puts the message back in the composer when the turn didn't take. */
@@ -309,6 +320,7 @@ export function useChatSend() {
       let stored = null as {
         id: string;
         stopped: boolean;
+        sources: MessageSource[];
         stats?: TurnStats;
       } | null;
       let cancelled = false;
@@ -327,6 +339,10 @@ export function useChatSend() {
             conversationId: target,
             messageContent: input.content,
             chosenModelId: input.modelId,
+            ...(input.reasoningEffort
+              ? { reasoningEffort: input.reasoningEffort }
+              : {}),
+            webSearch: input.webSearch,
             attachments: messageAttachmentsOf(input.sources),
             lastMessageId: input.lastMessageId,
             ...(replaces ? { replacesMessageId: replaces.storedId } : {}),
@@ -339,8 +355,8 @@ export function useChatSend() {
                 return { ...current, [target]: { ...turn, stoppable: true } };
               }),
             onDelta: (delta) => deltas.push(delta),
-            onDone: (lastMessageId, stopped, stats) => {
-              stored = { id: lastMessageId, stopped, stats };
+            onDone: (lastMessageId, stopped, sources, stats) => {
+              stored = { id: lastMessageId, stopped, sources, stats };
             },
             onCancelled: () => {
               cancelled = true;
@@ -361,6 +377,7 @@ export function useChatSend() {
         id: stored?.id ?? `local:${localId()}`,
         content: deltas.text,
         stopped: stored?.stopped ?? false,
+        sources: stored?.sources ?? [],
       };
 
       // Write the finished turn into the cache rather than refetching the
