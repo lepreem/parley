@@ -64,6 +64,15 @@ minutes. Models download into `DATA_DIR/models` the first time they're used,
 from Hugging Face at a fixed commit, and a download whose sha256 isn't the one
 pinned in `ai_transcribe_client.ts` is thrown away (`core/ai/modelFiles.ts`).
 
+Dictating a message skips all of the above but the model: `POST
+/speech/transcribe` takes a short recording as its body and answers with the
+text, with no job, no row and no file left behind. Recordings go one at a time
+through a Whisper context that stays loaded for five minutes after the last
+one, so the next message doesn't wait for it to load. If the request goes away,
+a recording not yet being transcribed is skipped, and one that is gets to
+finish, because stopping whisper.cpp ties up its context for far longer (see
+`runWhisper`).
+
 ## External dependencies
 
 The programs the API runs: Claude Code (logged in), ffmpeg and yt-dlp, and it loads the whisper.cpp binding. It runs a

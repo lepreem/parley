@@ -321,3 +321,6 @@ export type ServerEvents = {
   /** A reply finished, was stopped or failed; refetch the conversation. */
   replyFinished: { conversationId: string };
 };
+
+/** POST /speech/transcribe: what was said; empty if nothing was. */
+export type DictatedSpeech = { text: string };
