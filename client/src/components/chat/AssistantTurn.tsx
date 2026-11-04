@@ -3,8 +3,9 @@ import { describeModel } from "../../api/models";
 import { useChatModelsQuery } from "../../hooks/queries/useModelsQuery";
 import { useServerReady } from "../../hooks/server/useServerReady";
 import { Icon } from "../ui/Icon";
-import type { TurnStats } from "../../api/messages";
+import type { MessageSource, TurnStats } from "../../api/messages";
 import { Markdown } from "./Markdown";
+import { ReplySources } from "./ReplySources";
 import { TurnStatsPanel } from "./TurnStatsPanel";
 
 export function AssistantTurn({
@@ -13,6 +14,7 @@ export function AssistantTurn({
   streaming,
   elsewhere,
   stopped,
+  sources,
   stats,
 }: {
   content: string;
@@ -22,6 +24,8 @@ export function AssistantTurn({
   elsewhere?: boolean;
   /** Someone stopped it before it finished. */
   stopped?: boolean;
+  /** The web pages a search found for it. */
+  sources?: MessageSource[];
   /** How the turn went, when it was streamed to this page. */
   stats?: TurnStats;
 }) {
@@ -62,6 +66,8 @@ export function AssistantTurn({
           <span className="caret" />
         </p>
       )}
+
+      {sources && sources.length > 0 && <ReplySources sources={sources} />}
 
       {!streaming && content.length > 0 && (
         <div className="mt-2 flex h-7 items-center gap-3">

@@ -42,6 +42,7 @@ function toMessageJson(
     content: row.content,
     chosenModelId: row.chosenModelId,
     stopped: row.stopped,
+    sources: row.sources,
     conversationId: row.conversationId,
     createdAt: row.createdAt.toISOString(),
     attachments: images,

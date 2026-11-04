@@ -20,6 +20,8 @@ function listed(
     canonicalSlug: id,
     created: Date.parse(released) / 1000,
     contextLength: 200_000,
+    topProvider: { isModerated: true },
+    supportedParameters: ["tools"],
     architecture: {
       inputModalities: ["text", "image"],
       outputModalities: ["text"],
@@ -65,13 +67,63 @@ describe("offeredModels", () => {
       id: "openai/gpt-6-luna",
       name: "OpenAI: GPT-6 Luna",
       contextTokens: 200_000,
+      maxOutputTokens: null,
       acceptsImages: true,
       released: "2026-09-22",
       aliases: [],
       pricing: { inputPerMillionTokens: 0.1, outputPerMillionTokens: 0.5 },
       replacedBy: null,
       retires: "2027-09-22",
+      reasoning: null,
+      searchesWeb: true,
     });
+  });
+
+  it("only lets a model that takes tools search the web", () => {
+    const [text] = offeredModels(
+      [
+        listed("a/no-tools", "2026-09-22", [1, 1], {
+          supportedParameters: ["temperature"],
+        }),
+      ],
+      Date.parse("2026-10-31"),
+    );
+    expect(text?.searchesWeb).toBe(false);
+  });
+
+  it("lists the efforts it knows, least thinking first, with the default", () => {
+    const reasoningOf = (reasoning: Model["reasoning"]) =>
+      offeredModels(
+        [listed("a/model", "2026-09-22", [1, 1], { reasoning })],
+        Date.parse("2026-10-31"),
+      )[0]?.reasoning;
+
+    expect(
+      reasoningOf({
+        mandatory: true,
+        supportedEfforts: ["max", "new-level", null, "low"],
+        defaultEffort: "low",
+      } as Model["reasoning"]),
+    ).toEqual({ efforts: ["low", "max"], defaultEffort: "low" });
+    expect(
+      reasoningOf({
+        mandatory: false,
+        supportedEfforts: ["high", "none"],
+      }),
+    ).toEqual({ efforts: ["none", "high"], defaultEffort: null });
+  });
+
+  it("offers no choice of effort with fewer than two levels", () => {
+    const reasoningOf = (reasoning: Model["reasoning"]) =>
+      offeredModels(
+        [listed("a/model", "2026-09-22", [1, 1], { reasoning })],
+        Date.parse("2026-10-31"),
+      )[0]?.reasoning;
+
+    expect(
+      reasoningOf({ mandatory: true, supportedEfforts: ["high"] }),
+    ).toBeNull();
+    expect(reasoningOf({ mandatory: false })).toBeNull();
   });
 
   it("leaves out batch-only variants, which can't stream a reply", () => {
@@ -109,6 +161,20 @@ describe("offeredModels", () => {
       Date.parse("2026-10-31"),
     );
     expect(models[0]?.aliases).toEqual(["~openai/gpt-luna-latest"]);
+  });
+
+  it("carries the most the model can write, when OpenRouter says", () => {
+    const [known, unknown] = offeredModels(
+      [
+        listed("a/known", "2026-09-22", [1, 1], {
+          topProvider: { isModerated: true, maxCompletionTokens: 8_192 },
+        }),
+        listed("a/unknown", "2026-09-22", [1, 1]),
+      ],
+      Date.parse("2026-10-31"),
+    );
+    expect(known?.maxOutputTokens).toBe(8_192);
+    expect(unknown?.maxOutputTokens).toBeNull();
   });
 
   it("leaves out OpenAI's pro reasoning modes, but not other providers' pro models", () => {

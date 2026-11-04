@@ -9,6 +9,7 @@ import {
   stepsInOrder,
   type RecordedStep,
 } from "../preparationMetrics";
+import { NoRoomToReply } from "../ai";
 import { eventHub } from "../sse/hub";
 import { memory } from "../memory";
 import {
@@ -143,9 +144,14 @@ async function writeReply({
       await claim.release();
       sseEvents.push("cancelled", {});
     }
-  } catch {
+  } catch (error) {
     await claim.release();
-    sseEvents.push("error", { message: "Model response failed" });
+    sseEvents.push("error", {
+      message:
+        error instanceof NoRoomToReply
+          ? error.message
+          : "Model response failed",
+    });
   } finally {
     sseEvents.end();
     entry.remove();
