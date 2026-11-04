@@ -46,14 +46,16 @@ export const servedByLocalServer =
     .querySelector('meta[name="parley-server"]')
     ?.getAttribute("content") === "local";
 
+/**
+ * Whether this page can use the local server: the desktop app's own page, or
+ * Vite in development. The hosted site can't, and offers the app instead.
+ */
+export const canReachLocalServer = servedByLocalServer || import.meta.env.DEV;
+
 /** The server on the user's own machine, which chats through their Claude Code. */
 export const localServer: Server = {
   id: "local",
-  baseUrl: servedByLocalServer
-    ? ""
-    : (
-        import.meta.env.VITE_LOCAL_API_URL ?? `http://${DEV_HOST}:${LOCAL_PORT}`
-      ).replace(/\/$/, ""),
+  baseUrl: servedByLocalServer ? "" : `http://${DEV_HOST}:${LOCAL_PORT}`,
   signIn: "none",
   appPath: "/local",
   alwaysOn: false,

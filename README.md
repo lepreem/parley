@@ -8,6 +8,11 @@ your own machine (`servers/local/`), which this README is about. On your
 machine, chat goes through your own Claude Code and audio is transcribed
 locally with Whisper, so nothing needs an API key.
 
+To use Parley on your computer, download the
+[desktop app](https://github.com/lepreem/parley/releases/latest) for macOS,
+Windows or Linux; [`desktop/`](desktop/README.md) is its code. The rest of this
+README is for running the server from source.
+
 ## Who runs what
 
 An import says whose code it is:

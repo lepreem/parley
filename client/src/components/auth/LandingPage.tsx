@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { authGuestEndpoint, authLoginUrl, cloudServer } from "../../config";
 import { useAuth } from "../../hooks/auth/useAuth";
 import { useTheme } from "../../hooks/theme/useTheme";
@@ -8,6 +8,7 @@ import { useToast } from "../../hooks/toast/useToast";
 import { queryKeys } from "../../lib/queryClient";
 import { Icon } from "../ui/Icon";
 import { Meter } from "../ui/Meter";
+import { UseThisComputer } from "./UseThisComputer";
 
 /**
  * The hero is the thing this app actually does that others don't: one message
@@ -150,13 +151,8 @@ export function LandingPage() {
               Sign in
             </a>
             <GuestButton />
-            {/* No account needed: the local server runs on the user's machine. */}
-            <Link
-              to="/local"
-              className="inline-flex items-center rounded-lg border border-line px-5 py-2.5 text-sm font-medium text-muted transition-colors hover:border-signal hover:text-ink"
-            >
-              Use this computer
-            </Link>
+            {/* No account needed: the app runs on the user's own machine. */}
+            <UseThisComputer className="inline-flex items-center rounded-lg border border-line px-5 py-2.5 text-sm font-medium text-muted transition-colors hover:border-signal hover:text-ink" />
           </div>
         </div>
 

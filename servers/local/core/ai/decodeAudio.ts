@@ -100,6 +100,7 @@ export async function decodeAudio(
     ],
     {
       stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
       ...(abortSignal ? { signal: abortSignal } : {}),
     },
   );
@@ -132,7 +133,10 @@ export async function decodeAudio(
  * can't run.
  */
 export async function pingFfmpeg(): Promise<void> {
-  const child = spawn(await ffmpeg(), ["-version"], { stdio: "ignore" });
+  const child = spawn(await ffmpeg(), ["-version"], {
+    stdio: "ignore",
+    windowsHide: true,
+  });
   const code = await new Promise<number | null>((resolve, reject) => {
     child.on("error", reject);
     child.on("close", resolve);

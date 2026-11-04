@@ -12,12 +12,14 @@ import { useServerReady } from "../../hooks/server/useServerReady";
 import {
   authLoginUrl,
   cloudServer,
+  canReachLocalServer,
   localServer,
   servedByLocalServer,
 } from "../../config";
 import { useTheme } from "../../hooks/theme/useTheme";
 import { Icon } from "../ui/Icon";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
+import { UseThisComputer } from "../auth/UseThisComputer";
 import { ConversationRow } from "./ConversationRow";
 import { groupConversations } from "./conversationGroups";
 import { sectionPath } from "./sections";
@@ -53,6 +55,12 @@ function SectionSwitch() {
   const { setSidebarOpen } = useShell();
   // A page the local server served can't reach the cloud: one section only.
   if (servedByLocalServer) return null;
+  // The hosted site can't reach this computer: it offers the app instead.
+  if (!canReachLocalServer) {
+    return (
+      <UseThisComputer className="mx-3 mb-3 rounded-lg border border-line bg-surface px-2 py-1.5 text-center text-[12px] font-medium text-muted transition-colors hover:text-ink" />
+    );
+  }
 
   return (
     <div

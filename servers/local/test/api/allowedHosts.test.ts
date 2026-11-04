@@ -7,8 +7,6 @@ vi.mock("../../core/db", async () =>
 // The Tailscale name a phone would reach the app by. Read when the app is
 // first built, which is after this.
 process.env.ALLOWED_HOSTS = "macbook.tail1234.ts.net";
-// The hosted client, which calls this machine from the browser.
-process.env.ALLOWED_ORIGINS = "https://parley.example.app/";
 
 import { createApp } from "../../api/app";
 
@@ -86,14 +84,6 @@ function preflight(origin: string, headers: Record<string, string> = {}) {
 }
 
 describe("pages from another origin", () => {
-  it("may call the API when the origin is in ALLOWED_ORIGINS", async () => {
-    const res = await preflight("https://parley.example.app");
-
-    expect(res.headers.get("Access-Control-Allow-Origin")).toBe(
-      "https://parley.example.app",
-    );
-  });
-
   it("may call the API from this machine, as the Vite dev server does", async () => {
     const res = await preflight("http://localhost:5173");
 
@@ -106,27 +96,5 @@ describe("pages from another origin", () => {
     const res = await preflight("https://evil.test");
 
     expect(res.headers.get("Access-Control-Allow-Origin")).toBeNull();
-  });
-
-  it("are told this machine may be reached, when Chrome asks", async () => {
-    const res = await preflight("https://parley.example.app", {
-      "Access-Control-Request-Private-Network": "true",
-    });
-
-    expect(res.headers.get("Access-Control-Allow-Private-Network")).toBe(
-      "true",
-    );
-  });
-
-  it("aren't told so when the origin isn't trusted", async () => {
-    const res = await preflight("https://evil.test", {
-      "Access-Control-Request-Private-Network": "true",
-    });
-
-    expect(res.headers.get("Access-Control-Allow-Private-Network")).toBeNull();
-  });
-
-  it("may post a form from an origin in ALLOWED_ORIGINS", async () => {
-    expect((await formPost("https://parley.example.app")).status).toBe(400);
   });
 });
