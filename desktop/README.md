@@ -19,7 +19,8 @@ image and out of every other install.
   can't outlive the app.
 - `src/shellPath.ts` finds the terminal's PATH, which an app opened from the
   Finder doesn't get.
-- `src/ytDlp.ts` keeps yt-dlp in the data folder, where it can update itself.
+- `src/ytDlp.ts` keeps yt-dlp in the data folder, where it can update itself,
+  but only to a release that has been out for a week.
 - `src/updates.ts` tells people about a new release. The app can't replace
   itself on a Mac without a paid signing certificate, so no platform does.
 

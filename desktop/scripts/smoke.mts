@@ -18,6 +18,8 @@ const SAMPLE = path.resolve("../servers/local/test/sample/audio_speech.flac");
 const EXPECTED_WORDS = /ask not/i;
 const PAGE_TIMEOUT_MS = 3 * 60_000;
 const TRANSCRIBE_TIMEOUT_MS = 30 * 60_000;
+/** An older release than the one the app ships. */
+const YT_DLP_UPDATE_TARGET = "2026.10.21";
 
 /** The packaged app's folder, and its program inside that folder. */
 function packagedApp(): { dir: string; binary: string } {
@@ -113,6 +115,18 @@ async function reportState(dataDir: string) {
   console.error(log);
 }
 
+/** The bundled yt-dlp can move to a chosen release, as the app has it do. */
+async function checkYtDlpUpdates() {
+  const name = process.platform === "win32" ? "yt-dlp.exe" : "yt-dlp";
+  const copy = path.join(scratch, name);
+  await cp(path.resolve("build", "bin", name), copy);
+  execFileSync(copy, ["--update-to", `stable@${YT_DLP_UPDATE_TARGET}`]);
+  const version = execFileSync(copy, ["--version"]).toString().trim();
+  if (version !== YT_DLP_UPDATE_TARGET) {
+    throw new Error(`yt-dlp is at ${version}, not ${YT_DLP_UPDATE_TARGET}`);
+  }
+}
+
 const scratch = await mkdtemp(path.join(tmpdir(), "parley-smoke-"));
 await fakeClaude(scratch);
 const dataDir = path.join(scratch, "data");
@@ -203,6 +217,7 @@ try {
       return true;
     }
   });
+  await checkYtDlpUpdates();
   console.log("Smoke test passed");
 } catch (error) {
   failed = true;

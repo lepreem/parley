@@ -43,6 +43,18 @@ const VAD_MODEL: ModelSource = {
 };
 
 /**
+ * Whether Whisper runs on the GPU. Not on an Intel Mac: a transcription sat for
+ * half an hour there without finishing a segment, and such a Mac's GPU has little
+ * to offer it anyway.
+ */
+export function whisperUsesGpu(
+  platform: NodeJS.Platform = process.platform,
+  arch: string = process.arch,
+): boolean {
+  return !(platform === "darwin" && arch === "x64");
+}
+
+/**
  * Loads the binding, once. whisper.cpp prints its every step to stderr unless
  * it's given somewhere else to log, so only its errors reach the logs.
  */
@@ -128,7 +140,10 @@ export async function transcribeAI(
       if (spans.length === 0) return [];
       const speech = speechOnly(pcm, spans);
 
-      const whisper = await initWhisper({ filePath: modelPath, useGpu: true });
+      const whisper = await initWhisper({
+        filePath: modelPath,
+        useGpu: whisperUsesGpu(),
+      });
       try {
         const { stop, promise } = whisper.transcribeData(
           arrayBufferOf(speech.pcm),
