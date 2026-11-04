@@ -44,10 +44,13 @@ export function buildPrompt(
   ];
 }
 
-export function containsImageInput(turns: readonly ChatTurn[]) {
-  return turns.some(
-    (turn) =>
-      Array.isArray(turn.content) &&
-      turn.content.some((content) => content.type === "image_url"),
+export function countImageInputs(turns: readonly ChatTurn[]) {
+  return turns.reduce(
+    (count, turn) =>
+      Array.isArray(turn.content)
+        ? count +
+          turn.content.filter((content) => content.type === "image_url").length
+        : count,
+    0,
   );
 }
