@@ -120,6 +120,12 @@ export const envSchema = z
      * in OpenRouter, which is the hard cap on guest spending.
      */
     OPENROUTER_GUEST_API_KEY: z.string().min(1).optional(),
+    /**
+     * What dictation is billed to: a key with a credit limit set on it in
+     * OpenRouter, which is the hard cap on dictation spending and keeps it
+     * apart from chat's. Without it, the server refuses to dictate.
+     */
+    OPENROUTER_DICTATION_API_KEY: z.string().min(1).optional(),
   })
   .superRefine(rejectLoadtestOverridesInProduction)
   .superRefine(requireGuestSettingsTogether);

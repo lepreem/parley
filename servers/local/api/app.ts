@@ -11,6 +11,7 @@ import { jobsRouter } from "./src/routes/jobs.router";
 import { uploadRouter } from "./src/routes/upload.router";
 import { modelsRouter } from "./src/routes/models.router";
 import { conversationsRouter } from "./src/routes/conversations.router";
+import { speechRouter } from "./src/routes/speech.router";
 import { isAllowedHostname, isAllowedOrigin } from "./src/allowedHosts";
 import { EVERYONE, eventHub } from "./src/sse/hub";
 
@@ -57,6 +58,7 @@ export async function createApp() {
   app.route("/jobs", jobsRouter);
   app.route("/models", modelsRouter);
   app.route("/conversations", conversationsRouter);
+  app.route("/speech", speechRouter);
 
   // The built client, on the API's own origin. Under `npm run dev` it isn't
   // built and Vite serves it instead, proxying the API's paths here.

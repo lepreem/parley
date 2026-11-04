@@ -43,6 +43,8 @@ Once per server. Steps 1 to 3 happen on your own machine.
    from `openssl rand -base64 32`, and `OPENROUTER_GUEST_API_KEY`, an
    OpenRouter key of its own with a credit limit: that limit is the cap on
    what guests can spend. Without both, there's no guest chat.
+   For dictation, add `OPENROUTER_DICTATION_API_KEY`, another OpenRouter key
+   with a credit limit of its own. Without it, the server refuses to dictate.
    Then create a service token for `prd` (Access → Service Tokens) and paste
    it into this, followed by Enter and Ctrl-D:
 

@@ -70,6 +70,13 @@ export const RATE_LIMIT_POLICIES = {
    * upload.
    */
   uploadConfirm: { limit: 60, windowMs: FIFTEEN_MINUTES_MS, key: "userId" },
+
+  /**
+   * A dictated message is a paid transcription. The short budget stops a
+   * runaway client; the daily one is what bounds what a user can spend.
+   */
+  dictation: { limit: 30, windowMs: FIFTEEN_MINUTES_MS, key: "userId" },
+  dictationDaily: { limit: 200, windowMs: ONE_DAY_MS, key: "userId" },
 } as const satisfies Record<string, RateLimitPolicy>;
 
 export type RateLimitName = keyof typeof RATE_LIMIT_POLICIES;

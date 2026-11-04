@@ -8,6 +8,8 @@ import {
   type TranscribeModelData,
 } from "./model_catalog";
 
+export { transcribeDictation } from "./dictation";
+
 const deepgram = new DeepgramClient({
   apiKey: getEnv().DEEPGRAM_API_KEY,
   // The load test's stand-in; unset, the SDK uses Deepgram itself.

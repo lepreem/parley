@@ -40,6 +40,27 @@ to first token (median 1.76 s) far ahead of everything the server does.
   (`prepareTurn`), so a text-only model with stale images costs a storage call,
   and a storage failure there is a 500 instead of the 400.
 
+## Move transcription to OpenRouter Whisper
+
+Uploaded files and YouTube videos without captions run on Deepgram
+(`src/ai/ai_transcribe_client/ai_transcribe_client.ts`). When the prepaid
+credit gets low ($190.07 on 2026-11-03, about 737 hours), move them to
+`openai/whisper-large-v3-turbo` through OpenRouter: $0.0002 to $0.00067 a
+minute against Deepgram's $0.0043. Don't run Whisper on the VPS, as the local
+server does: on its 2 vCores, a long file would slow the whole site.
+
+- **Split long audio.** OpenRouter caps an upload at 25 MB and its providers
+  time out at about 60 seconds, where Deepgram takes one job of any length.
+- **Send the audio, not a URL.** Deepgram fetches a signed bucket URL;
+  OpenRouter wants the bytes.
+- **Keep the timestamps and language.** Ask for `verbose_json` with segment
+  timestamps, and check what it reports against `Transcription`.
+- **Share the call with dictation** (`transcribeDictation` in `dictation.ts`):
+  until now the two have had little in common. Decide whether files spend
+  from `OPENROUTER_DICTATION_API_KEY`, the main key or one of their own.
+- **Remove what only Deepgram needs:** its client, startup ping, model catalog
+  and `DEEPGRAM_CONCURRENCY`.
+
 ## Scaling past one API instance
 
 Nothing needs this yet. Everything below is per process today:
