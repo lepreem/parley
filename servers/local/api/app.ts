@@ -28,23 +28,10 @@ export async function createApp() {
     }
     await next();
   });
-  // Chrome asks before a public page reaches this machine, with a preflight
-  // that must say so explicitly; the user then allows it once. Ahead of
-  // cors(), which answers the preflight itself.
-  app.use("*", async (c, next) => {
-    await next();
-    if (
-      c.req.method === "OPTIONS" &&
-      c.req.header("Access-Control-Request-Private-Network") === "true" &&
-      isAllowedOrigin(c.req.header("Origin"))
-    ) {
-      c.res.headers.set("Access-Control-Allow-Private-Network", "true");
-    }
-  });
   // A page from another origin may call the API only if it's one the app
-  // trusts: this machine's (Vite in development) or the hosted client's, in
-  // ALLOWED_ORIGINS. Any other site's JSON or DELETE is refused at the
-  // preflight. There are no cookies, so nothing is sent with credentials.
+  // trusts: this machine's, which is Vite in development. Any other site's
+  // JSON or DELETE is refused at the preflight. There are no cookies, so
+  // nothing is sent with credentials.
   app.use(
     "*",
     cors({ origin: (origin) => (isAllowedOrigin(origin) ? origin : null) }),

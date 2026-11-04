@@ -23,6 +23,7 @@ class ClaudeCodeError extends Error {
 function runCommand(args: readonly string[]): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(getBaseEnv().CLAUDE_PATH, args, {
+      windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
@@ -206,6 +207,7 @@ async function runChat(
   },
 ): Promise<string> {
   const child = spawn(getBaseEnv().CLAUDE_PATH, chatArgs(model, instructions), {
+    windowsHide: true,
     // Claude Code tells the model which folder it runs in, and the app's own
     // would steer answers towards it; the temp folder says nothing.
     cwd: tmpdir(),

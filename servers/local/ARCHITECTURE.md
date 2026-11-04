@@ -152,20 +152,18 @@ One process, `api`, on the user's machine, listening on `127.0.0.1:PORT`
 only. It serves the built client (`client/dist`, `CLIENT_DIR`) on its own
 origin, so the page, the API and its event stream share one origin and one
 port. Under `npm run dev` the client isn't built: Vite serves it on its own
-port and calls the API on this one, as the hosted client does.
+port and calls the API on this one. The desktop app (`desktop/`) starts this
+same process and shows the page in its own window.
 
 With no sign-in, the browser is the way in, so the API answers only pages it
-trusts (`api/src/allowedHosts.ts`): this machine's, and the origins listed in
-`ALLOWED_ORIGINS`, meant for the hosted client.
+trusts (`api/src/allowedHosts.ts`): this machine's.
 
 - a request addressed to anything but `localhost`, `127.0.0.1`, `[::1]` or a
   name in `ALLOWED_HOSTS` is refused, which stops DNS rebinding;
 - CORS lets only a trusted page read a response; any other site's JSON or
   DELETE is refused at the preflight;
 - a form post, which a browser sends cross-site without asking, is refused
-  unless it comes from a trusted page;
-- when Chrome asks before a public page reaches this machine, a trusted
-  page's preflight says it may, and the user allows it once.
+  unless it comes from a trusted page.
 
 Transcription runs inside it, one message per queue at a time, so there are no
 worker replicas to scale.

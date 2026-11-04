@@ -16,14 +16,12 @@ export function isAllowedHostname(hostname: string): boolean {
 
 /**
  * Whether an Origin header is a page the app trusts: one served under an
- * allowed name, or one listed in ALLOWED_ORIGINS, like the hosted client. A
- * page from this machine comes from a process here, which could reach the API
- * directly anyway, and a listed name or origin is one the user chose; any
+ * allowed name. A page from this machine comes from a process here, which could
+ * reach the API directly anyway, and a listed name is one the user chose; any
  * other origin is a site the browser happens to have open.
  */
 export function isAllowedOrigin(origin: string | undefined): boolean {
   if (!origin) return false;
-  if (getApiEnv().ALLOWED_ORIGINS.includes(origin.toLowerCase())) return true;
   try {
     return isAllowedHostname(new URL(origin).hostname);
   } catch {

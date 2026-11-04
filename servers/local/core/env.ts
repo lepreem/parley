@@ -43,21 +43,6 @@ export const apiEnvSchema = baseEnvSchema.extend({
         .map((name) => name.trim().toLowerCase())
         .filter(Boolean),
     ),
-  /**
-   * Origins besides this machine's whose pages may call the API,
-   * comma-separated: the hosted client, e.g. https://parley.example.com,
-   * which reaches "This computer" from the browser. Each may read and change
-   * everything here, so list only the app's own.
-   */
-  ALLOWED_ORIGINS: z
-    .string()
-    .default("")
-    .transform((value) =>
-      value
-        .split(",")
-        .map((origin) => origin.trim().replace(/\/$/, "").toLowerCase())
-        .filter(Boolean),
-    ),
   /** The yt-dlp program that fetches YouTube videos; found on PATH by default. */
   YT_DLP_PATH: z.string().min(1).default("yt-dlp"),
 });

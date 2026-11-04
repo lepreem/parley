@@ -36,6 +36,7 @@ function commonArgs() {
 function run(args: readonly string[]): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(getApiEnv().YT_DLP_PATH, args, {
+      windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "";
