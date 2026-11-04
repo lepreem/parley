@@ -41,6 +41,13 @@ const glyphs = {
     <path d="M10.5 13.5a4.5 4.5 0 0 0 6.36 0l2.5-2.5a4.5 4.5 0 0 0-6.36-6.36l-1.2 1.2M13.5 10.5a4.5 4.5 0 0 0-6.36 0l-2.5 2.5a4.5 4.5 0 0 0 6.36 6.36l1.2-1.2" />
   ),
   library: <path d="M4 6h16M4 12h16M4 18h10" />,
+  gauge: (
+    <>
+      <path d="M5.1 18.5a9 9 0 1 1 13.8 0" />
+      <path d="m12 14 3.5-4.5" />
+      <circle cx="12" cy="14" r="1.2" fill="currentColor" stroke="none" />
+    </>
+  ),
   globe: (
     <>
       <circle cx="12" cy="12" r="8.5" />
