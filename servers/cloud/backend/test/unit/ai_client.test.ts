@@ -20,6 +20,7 @@ vi.mock("../../src/memory/modelLists", async (importOriginal) => ({
 const runFetch = <T>(_name: unknown, fetch: () => Promise<T>) => fetch();
 
 vi.mock("@openrouter/sdk", () => ({
+  HTTPClient: class {},
   OpenRouter: class {
     constructor(private readonly options: { apiKey: string }) {}
     models = { list: mockModelsList };
@@ -53,6 +54,7 @@ const sampleModel = {
   retires: null,
   pricing: { inputPerMillionTokens: 0.15, outputPerMillionTokens: 0.6 },
   reasoning: null,
+  searchesWeb: false,
 };
 
 const openRouterListModel = {
@@ -137,6 +139,7 @@ describe("listChatModels", () => {
         retires: null,
         pricing: { inputPerMillionTokens: 0.15, outputPerMillionTokens: 0.6 },
         reasoning: null,
+        searchesWeb: false,
       },
       {
         id: "openrouter/auto",
@@ -150,6 +153,7 @@ describe("listChatModels", () => {
         retires: null,
         pricing: null,
         reasoning: null,
+        searchesWeb: false,
       },
     ]);
     // Only text-output models are relevant here; transcription is Deepgram's.
@@ -249,6 +253,37 @@ describe("chatAI", () => {
       process.env.OPENROUTER_API_KEY,
       process.env.OPENROUTER_GUEST_API_KEY,
     ]);
+  });
+
+  it("offers the search tool, within its limits, only when asked", async () => {
+    mockChatSend.mockResolvedValue((async function* () {})());
+
+    await chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
+      onDelta: () => {},
+    });
+    await chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
+      onDelta: () => {},
+      webSearch: true,
+      onSource: () => {},
+    });
+
+    const requestOf = (call: number) =>
+      (mockChatSend.mock.calls[call]?.[0] as { chatRequest: object })
+        .chatRequest;
+    expect(requestOf(0)).toMatchObject({ tools: undefined });
+    expect(requestOf(1)).toMatchObject({
+      tools: [
+        {
+          type: "openrouter:web_search",
+          parameters: {
+            engine: "exa",
+            maxUses: 3,
+            maxResults: 3,
+            maxTotalResults: 9,
+          },
+        },
+      ],
+    });
   });
 
   it("routes for low latency and pins the session for prompt-cache hits", async () => {
@@ -371,6 +406,24 @@ describe("chatAI timeouts", () => {
     expect(outcome.settled).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
     expect(outcome.value).toEqual(timedOut("No progress within 360000 ms"));
+  });
+
+  it("waits longer between chunks when the model can stop to search", async () => {
+    mockChatSend.mockImplementationOnce(
+      streamingSend([{ afterMs: 1_000, content: "hello" }]),
+    );
+    const outcome = track(
+      chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
+        onDelta: () => {},
+        webSearch: true,
+        onSource: () => {},
+      }),
+    );
+
+    await vi.advanceTimersByTimeAsync(1_000 + 2 * 60_000 - 1);
+    expect(outcome.settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(outcome.value).toEqual(timedOut("No progress for 120000 ms"));
   });
 
   it("fails when the model reaches its ceiling before writing anything", async () => {

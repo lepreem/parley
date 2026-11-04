@@ -1,14 +1,16 @@
 import { getEnv } from "../../env";
-import { OpenRouter } from "@openrouter/sdk";
+import { HTTPClient, OpenRouter } from "@openrouter/sdk";
 
 import { CACHE_KEYS, memory } from "../../memory";
 import type {
   ChatContentItems,
   ChatRequest,
   ChatRequestEffort,
+  OpenRouterWebSearchServerTool,
 } from "@openrouter/sdk/models";
 import { withTimeout } from "@parley/server-kit/runtime/withTimeout";
 import type { ChatModel } from "@parley/contract";
+import { tapCitations } from "./citationTap";
 import { guestModelsOf, offeredModels } from "./model_catalog";
 
 const client = new OpenRouter({
@@ -80,7 +82,25 @@ const CHAT_TOTAL_TIMEOUT_MS = 8 * 60 * 1000; // 8 minutes
 // thousands of tokens, at around 100 a second, with room left to write a reply.
 const CHAT_FIRST_TOKEN_TIMEOUT_MS = 6 * 60 * 1000; // 6 minutes
 const CHAT_BETWEEN_CHUNKS_TIMEOUT_MS = 30 * 1000; // 30 seconds
+// A model can stop partway through a reply to search and read what it finds.
+const CHAT_BETWEEN_CHUNKS_SEARCHING_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
 const TITLE_TIMEOUT_MS = 15 * 1000; // 15 seconds
+
+/**
+ * The most one turn's search can cost, whichever model runs it: Exa charges by
+ * the result, about $0.0024 each when measured, and honours these limits for
+ * every model, where a provider's own search mostly ignores them.
+ */
+const WEB_SEARCH_TOOL: OpenRouterWebSearchServerTool = {
+  type: "openrouter:web_search",
+  parameters: {
+    engine: "exa",
+    maxUses: 3,
+    maxResults: 3,
+    maxTotalResults: 9,
+    maxCharacters: 4_000,
+  },
+};
 
 /** The model reached its token ceiling while thinking, so it wrote nothing. */
 export class NoRoomToReply extends Error {
@@ -170,6 +190,10 @@ type ChatOptions = {
   signal?: AbortSignal | undefined;
   /** Bills the call to the guest key. */
   guest?: boolean | undefined;
+  /** Lets the model search the web, if it decides it needs to. */
+  webSearch?: boolean | undefined;
+  /** Each page a search finds, as OpenRouter describes it. */
+  onSource?: ((url: unknown, title: unknown) => void) | undefined;
 };
 
 async function complete(
@@ -189,6 +213,7 @@ async function complete(
     // warm provider.
     provider: { sort: "latency" },
     sessionId: opts.sessionId,
+    tools: opts.webSearch ? [WEB_SEARCH_TOOL] : undefined,
   };
 
   const timeoutOptions = {
@@ -197,10 +222,29 @@ async function complete(
       ? CHAT_FIRST_TOKEN_TIMEOUT_MS
       : undefined,
     progressTimeoutMs: opts.onDelta
-      ? CHAT_BETWEEN_CHUNKS_TIMEOUT_MS
+      ? opts.webSearch
+        ? CHAT_BETWEEN_CHUNKS_SEARCHING_TIMEOUT_MS
+        : CHAT_BETWEEN_CHUNKS_TIMEOUT_MS
       : undefined,
     signal: opts.signal,
   };
+
+  // Only a search has citations to read, so only a search pays for reading
+  // the stream twice. Guests don't search, and this client bills the main key.
+  const { onDelta, onSource } = opts;
+  if (onDelta && onSource && !opts.guest) {
+    const tap = tapCitations(onSource);
+    const sender = new OpenRouter({
+      apiKey: getEnv().OPENROUTER_API_KEY,
+      serverURL: getEnv().OPENROUTER_BASE_URL,
+      httpClient: new HTTPClient({ fetcher: tap.fetcher }),
+    });
+    return withTimeout(timeoutOptions, async (ctx) => {
+      const reply = await streamChatAI(sender, chatRequest, onDelta, ctx);
+      await tap.finished();
+      return reply;
+    });
+  }
 
   const sender = clientFor(opts.guest ?? false);
   return withTimeout(timeoutOptions, (ctx) =>

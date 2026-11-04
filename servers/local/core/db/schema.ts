@@ -1,3 +1,4 @@
+import type { MessageSource } from "@parley/contract";
 import { randomUUID } from "node:crypto";
 import { sql, type SQL } from "drizzle-orm";
 import {
@@ -156,6 +157,11 @@ export const ChatMessages = sqliteTable(
     // An assistant reply someone stopped partway; its content is what came
     // before they did.
     stopped: integer("stopped", { mode: "boolean" }).default(false).notNull(),
+    // The web pages a search found for an assistant message.
+    sources: text("sources", { mode: "json" })
+      .$type<MessageSource[]>()
+      .default([])
+      .notNull(),
 
     createdAt: timestamp("created_at").default(now).notNull(),
     updatedAt: timestamp("updated_at")

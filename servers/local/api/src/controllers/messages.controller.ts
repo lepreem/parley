@@ -6,10 +6,12 @@ import type { Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import type {
   ChatMessage,
+  MessageSource,
   MessagesResponse,
   ReasoningEffort,
   ReplyStreamEvents,
 } from "@parley/contract";
+import { addSource } from "@parley/server-kit/webSources";
 import { SSEEventQueue } from "@parley/server-kit/sse/eventQueue";
 import type { ReplyInProgressEntry } from "@parley/server-kit/memory/repliesInProgress";
 import {
@@ -86,6 +88,7 @@ function toMessageJson(
     content: row.content,
     chosenModelId: row.chosenModelId,
     stopped: row.stopped,
+    sources: row.sources,
     conversationId: row.conversationId,
     createdAt: row.createdAt.toISOString(),
     attachments: images,
@@ -258,6 +261,7 @@ type MessageRequest = {
   content: string;
   chosenModelId: string;
   reasoningEffort: ReasoningEffort | undefined;
+  webSearch: boolean;
   attachmentIds: string[];
   imageUploadIds: string[];
   audioUploadIds: string[];
@@ -273,6 +277,7 @@ function messageRequestFrom(c: Context): MessageRequest {
     content: c.get(CTX_KEYS.messageContent),
     chosenModelId: c.get(CTX_KEYS.chosenModelId),
     reasoningEffort: c.get(CTX_KEYS.reasoningEffort),
+    webSearch: c.get(CTX_KEYS.webSearch) ?? false,
     attachmentIds: attachments.map((attachment) =>
       attachment.type === "image"
         ? attachment.imageUploadId
@@ -535,6 +540,7 @@ async function writeReply({
       messageInput.expectedLastMessageId === null
         ? titleForFirstTurn(messageInput.content, messageInput.conversationId)
         : Promise.resolve(undefined);
+    const sources: MessageSource[] = [];
     let assistantContent: string;
     let stopped = false;
     try {
@@ -544,6 +550,8 @@ async function writeReply({
           sseEvents.push("delta", { delta });
         },
         effort: messageInput.reasoningEffort,
+        webSearch: messageInput.webSearch,
+        onSource: (url, title) => addSource(sources, url, title),
         signal: entry.signal,
       });
     } catch (error) {
@@ -570,12 +578,13 @@ async function writeReply({
       chosenModelId: messageInput.chosenModelId,
       assistantContent,
       stopped,
+      sources,
       conversationTitle: await conversationTitlePromise,
       contextWindowMessageCount,
       claimToken,
     });
 
-    sseEvents.push("done", { lastMessageId, stopped });
+    sseEvents.push("done", { lastMessageId, stopped, sources });
   } catch {
     await releaseClaims(messageInput, claimPromises, claimToken);
     sseEvents.push("error", { message: "Model response failed" });

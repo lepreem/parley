@@ -69,7 +69,11 @@ export type ChatMessage = {
   transcriptAttachments: MessageTranscript[];
   /** An assistant reply someone stopped before it finished. */
   stopped: boolean;
+  /** The web pages a search found for this reply; empty when none ran. */
+  sources: MessageSource[];
 };
+
+export type MessageSource = { url: string; title: string };
 
 /**
  * A turn the server is answering right now. Neither message is stored until
@@ -112,6 +116,8 @@ export type SendMessageBody = {
    * thinks as hard as it does by default.
    */
   reasoningEffort?: ReasoningEffort;
+  /** Lets the model search the web, if it decides it needs to. */
+  webSearch?: boolean;
 };
 
 /** One timed step of a turn, in milliseconds from the turn's start. */
@@ -162,7 +168,12 @@ export type ReplyStreamEvents = {
    * the turn went, for anyone curious; a server that doesn't time its turns
    * leaves it out.
    */
-  done: { lastMessageId: string; stopped: boolean; stats?: TurnStats };
+  done: {
+    lastMessageId: string;
+    stopped: boolean;
+    sources: MessageSource[];
+    stats?: TurnStats;
+  };
   /** Stopped before any of the reply came, so nothing was saved. */
   cancelled: Record<string, never>;
   error: ErrorBody;
@@ -202,6 +213,8 @@ export type ChatModel = {
   pricing: ModelPricing | null;
   /** How hard it can be asked to think, or null when that isn't a choice. */
   reasoning: ModelReasoning | null;
+  /** Whether a turn may let it search the web. */
+  searchesWeb: boolean;
 };
 
 export type ReasoningEffort =

@@ -60,6 +60,7 @@ export const messageCreateBodySchema = takesBody<SendMessageBody>()(
         .max(MAX_MESSAGE_LENGTH, "Message is too long"),
       [CTX_KEYS.chosenModelId]: z.string().min(1),
       [CTX_KEYS.reasoningEffort]: z.enum(REASONING_EFFORTS).optional(),
+      [CTX_KEYS.webSearch]: z.boolean().optional(),
       [CTX_KEYS.messageAttachmentsIds]: z
         .array(messageAttachmentSchema)
         .optional()
@@ -91,6 +92,13 @@ export const messageCreateBodySchema = takesBody<SendMessageBody>()(
           code: "custom",
           message: "Invalid effort: this model doesn't offer it",
           path: [CTX_KEYS.reasoningEffort],
+        });
+      }
+      if (data[CTX_KEYS.webSearch] && !model.searchesWeb) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Invalid model: can't search the web",
+          path: [CTX_KEYS.webSearch],
         });
       }
       const imageCount = data[CTX_KEYS.messageAttachmentsIds].filter(

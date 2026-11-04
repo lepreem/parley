@@ -1,7 +1,12 @@
 import type { z } from "zod";
-import type { ReasoningEffort, TurnStats } from "@parley/contract";
+import type {
+  MessageSource,
+  ReasoningEffort,
+  TurnStats,
+} from "@parley/contract";
 import type { ReplyInProgressEntry } from "@parley/server-kit/memory/repliesInProgress";
 import { logger, messageOf } from "@parley/server-kit/runtime/logger";
+import { addSource } from "@parley/server-kit/webSources";
 import { data, type HistoryCandidate, type HistoryTranscript } from "../data";
 import { buildUserTurn, chat, type ChatTurn } from "../ai";
 import { measurePreparation } from "../preparationMetrics";
@@ -32,6 +37,8 @@ export type TurnRequest = {
   chosenModelId: string;
   /** How hard the model thinks; left to the model when undefined. */
   reasoningEffort: ReasoningEffort | undefined;
+  /** Whether the model may search the web. */
+  webSearch: boolean;
   /** Every attachment, images and transcripts, in the order they were sent. */
   attachmentIds: string[];
   imageUploadIds: string[];
@@ -47,6 +54,7 @@ export function turnRequestFrom(
     messageContent,
     chosenModelId,
     reasoningEffort,
+    webSearch,
     attachments,
     lastMessageId,
   }: z.output<typeof messageCreateBodySchema>,
@@ -58,6 +66,7 @@ export function turnRequestFrom(
     content: messageContent,
     chosenModelId,
     reasoningEffort,
+    webSearch: webSearch ?? false,
     attachmentIds: attachments.map((attachment) =>
       attachment.type === "image"
         ? attachment.imageUploadId
@@ -214,6 +223,12 @@ export async function prepareTurn(
   if (request.guest && request.reasoningEffort) {
     throw new TurnRejected(400, {
       message: "Invalid effort: sign in to choose one",
+    });
+  }
+  // Searches are charged on top of the tokens, so they're for signed-in users.
+  if (request.guest && request.webSearch) {
+    throw new TurnRejected(400, {
+      message: "Web search: sign in to use it",
     });
   }
   if (newTurnResolvedImages.length !== request.imageUploadIds.length) {
@@ -373,6 +388,7 @@ export async function answerTurn(
       : Promise.resolve(undefined);
 
   const model = await chat.findModel(request.chosenModelId);
+  const sources: MessageSource[] = [];
 
   let assistantContent: string;
   let stopped = false;
@@ -387,6 +403,13 @@ export async function answerTurn(
         },
         maxOutputTokens: completionTokenCeiling(model, request.reasoningEffort),
         reasoningEffort: request.reasoningEffort,
+        ...(request.webSearch
+          ? {
+              webSearch: true,
+              onSource: (url: unknown, title: unknown) =>
+                addSource(sources, url, title),
+            }
+          : {}),
         sessionId: request.conversationId,
         signal: entry.signal,
         guest: request.guest,
@@ -413,6 +436,7 @@ export async function answerTurn(
         chosenModelId: request.chosenModelId,
         assistantContent,
         stopped,
+        sources,
         conversationTitle: title,
         contextWindowMessageCount: countMessagesInContextWindow([
           assistantContent.length,
@@ -429,5 +453,5 @@ export async function answerTurn(
     assistantMessageId: saved.assistantMessageId,
     assistantContent,
   });
-  return { lastMessageId: saved.assistantMessageId, stopped };
+  return { lastMessageId: saved.assistantMessageId, stopped, sources };
 }

@@ -148,6 +148,8 @@ export function offeredModels(
       replacedBy: null,
       retires: model.expirationDate ?? null,
       reasoning: reasoningOf(model),
+      // The search is a tool OpenRouter runs, so the model has to take tools.
+      searchesWeb: model.supportedParameters.includes("tools"),
     }));
 
   const replacements = replacementsOf(offered);

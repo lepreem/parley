@@ -111,6 +111,7 @@ describe("listChatModels", () => {
           efforts: ["none", "low", "medium", "high", "xhigh", "max"],
           defaultEffort: null,
         },
+        searchesWeb: true,
       },
       {
         id: "sonnet",
@@ -127,6 +128,7 @@ describe("listChatModels", () => {
           efforts: ["none", "low", "medium", "high", "xhigh", "max"],
           defaultEffort: null,
         },
+        searchesWeb: true,
       },
       {
         id: "haiku",
@@ -143,6 +145,7 @@ describe("listChatModels", () => {
           efforts: ["none", "low", "medium", "high", "xhigh", "max"],
           defaultEffort: null,
         },
+        searchesWeb: true,
       },
     ]);
   });
@@ -279,6 +282,60 @@ describe("chatAI", () => {
 
     expect(answer).toBe("Hello");
     expect(deltas).toEqual(["Hel", "lo"]);
+  });
+
+  it("gives the model only WebSearch, and only when asked", async () => {
+    mockSpawn.mockImplementation(answers("hi"));
+
+    await chatAI("sonnet", [{ role: "user", content: "yo" }]);
+    await chatAI("sonnet", [{ role: "user", content: "yo" }], {
+      webSearch: true,
+    });
+
+    expect(valueOf(runOf(0).args, "--tools")).toBe("");
+    expect(runOf(0).args).not.toContain("--allowedTools");
+    expect(valueOf(runOf(1).args, "--tools")).toBe("WebSearch");
+    expect(valueOf(runOf(1).args, "--allowedTools")).toBe("WebSearch");
+  });
+
+  it("hands over the pages a search lists, skipping its summaries", async () => {
+    const pages: unknown[][] = [];
+    mockSpawn.mockImplementation(
+      fakeProcess([
+        {
+          line: {
+            type: "user",
+            tool_use_result: {
+              query: "node lts",
+              results: [
+                {
+                  tool_use_id: "srvtoolu_1",
+                  content: [
+                    { title: "Node.js", url: "https://nodejs.org/" },
+                    { title: "Blog", url: "https://example.com/blog" },
+                  ],
+                },
+                "A summary of what the search found.",
+              ],
+            },
+          },
+        },
+        { line: { type: "user" } },
+        { line: textLine("hi") },
+        { line: resultLine("hi") },
+      ]),
+    );
+
+    const answer = await chatAI("sonnet", [{ role: "user", content: "yo" }], {
+      webSearch: true,
+      onSource: (url, title) => pages.push([url, title]),
+    });
+
+    expect(answer).toBe("hi");
+    expect(pages).toEqual([
+      ["https://nodejs.org/", "Node.js"],
+      ["https://example.com/blog", "Blog"],
+    ]);
   });
 
   it("leaves the effort to Claude Code unless told one", async () => {

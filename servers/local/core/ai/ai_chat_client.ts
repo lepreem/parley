@@ -160,6 +160,7 @@ function chatArgs(
   model: string,
   instructions: string,
   effort: ReasoningEffort | undefined,
+  webSearch: boolean,
 ) {
   return [
     "--print",
@@ -175,7 +176,9 @@ function chatArgs(
     "--verbose",
     "--include-partial-messages",
     "--tools",
-    "",
+    webSearch ? "WebSearch" : "",
+    // Run with --print, nothing can answer a request for permission to use it.
+    ...(webSearch ? ["--allowedTools", "WebSearch"] : []),
     "--strict-mcp-config",
     "--setting-sources",
     "",
@@ -192,8 +195,24 @@ type OutputLine =
       type: "stream_event";
       event: { type: string; delta?: { type: string; text?: string } };
     }
+  | { type: "user"; tool_use_result?: { results?: unknown[] } }
   | { type: "result"; is_error: boolean; result?: string }
   | { type: "other" };
+
+/** Hands over the pages one WebSearch result lists. */
+function readSources(
+  results: readonly unknown[],
+  onSource: (url: unknown, title: unknown) => void,
+) {
+  for (const result of results) {
+    if (typeof result !== "object" || result === null) continue;
+    const { content } = result as { content?: unknown };
+    if (!Array.isArray(content)) continue;
+    for (const page of content as { url?: unknown; title?: unknown }[]) {
+      onSource(page.url, page.title);
+    }
+  }
+}
 
 /**
  * Runs one turn, passing each piece of the answer's text to `onText` as it
@@ -207,17 +226,21 @@ async function runChat(
     abortSignal,
     onText,
     effort,
+    webSearch,
+    onSource,
     instructions,
   }: {
     abortSignal: AbortSignal;
     onText: (text: string) => void | Promise<void>;
     effort: ReasoningEffort | undefined;
+    webSearch: boolean;
+    onSource: (url: unknown, title: unknown) => void;
     instructions: string;
   },
 ): Promise<string> {
   const child = spawn(
     getBaseEnv().CLAUDE_PATH,
-    chatArgs(model, instructions, effort),
+    chatArgs(model, instructions, effort, webSearch),
     {
       // Claude Code tells the model which folder it runs in, and the app's own
       // would steer answers towards it; the temp folder says nothing.
@@ -256,7 +279,9 @@ async function runChat(
       const output = JSON.parse(line) as OutputLine;
 
       if (output.type === "result") result = output;
-      else if (
+      else if (output.type === "user") {
+        readSources(output.tool_use_result?.results ?? [], onSource);
+      } else if (
         output.type === "stream_event" &&
         output.event.type === "content_block_delta" &&
         output.event.delta?.type === "text_delta" &&
@@ -293,6 +318,8 @@ const CHAT_TOTAL_TIMEOUT_MS = 8 * 60 * 1000; // 8 minutes
 // think for minutes before its first token.
 const CHAT_FIRST_TOKEN_TIMEOUT_MS = 6 * 60 * 1000; // 6 minutes
 const CHAT_BETWEEN_CHUNKS_TIMEOUT_MS = 30 * 1000; // 30 seconds
+// A model can stop partway through a reply to search and read what it finds.
+const CHAT_BETWEEN_CHUNKS_SEARCHING_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
 const TITLE_TIMEOUT_MS = 15 * 1000; // 15 seconds
 
 type ChatOptions = {
@@ -302,6 +329,10 @@ type ChatOptions = {
    * a short answer like a title takes about two seconds instead of six.
    */
   effort?: ReasoningEffort | undefined;
+  /** Lets the model search the web, if it decides it needs to. */
+  webSearch?: boolean | undefined;
+  /** Each page a search finds, as Claude Code describes it. */
+  onSource?: ((url: unknown, title: unknown) => void) | undefined;
   /**
    * The system prompt: what the model is for. Defaults to replying in a chat,
    * to a conversation in <user> and <assistant> tags.
@@ -322,7 +353,11 @@ export async function chatAI(
   const timeoutOptions = {
     timeoutMs: opts.timeoutMs ?? CHAT_TOTAL_TIMEOUT_MS,
     firstProgressTimeoutMs: onDelta ? CHAT_FIRST_TOKEN_TIMEOUT_MS : undefined,
-    progressTimeoutMs: onDelta ? CHAT_BETWEEN_CHUNKS_TIMEOUT_MS : undefined,
+    progressTimeoutMs: !onDelta
+      ? undefined
+      : opts.webSearch
+        ? CHAT_BETWEEN_CHUNKS_SEARCHING_TIMEOUT_MS
+        : CHAT_BETWEEN_CHUNKS_TIMEOUT_MS,
     signal: opts.signal,
   };
 
@@ -330,6 +365,8 @@ export async function chatAI(
     runChat(model, messages, {
       abortSignal,
       effort: opts.effort,
+      webSearch: opts.webSearch ?? false,
+      onSource: opts.onSource ?? (() => {}),
       instructions: opts.instructions ?? CHAT_INSTRUCTIONS,
       // Only text counts: a model can think silently for longer than the
       // between-chunk limit before it starts answering.
@@ -366,6 +403,7 @@ const CHAT_MODELS: readonly ChatModel[] = [
     retires: null,
     pricing: null,
     reasoning: REASONING,
+    searchesWeb: true,
   },
   {
     id: "sonnet",
@@ -379,6 +417,7 @@ const CHAT_MODELS: readonly ChatModel[] = [
     retires: null,
     pricing: null,
     reasoning: REASONING,
+    searchesWeb: true,
   },
   {
     id: "haiku",
@@ -392,6 +431,7 @@ const CHAT_MODELS: readonly ChatModel[] = [
     retires: null,
     pricing: null,
     reasoning: REASONING,
+    searchesWeb: true,
   },
 ];
 

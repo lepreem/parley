@@ -21,6 +21,7 @@ function listed(
     created: Date.parse(released) / 1000,
     contextLength: 200_000,
     topProvider: { isModerated: true },
+    supportedParameters: ["tools"],
     architecture: {
       inputModalities: ["text", "image"],
       outputModalities: ["text"],
@@ -74,7 +75,20 @@ describe("offeredModels", () => {
       replacedBy: null,
       retires: "2027-09-22",
       reasoning: null,
+      searchesWeb: true,
     });
+  });
+
+  it("only lets a model that takes tools search the web", () => {
+    const [text] = offeredModels(
+      [
+        listed("a/no-tools", "2026-09-22", [1, 1], {
+          supportedParameters: ["temperature"],
+        }),
+      ],
+      Date.parse("2026-10-31"),
+    );
+    expect(text?.searchesWeb).toBe(false);
   });
 
   it("lists the efforts it knows, least thinking first, with the default", () => {

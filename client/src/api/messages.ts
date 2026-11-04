@@ -1,6 +1,7 @@
 import type {
   ChatMessage,
   MessageAttachmentInput,
+  MessageSource,
   MessagesResponse,
   MessageTranscript,
   ReplyInProgress,
@@ -15,6 +16,7 @@ import { serverUrl, type Server } from "./server";
 export type {
   ChatMessage,
   MessageAttachmentInput,
+  MessageSource,
   MessagesResponse,
   MessageTranscript,
   ReplyInProgress,
@@ -66,7 +68,12 @@ type StreamCallbacks = {
   onOpen: () => void;
   onDelta: (delta: string) => void;
   /** `stats` when the server sent them, for the reply's stats panel. */
-  onDone: (lastMessageId: string, stopped: boolean, stats?: TurnStats) => void;
+  onDone: (
+    lastMessageId: string,
+    stopped: boolean,
+    sources: MessageSource[],
+    stats?: TurnStats,
+  ) => void;
   /** Stopped before any of the reply came: nothing was saved. */
   onCancelled: () => void;
 };
@@ -88,6 +95,7 @@ function dispatchReplyEvent(
     callbacks.onDone(
       data.lastMessageId,
       data.stopped === true,
+      Array.isArray(data.sources) ? data.sources : [],
       Array.isArray(data.stats?.steps) && typeof data.stats.context === "object"
         ? data.stats
         : undefined,
@@ -127,6 +135,7 @@ export async function streamMessage(
       ...(input.reasoningEffort
         ? { reasoningEffort: input.reasoningEffort }
         : {}),
+      ...(input.webSearch ? { webSearch: true } : {}),
       attachments: input.attachments,
       lastMessageId: input.lastMessageId,
     } satisfies SendMessageBody),
@@ -139,9 +148,9 @@ export async function streamMessage(
   await readServerSentEvents(response.body, (event) =>
     dispatchReplyEvent(event, {
       ...callbacks,
-      onDone: (lastMessageId, stopped, stats) => {
+      onDone: (lastMessageId, stopped, sources, stats) => {
         completed = true;
-        callbacks.onDone(lastMessageId, stopped, stats);
+        callbacks.onDone(lastMessageId, stopped, sources, stats);
       },
       onCancelled: () => {
         completed = true;

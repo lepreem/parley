@@ -34,6 +34,9 @@ type ComposerProps = {
   onModelChange: (modelId: string) => void;
   effort: ReasoningEffort | null;
   onEffortChange: (effort: ReasoningEffort | null) => void;
+  canSearchWeb: boolean;
+  webSearch: boolean;
+  onWebSearchChange: (on: boolean) => void;
   modelsLoading: boolean;
   modelsError: string | null;
   requirements: MessageRequirements;
@@ -56,6 +59,9 @@ export function Composer({
   onModelChange,
   effort,
   onEffortChange,
+  canSearchWeb,
+  webSearch,
+  onWebSearchChange,
   modelsLoading,
   modelsError,
   requirements,
@@ -192,6 +198,26 @@ export function Composer({
                 value={effort}
                 onChange={onEffortChange}
               />
+            )}
+            {canSearchWeb && (
+              <button
+                type="button"
+                onClick={() => onWebSearchChange(!webSearch)}
+                aria-label="Let the model search the web"
+                aria-pressed={webSearch}
+                title={
+                  webSearch
+                    ? "Web search is on: the model can look things up"
+                    : "Web search is off"
+                }
+                className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+                  webSearch
+                    ? "bg-signal-tint text-signal-strong"
+                    : "text-muted hover:bg-sunk hover:text-ink"
+                }`}
+              >
+                <Icon name="globe" className="h-4 w-4" />
+              </button>
             )}
             <span className="flex-1" />
             {sending ? (

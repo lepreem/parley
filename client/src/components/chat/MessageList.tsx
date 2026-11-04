@@ -109,6 +109,7 @@ export function MessageList({
                     content={message.content}
                     modelId={message.chosenModelId}
                     stopped={message.stopped}
+                    sources={message.sources}
                     stats={turnStats[message.id]}
                   />
                 ),

@@ -59,6 +59,7 @@ export const messageCreateBodySchema = takesBody<SendMessageBody>()(
         .max(MAX_MESSAGE_LENGTH, "Message is too long"),
       chosenModelId: z.string().min(1),
       reasoningEffort: z.enum(REASONING_EFFORTS).optional(),
+      webSearch: z.boolean().optional(),
       attachments: z
         .array(messageAttachmentSchema)
         .optional()
@@ -92,6 +93,13 @@ export const messageCreateBodySchema = takesBody<SendMessageBody>()(
           code: "custom",
           message: "Invalid effort: this model doesn't offer it",
           path: ["reasoningEffort"],
+        });
+      }
+      if (data.webSearch && !model.searchesWeb) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Invalid model: can't search the web",
+          path: ["webSearch"],
         });
       }
       const imageCount = data.attachments.filter(

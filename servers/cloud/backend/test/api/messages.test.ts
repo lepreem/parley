@@ -421,6 +421,28 @@ describe("a guest's turn", () => {
     expect(mockUnclaimConversationTurn).toHaveBeenCalled();
   });
 
+  it("is refused web search", async () => {
+    mockFindChatModel.mockResolvedValue({
+      id: modelId,
+      contextTokens: null,
+      acceptsImages: true,
+      searchesWeb: true,
+    });
+
+    const res = await postAsGuest({
+      messageContent: "Hi there",
+      chosenModelId: modelId,
+      webSearch: true,
+    });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      message: "Web search: sign in to use it",
+    });
+    expect(mockChatAI).not.toHaveBeenCalled();
+    expect(mockUnclaimConversationTurn).toHaveBeenCalled();
+  });
+
   it("is refused a choice of effort", async () => {
     mockFindChatModel.mockResolvedValue({
       id: modelId,
@@ -693,6 +715,83 @@ describe("POST /conversations/:conversationId/messages", () => {
 
     finishGeneration("Summary");
     expect(await response.text()).toContain("event: done");
+  });
+
+  describe("with web search", () => {
+    const canSearch = (searchesWeb: boolean) =>
+      mockFindChatModel.mockResolvedValue({
+        id: modelId,
+        contextTokens: null,
+        acceptsImages: true,
+        searchesWeb,
+      });
+
+    it("lets the model search, and saves and reports what it found", async () => {
+      canSearch(true);
+      mockChatAI.mockImplementationOnce(
+        async (
+          _model: string,
+          _turns: unknown,
+          opts: { onSource: (url: unknown, title: unknown) => void },
+        ) => {
+          opts.onSource("https://a.example/page", "A page");
+          opts.onSource("https://a.example/page", "The same page");
+          opts.onSource("javascript:alert(1)", "Not a page");
+          return "Answer";
+        },
+      );
+
+      const res = await postMessage({
+        messageContent: "Hi",
+        chosenModelId: modelId,
+        webSearch: true,
+      });
+      const body = await res.text();
+
+      const sources = [{ url: "https://a.example/page", title: "A page" }];
+      expect(mockChatAI).toHaveBeenCalledWith(
+        modelId,
+        expect.anything(),
+        expect.objectContaining({ webSearch: true }),
+      );
+      expect(mockPersistAndUnclaimChatTurn).toHaveBeenCalledWith(
+        expect.objectContaining({ sources }),
+      );
+      expect(body).toContain(`"sources":${JSON.stringify(sources)}`);
+    });
+
+    it("doesn't offer search unless asked", async () => {
+      canSearch(true);
+      mockChatAI.mockResolvedValueOnce("Answer");
+
+      const res = await postMessage({
+        messageContent: "Hi",
+        chosenModelId: modelId,
+      });
+      await res.text();
+
+      const [, , opts] = mockChatAI.mock.calls[0];
+      expect(opts.webSearch).toBeUndefined();
+      expect(mockPersistAndUnclaimChatTurn).toHaveBeenCalledWith(
+        expect.objectContaining({ sources: [] }),
+      );
+    });
+
+    it("refuses it for a model that can't search", async () => {
+      canSearch(false);
+
+      const res = await postMessage({
+        messageContent: "Hi",
+        chosenModelId: modelId,
+        webSearch: true,
+      });
+
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({
+        message: "Invalid model: can't search the web",
+      });
+      expect(mockChatAI).not.toHaveBeenCalled();
+    });
   });
 
   describe("with a reasoning effort", () => {
