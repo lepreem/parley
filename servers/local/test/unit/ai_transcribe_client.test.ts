@@ -26,6 +26,7 @@ vi.mock("@fugood/whisper.node", () => ({
 import {
   pingTranscribeAI,
   transcribeAI,
+  whisperUsesGpu,
 } from "../../core/ai/ai_transcribe_client";
 
 /** 16kHz 16-bit PCM, `seconds` long. */
@@ -400,5 +401,14 @@ describe("dictateAI", () => {
     );
     expect(await dictateAI("/tmp/two", stillWanted)).toBe("Hello.");
     expect(mocks.initWhisper).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("whisperUsesGpu", () => {
+  it("is on everywhere but an Intel Mac", () => {
+    expect(whisperUsesGpu("darwin", "arm64")).toBe(true);
+    expect(whisperUsesGpu("win32", "x64")).toBe(true);
+    expect(whisperUsesGpu("linux", "x64")).toBe(true);
+    expect(whisperUsesGpu("darwin", "x64")).toBe(false);
   });
 });

@@ -25,7 +25,7 @@ async function program(name: string, body = "#!/bin/sh\nexit 0\n") {
   return file;
 }
 
-describe("findClaude", () => {
+describe.skipIf(process.platform === "win32")("findClaude on Unix", () => {
   it("finds it on the path", async () => {
     const file = await program("claude");
     expect(findClaude(`/nowhere:${dir}`, "linux")).toBe(file);
@@ -35,7 +35,9 @@ describe("findClaude", () => {
     await writeFile(path.join(dir, "claude"), "");
     expect(findClaude(dir, "linux")).toBeUndefined();
   });
+});
 
+describe("findClaude on Windows", () => {
   it("takes only a real program on Windows, not npm's script", async () => {
     await writeFile(path.join(dir, "claude.cmd"), "");
     expect(findClaude(dir, "win32")).toBeUndefined();
