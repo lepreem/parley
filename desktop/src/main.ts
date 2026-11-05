@@ -8,10 +8,12 @@ import {
   Menu,
   nativeTheme,
   shell,
+  systemPreferences,
   type IpcMainInvokeEvent,
   type MessageBoxOptions,
 } from "electron";
 import { claudeStatus, installerCommand, runSetupStep } from "./claudeCode";
+import { isPermitted } from "./permissions";
 import { ServerStartError, startServer, type RunningServer } from "./server";
 import type { SetupState } from "./setupState";
 import { userPath } from "./shellPath";
@@ -93,12 +95,19 @@ function createWindow() {
     event.preventDefault();
     if (isHttp(url)) void shell.openExternal(url);
   });
-  // Nothing the app does needs the camera, location or the like.
   created.webContents.session.setPermissionRequestHandler(
-    (_contents, permission, callback) =>
-      callback(
-        ["clipboard-sanitized-write", "fullscreen"].includes(permission),
-      ),
+    (_contents, permission, callback, details) => {
+      if (!isPermitted(permission, details, server?.url)) {
+        callback(false);
+      } else if (permission === "media" && process.platform === "darwin") {
+        // A Mac asks the person itself, the first time.
+        systemPreferences
+          .askForMediaAccess("microphone")
+          .then(callback, () => callback(false));
+      } else {
+        callback(true);
+      }
+    },
   );
   // Electron has no right-click menu of its own.
   created.webContents.on("context-menu", (_event, params) => {

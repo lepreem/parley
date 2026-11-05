@@ -37,6 +37,9 @@ mac:
   category: public.app-category.productivity
   target: [dmg]
   artifactName: Parley-mac-${arch}.${ext}
+  # What the Mac shows when it asks for the microphone.
+  extendInfo:
+    NSMicrophoneUsageDescription: Parley uses the microphone to dictate your messages.
   # Signed with no identity, which is free and what Apple Silicon needs to run
   # a program at all. It doesn't get past Gatekeeper; that's the "Open Anyway"
   # step on the download page.

@@ -107,6 +107,8 @@ export const modelRateLimiter = createLimiter("model");
 export const imageReadRateLimiter = createLimiter("imageRead");
 export const uploadRateLimiter = createLimiter("upload");
 export const uploadConfirmRateLimiter = createLimiter("uploadConfirm");
+export const dictationRateLimiter = createLimiter("dictation");
+export const dictationDailyRateLimiter = createLimiter("dictationDaily");
 
 /** Test-only: clears every count, so cases don't spend each other's budgets. */
 export function resetRateLimits() {

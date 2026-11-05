@@ -50,7 +50,9 @@ yt-dlp, and says which. Whisper (whisper.cpp) and ffmpeg come with
 `npm install`, built for your platform. Start it from the repo root rather
 than running `servers/local/` directly: that's what puts yt-dlp on its PATH.
 The first transcription downloads its Whisper model (`small`, about 470 MB);
-later ones start straight away.
+later ones start straight away. The mic button in the message box dictates
+with the same model: what you say comes back as text to edit before sending,
+and the recording isn't kept.
 
 ## Where things live
 

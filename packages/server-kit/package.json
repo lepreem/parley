@@ -8,6 +8,7 @@
     "./http/cache.middleware": "./src/http/cache.middleware.ts",
     "./http/cursor": "./src/http/cursor.ts",
     "./http/takesBody": "./src/http/takesBody.ts",
+    "./http/audioClip": "./src/http/audioClip.ts",
     "./ids": "./src/ids.ts",
     "./reasoningEfforts": "./src/reasoningEfforts.ts",
     "./runtime/logger": "./src/runtime/logger.ts",

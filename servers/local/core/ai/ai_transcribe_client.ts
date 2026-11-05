@@ -106,6 +106,46 @@ export async function pingTranscribeAI(): Promise<void> {
   await Promise.all([loadWhisper(), pingFfmpeg()]);
 }
 
+type Whisper = Awaited<ReturnType<typeof initWhisper>>;
+
+/**
+ * The segments `whisper` hears in `pcm`, in the language it's spoken in.
+ *
+ * Aborting rejects straight away, with the signal's reason, because the
+ * binding never settles a run's promise once it's stopped. Stopping is only
+ * for a run that's gone wrong: the run goes on regardless, and for far longer
+ * than it would have (a 10-second clip held its context for nearly three
+ * minutes, when finishing would have taken nine seconds). Releasing a context
+ * under it left the next context stuck, so a context whose run was aborted
+ * mustn't be released. It can be run again: the next run waits for the old one.
+ */
+async function runWhisper(
+  whisper: Whisper,
+  pcm: Buffer,
+  abortSignal: AbortSignal,
+  onNewSegments?: () => void,
+) {
+  const { stop, promise } = whisper.transcribeData(
+    arrayBufferOf(pcm),
+    // whisper.cpp assumes English unless told to detect the language.
+    { language: "auto", ...(onNewSegments ? { onNewSegments } : {}) },
+  );
+  let onAbort = () => {};
+  const aborted = new Promise<never>((_, reject) => {
+    onAbort = () => {
+      void stop();
+      reject(abortSignal.reason);
+    };
+  });
+  abortSignal.addEventListener("abort", onAbort, { once: true });
+  try {
+    const { segments } = await Promise.race([promise, aborted]);
+    return segments;
+  } finally {
+    abortSignal.removeEventListener("abort", onAbort);
+  }
+}
+
 // How long a transcription takes depends on the audio's length and this
 // machine's speed, so the total is generous. What's held tight is silence: a
 // run that prints nothing for this long has stalled. The first segment also
@@ -145,30 +185,109 @@ export async function transcribeAI(
         useGpu: whisperUsesGpu(),
       });
       try {
-        const { stop, promise } = whisper.transcribeData(
-          arrayBufferOf(speech.pcm),
-          // whisper.cpp assumes English unless told to detect the language.
-          { language: "auto", onNewSegments: markProgress },
+        const segments = await runWhisper(
+          whisper,
+          speech.pcm,
+          abortSignal,
+          markProgress,
         );
-        const onAbort = () => void stop();
-        abortSignal.addEventListener("abort", onAbort, { once: true });
-        let result;
-        try {
-          result = await promise;
-        } finally {
-          abortSignal.removeEventListener("abort", onAbort);
-        }
-        abortSignal.throwIfAborted();
 
         // The binding times segments in milliseconds.
-        return result.segments.map(({ t0, t1, text }) => ({
+        return segments.map(({ t0, t1, text }) => ({
           start: speech.toOriginalMs(t0) / 1000,
           end: speech.toOriginalMs(t1) / 1000,
           text,
         }));
       } finally {
-        await whisper.release();
+        // An aborted run may still be going; see runWhisper.
+        if (!abortSignal.aborted) await whisper.release();
       }
     },
   );
+}
+
+/**
+ * How long Whisper stays in memory after a dictated message. Loading it takes
+ * long enough to feel, and someone dictating tends to go on to the next
+ * message; a file's transcription doesn't care, so it loads its own.
+ */
+const DICTATION_KEEP_LOADED_MS = 5 * 60 * 1000;
+
+let dictationWhisper: Promise<Whisper> | undefined;
+let dictationRelease: NodeJS.Timeout | undefined;
+let lastDictation: Promise<unknown> = Promise.resolve();
+
+function releaseDictationWhisper() {
+  const whisper = dictationWhisper;
+  dictationWhisper = undefined;
+  void whisper?.then((loaded) => loaded.release()).catch(() => {});
+}
+
+/**
+ * The recording at `audioPath`, as text; empty if nobody spoke. `cancelled`
+ * skips whatever hasn't started, since the next message waits on this one.
+ * Whisper itself is left to finish: see runWhisper for why that's quicker.
+ */
+async function dictate(
+  audioPath: string,
+  cancelled: AbortSignal,
+): Promise<string> {
+  cancelled.throwIfAborted();
+  clearTimeout(dictationRelease);
+  let aborted = () => false;
+  try {
+    const text = await withTimeout(
+      { timeoutMs: FIRST_SEGMENT_TIMEOUT_MS },
+      async ({ abortSignal }) => {
+        const notWanted = AbortSignal.any([abortSignal, cancelled]);
+        aborted = () => notWanted.aborted;
+        const [pcm, vadPath, modelPath] = await Promise.all([
+          decodeAudio(audioPath, notWanted),
+          modelFile(VAD_MODEL, notWanted),
+          modelFile(WHISPER_MODEL, notWanted),
+          loadWhisper(),
+        ]);
+
+        const spans = await detectSpeech(pcm, vadPath);
+        notWanted.throwIfAborted();
+        if (spans.length === 0) return "";
+
+        dictationWhisper ??= initWhisper({ filePath: modelPath, useGpu: true });
+        const segments = await runWhisper(
+          await dictationWhisper,
+          speechOnly(pcm, spans).pcm,
+          abortSignal,
+        );
+        return segments
+          .map(({ text }) => text)
+          .join("")
+          .trim();
+      },
+    );
+    dictationRelease = setTimeout(
+      releaseDictationWhisper,
+      DICTATION_KEEP_LOADED_MS,
+    );
+    dictationRelease.unref();
+    return text;
+  } catch (error) {
+    // A run that failed by itself is over, so the next message can start from
+    // a fresh context. An aborted one may not be (see runWhisper): its context
+    // stays until a later message finishes and sets the timer above.
+    if (!aborted()) releaseDictationWhisper();
+    throw error;
+  }
+}
+
+/**
+ * A dictated recording, as text. One at a time, since they share a context;
+ * this doesn't wait on files being transcribed, which have their own.
+ */
+export function dictateAI(
+  audioPath: string,
+  cancelled: AbortSignal,
+): Promise<string> {
+  const run = lastDictation.then(() => dictate(audioPath, cancelled));
+  lastDictation = run.catch(() => {});
+  return run;
 }

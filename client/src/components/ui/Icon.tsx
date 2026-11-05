@@ -18,6 +18,12 @@ const glyphs = {
       <path d="m4 17 4.5-4.5a2 2 0 0 1 2.83 0L16 17m-1-2.5 1.6-1.6a2 2 0 0 1 2.83 0L21 14.5" />
     </>
   ),
+  mic: (
+    <>
+      <rect x="9" y="3" width="6" height="11.5" rx="3" />
+      <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3" />
+    </>
+  ),
   waveform: <path d="M4 10v4M8 6.5v11M12 3.5v17M16 7.5v9M20 10.5v3" />,
   video: (
     <>
@@ -35,6 +41,13 @@ const glyphs = {
     <path d="M10.5 13.5a4.5 4.5 0 0 0 6.36 0l2.5-2.5a4.5 4.5 0 0 0-6.36-6.36l-1.2 1.2M13.5 10.5a4.5 4.5 0 0 0-6.36 0l-2.5 2.5a4.5 4.5 0 0 0 6.36 6.36l1.2-1.2" />
   ),
   library: <path d="M4 6h16M4 12h16M4 18h10" />,
+  gauge: (
+    <>
+      <path d="M5.1 18.5a9 9 0 1 1 13.8 0" />
+      <path d="m12 14 3.5-4.5" />
+      <circle cx="12" cy="14" r="1.2" fill="currentColor" stroke="none" />
+    </>
+  ),
   globe: (
     <>
       <circle cx="12" cy="12" r="8.5" />

@@ -6,6 +6,7 @@ import type {
   ChatContentItems,
   ChatRequest,
   ChatRequestEffort,
+  ChatUsage,
   OpenRouterWebSearchServerTool,
 } from "@openrouter/sdk/models";
 import { withTimeout } from "@parley/server-kit/runtime/withTimeout";
@@ -133,6 +134,7 @@ async function streamChatAI(
   sender: OpenRouter,
   chatRequest: ChatRequest,
   onDelta: (delta: string) => void | Promise<void>,
+  onUsage: ((usage: ChatUsage) => void) | undefined,
   {
     abortSignal,
     markProgress,
@@ -151,6 +153,7 @@ async function streamChatAI(
 
   for await (const chunk of stream) {
     if (chunk.error) throw new Error(chunk.error.message);
+    if (chunk.usage) onUsage?.(chunk.usage);
 
     const choice = chunk.choices[0];
     const delta = choice?.delta?.content;
@@ -171,6 +174,11 @@ async function streamChatAI(
 
 type ChatOptions = {
   onDelta?: ((delta: string) => void | Promise<void>) | undefined;
+  /**
+   * What a streamed call spent, as the provider reports it. The report comes
+   * after the last of the reply, so a call stopped early never gets one.
+   */
+  onUsage?: ((usage: ChatUsage) => void) | undefined;
   /** Ceiling on the completion, so one call can't run up an unbounded bill. */
   maxOutputTokens?: number | undefined;
   /**
@@ -240,7 +248,13 @@ async function complete(
       httpClient: new HTTPClient({ fetcher: tap.fetcher }),
     });
     return withTimeout(timeoutOptions, async (ctx) => {
-      const reply = await streamChatAI(sender, chatRequest, onDelta, ctx);
+      const reply = await streamChatAI(
+        sender,
+        chatRequest,
+        onDelta,
+        opts.onUsage,
+        ctx,
+      );
       await tap.finished();
       return reply;
     });
@@ -249,7 +263,7 @@ async function complete(
   const sender = clientFor(opts.guest ?? false);
   return withTimeout(timeoutOptions, (ctx) =>
     opts.onDelta
-      ? streamChatAI(sender, chatRequest, opts.onDelta, ctx)
+      ? streamChatAI(sender, chatRequest, opts.onDelta, opts.onUsage, ctx)
       : nonStreamChatAI(sender, chatRequest, ctx.abortSignal),
   );
 }
