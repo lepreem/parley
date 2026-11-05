@@ -12,6 +12,7 @@ QueueName = NewType("QueueName", str)
 class _Queues:
     YT_FETCH_CAPTIONS: QueueName
     YT_FETCH_AUDIO: QueueName
+    YT_CANCEL_FETCH: QueueName
     YT_SAVE_CAPTIONS: QueueName
     TRANSCRIBE_AUDIO: QueueName
     YT_FAIL_JOB: QueueName
@@ -34,6 +35,7 @@ class _Contract:
         self.queues = _Queues(
             YT_FETCH_CAPTIONS=QueueName(queues["YT_FETCH_CAPTIONS"]),
             YT_FETCH_AUDIO=QueueName(queues["YT_FETCH_AUDIO"]),
+            YT_CANCEL_FETCH=QueueName(queues["YT_CANCEL_FETCH"]),
             YT_SAVE_CAPTIONS=QueueName(queues["YT_SAVE_CAPTIONS"]),
             TRANSCRIBE_AUDIO=QueueName(queues["TRANSCRIBE_AUDIO"]),
             YT_FAIL_JOB=QueueName(queues["YT_FAIL_JOB"]),

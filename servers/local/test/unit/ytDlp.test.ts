@@ -38,6 +38,16 @@ beforeEach(() => {
 });
 
 describe("ytDlp", () => {
+  it("hands the abort signal to the process it runs", async () => {
+    const { signal } = new AbortController();
+
+    await ytDlp.probe("https://youtu.be/abc", signal);
+    await ytDlp.downloadAudio("https://youtu.be/abc", "/tmp/f", 1_000, signal);
+
+    expect(mockSpawn.mock.calls[0][2]).toMatchObject({ signal });
+    expect(mockSpawn.mock.calls[1][2]).toMatchObject({ signal });
+  });
+
   it("solves YouTube's JavaScript challenge with this process's node", async () => {
     await ytDlp.probe("https://youtu.be/abc");
 

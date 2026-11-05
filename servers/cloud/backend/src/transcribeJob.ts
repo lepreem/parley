@@ -9,6 +9,7 @@ import {
 import type { TranscriptSegment } from "@parley/server-kit/transcription/transcript";
 import type { UploadId } from "@parley/server-kit/ids";
 import { eventHub } from "./sse/hub";
+import { jobCancellation } from "@parley/server-kit/transcription/jobCancellation";
 
 const log = logger.child({ component: "transcribe" });
 
@@ -58,16 +59,22 @@ type ClaimedJob = NonNullable<
 >;
 
 /** The job's audio, transcribed. */
-async function transcribeAudio(job: ClaimedJob): Promise<Transcription> {
+async function transcribeAudio(
+  job: ClaimedJob,
+  cancelled: AbortSignal,
+): Promise<Transcription> {
+  cancelled.throwIfAborted();
   const model = await transcription.model();
   if (!model) {
     throw new Error("Deepgram offers no transcription model");
   }
+  cancelled.throwIfAborted();
   const audioUrl = await sign.url(job.userId, {
     kind: "audio",
     uploadId: job.audioUploadId,
   });
-  return transcription.transcribe(model, audioUrl);
+  cancelled.throwIfAborted();
+  return transcription.transcribe(model, audioUrl, cancelled);
 }
 
 /**
@@ -132,6 +139,7 @@ export async function handleTranscribeJob(
   { attempt, lastAttempt, redelivered }: DeliveryMetadata,
 ) {
   let job: ClaimedJob | null = null;
+  const { signal: cancelled, finish } = jobCancellation.start(audioUploadId);
 
   try {
     job = await data.jobs.claimAudioJob(audioUploadId, redelivered);
@@ -144,7 +152,8 @@ export async function handleTranscribeJob(
           language: captionsLanguage ?? null,
           fromCaptions: true,
         }
-      : { ...(await transcribeAudio(job)), fromCaptions: false };
+      : { ...(await transcribeAudio(job, cancelled)), fromCaptions: false };
+    cancelled.throwIfAborted();
     if (!segments.some((segment) => segment.text.trim())) {
       throw new NoSpeechError();
     }
@@ -164,6 +173,11 @@ export async function handleTranscribeJob(
       return;
     }
   } catch (error) {
+    // The user deleted the job, so there's nothing to retry or report.
+    if (cancelled.aborted) {
+      log.debug("Transcription cancelled", { audioUploadId });
+      return;
+    }
     log.error("Transcription job failed", error, {
       audioUploadId,
       attempt,
@@ -181,6 +195,8 @@ export async function handleTranscribeJob(
     // isn't told about shows as processing until the page reloads.
     if (failed) eventHub.send(job.userId, "jobUpdated", { audioUploadId });
     return;
+  } finally {
+    finish();
   }
 
   // Tells the user's open streams the job is done, so their screen updates.

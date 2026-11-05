@@ -2,14 +2,18 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockProbe, mockDownloadAudio, mockWrite, mockPublish } = vi.hoisted(
-  () => ({
+const { mockProbe, mockDownloadAudio, mockWrite, mockPublish, mockFindJob } =
+  vi.hoisted(() => ({
     mockProbe: vi.fn(),
     mockDownloadAudio: vi.fn(),
     mockWrite: vi.fn(),
     mockPublish: vi.fn(),
-  }),
-);
+    mockFindJob: vi.fn(),
+  }));
+
+vi.mock("../../core/data", () => ({
+  data: { jobs: { findAudioJob: mockFindJob } },
+}));
 
 vi.mock("../../api/src/ytDlp", async (importActual) => ({
   ...(await importActual<typeof import("../../api/src/ytDlp")>()),
@@ -37,6 +41,7 @@ vi.mock("../../core/message-queue/messageQueue", async (importActual) => ({
 
 import { YtDlpError } from "../../api/src/ytDlp";
 import { fetchCaptions, handleYoutubeFetch } from "../../api/src/youtubeFetch";
+import { jobCancellation } from "@parley/server-kit/transcription/jobCancellation";
 
 const job = {
   audioUploadId: "11111111-1111-4111-8111-111111111111",
@@ -76,6 +81,7 @@ beforeEach(() => {
   mockDownloadAudio.mockImplementation(downloads({ "audio.webm": 10 }));
   mockWrite.mockResolvedValue(undefined);
   mockPublish.mockResolvedValue(undefined);
+  mockFindJob.mockResolvedValue({ audioUploadId: job.audioUploadId });
 });
 
 afterEach(() => {
@@ -85,6 +91,57 @@ afterEach(() => {
 function published(queue: string) {
   return mockPublish.mock.calls.filter(([name]) => name === queue);
 }
+
+describe("handleYoutubeFetch for a deleted job", () => {
+  it("does nothing when the job was deleted while it waited", async () => {
+    mockFindJob.mockResolvedValue(undefined);
+
+    await handleYoutubeFetch(job);
+
+    expect(mockProbe).not.toHaveBeenCalled();
+    expect(mockPublish).not.toHaveBeenCalled();
+  });
+
+  it("stops the download, without retrying or reporting a failure", async () => {
+    mockDownloadAudio.mockImplementation(
+      (_url: string, _dir: string, _max: number, cancelled: AbortSignal) =>
+        new Promise((_, reject) => {
+          cancelled.addEventListener("abort", () => reject(cancelled.reason));
+          jobCancellation.cancel(job.audioUploadId);
+        }),
+    );
+
+    await expect(handleYoutubeFetch(job)).resolves.toBeUndefined();
+
+    expect(mockDownloadAudio).toHaveBeenCalledTimes(1);
+    expect(mockWrite).not.toHaveBeenCalled();
+    expect(mockPublish).not.toHaveBeenCalled();
+  });
+
+  it("doesn't store a download that finishes as it's cancelled", async () => {
+    mockDownloadAudio.mockImplementation(async (url, directory) => {
+      await downloads({ "audio.webm": 10 })(url, directory);
+      jobCancellation.cancel(job.audioUploadId);
+    });
+
+    await handleYoutubeFetch(job);
+
+    expect(mockWrite).not.toHaveBeenCalled();
+    expect(mockPublish).not.toHaveBeenCalled();
+  });
+
+  it("doesn't go on to the audio when cancelled while fetching captions", async () => {
+    mockProbe.mockImplementation(async () => {
+      jobCancellation.cancel(job.audioUploadId);
+      return {};
+    });
+
+    await handleYoutubeFetch({ ...job, useCaptionsIfAvailable: true });
+
+    expect(mockDownloadAudio).not.toHaveBeenCalled();
+    expect(mockPublish).not.toHaveBeenCalled();
+  });
+});
 
 describe("handleYoutubeFetch", () => {
   it("stores the audio under the job's id, then queues transcription", async () => {
@@ -217,10 +274,12 @@ describe("fetchCaptions", () => {
     });
     fetchMock.mockResolvedValue(captionsAnswer("Hello"));
 
-    expect(await fetchCaptions(job.url)).toEqual([
+    expect(await fetchCaptions(job.url, new AbortController().signal)).toEqual([
       { start: 0, end: 1, text: "Hello" },
     ]);
-    expect(fetchMock).toHaveBeenCalledWith("https://captions/en");
+    expect(fetchMock).toHaveBeenCalledWith("https://captions/en", {
+      signal: expect.any(AbortSignal),
+    });
   });
 
   it("takes the recognition in the video's own language over a translation", async () => {
@@ -232,10 +291,12 @@ describe("fetchCaptions", () => {
     });
     fetchMock.mockResolvedValue(captionsAnswer("Hello"));
 
-    expect(await fetchCaptions(job.url)).toEqual([
+    expect(await fetchCaptions(job.url, new AbortController().signal)).toEqual([
       { start: 0, end: 1, text: "Hello" },
     ]);
-    expect(fetchMock).toHaveBeenCalledWith("https://captions/en-orig");
+    expect(fetchMock).toHaveBeenCalledWith("https://captions/en-orig", {
+      signal: expect.any(AbortSignal),
+    });
   });
 
   it("makes each caption line a segment, with when it's shown", async () => {
@@ -263,7 +324,7 @@ describe("fetchCaptions", () => {
       ),
     );
 
-    expect(await fetchCaptions(job.url)).toEqual([
+    expect(await fetchCaptions(job.url, new AbortController().signal)).toEqual([
       { start: 1.5, end: 3.5, text: "we're no" },
       { start: 3.5, end: 4, text: "strangers" },
     ]);
@@ -275,7 +336,9 @@ describe("fetchCaptions", () => {
     });
     fetchMock.mockResolvedValue(captionsAnswer("  ", "\n"));
 
-    expect(await fetchCaptions(job.url)).toBeNull();
+    expect(
+      await fetchCaptions(job.url, new AbortController().signal),
+    ).toBeNull();
   });
 
   it("is null when the captions can't be fetched", async () => {
@@ -284,7 +347,9 @@ describe("fetchCaptions", () => {
     });
     fetchMock.mockResolvedValue(new Response("", { status: 403 }));
 
-    expect(await fetchCaptions(job.url)).toBeNull();
+    expect(
+      await fetchCaptions(job.url, new AbortController().signal),
+    ).toBeNull();
   });
 });
 

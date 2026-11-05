@@ -10,9 +10,12 @@ import { extractedAudioFileName, speechFileName } from "./fileNames";
 export async function prepareSpeech(
   file: File,
   kind: "audio" | "video",
+  signal?: AbortSignal,
 ): Promise<File> {
   return compressAudioForSpeech(
-    kind === "video" ? await extractAudioFromVideo(file) : file,
+    kind === "video" ? await extractAudioFromVideo(file, signal) : file,
+    undefined,
+    signal,
   );
 }
 

@@ -1,8 +1,10 @@
-"""Event handlers: fetch YouTube captions or audio and queue transcription."""
+"""Event handlers: fetch YouTube captions or audio and queue transcription, and
+stop a fetch whose job was deleted."""
 
 import functools
 import logging
 import tempfile
+import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -53,6 +55,36 @@ EXT_CONTENT_TYPES = {
 }
 
 
+# Long enough for a cancelled job's message to have left the queue: a cancel can
+# arrive before its fetch is even delivered. Lost on a restart, which only means
+# a fetch runs to its end and its transcription finds no job.
+CANCELLED_TTL_SECONDS = 24 * 60 * 60
+
+_cancelled: dict[str, float] = {}
+_cancelled_lock = threading.Lock()
+
+
+class JobCancelled(Exception):
+    """The job was deleted while this fetch worked on it."""
+
+
+def handle_yt_cancel_fetch(event: dict) -> None:
+    """Record that a job was deleted, for its fetch to find at its next check."""
+    now = time.monotonic()
+    with _cancelled_lock:
+        for job_id, expires in list(_cancelled.items()):
+            if expires <= now:
+                del _cancelled[job_id]
+        _cancelled[event["audioUploadId"]] = now + CANCELLED_TTL_SECONDS
+    log.info("Cancelled %s", event["audioUploadId"])
+
+
+def _stop_if_cancelled(audio_upload_id: str) -> None:
+    with _cancelled_lock:
+        if audio_upload_id in _cancelled:
+            raise JobCancelled(audio_upload_id)
+
+
 def _is_retryable(error: Exception) -> bool:
     """Only yt-dlp download failures are worth another extraction. Our own
     RuntimeErrors (oversized audio, no output file) are deterministic."""
@@ -82,7 +114,7 @@ def _fetch_with_retries(audio_upload_id: str, url: str, user_id: str) -> None:
             time.sleep(backoff)
 
 
-def _fetch_captions(url: str) -> dict | None:
+def _fetch_captions(audio_upload_id: str, url: str) -> dict | None:
     """The video's first caption track as the yt_save_captions message carries
     it, or None when it has none worth using: "segments", one per caption line
     in the shape the API's TranscriptSegment takes ({"start", "end", "text"},
@@ -96,6 +128,7 @@ def _fetch_captions(url: str) -> dict | None:
         selected_transcript = next(iter(transcripts), None)
         if selected_transcript is None:
             return None
+        _stop_if_cancelled(audio_upload_id)
         fetched_transcript = selected_transcript.fetch()
     except CouldNotRetrieveTranscript as error:
         log.info("No usable captions for %s: %s", video_id, error)
@@ -126,12 +159,15 @@ def _fetch_captions(url: str) -> dict | None:
 def _fails_the_job(handler: Callable[[dict], None]) -> Callable[[dict], None]:
     """Tell the API when a fetch fails, so it can mark the job row failed. A
     malformed payload (missing url/userId) must still fail the job if we know
-    which one it is. Re-raises so the dispatcher drops the message."""
+    which one it is. Re-raises so the dispatcher drops the message. A cancelled
+    fetch isn't a failure: the job is gone, so the message is simply done."""
 
     @functools.wraps(handler)
     def handle(event: dict) -> None:
         try:
             handler(event)
+        except JobCancelled as cancelled:
+            log.info("Stopped the fetch for cancelled job %s", cancelled)
         except Exception as error:
             if isinstance(event, dict) and event.get("audioUploadId"):
                 mq.publish_threadsafe(
@@ -155,7 +191,9 @@ def handle_yt_fetch_captions(event: dict) -> None:
     url: str = event["url"]
     user_id: str = event["userId"]
 
-    captions = _fetch_captions(url)
+    _stop_if_cancelled(audio_upload_id)
+    captions = _fetch_captions(audio_upload_id, url)
+    _stop_if_cancelled(audio_upload_id)
     if captions:
         mq.publish_threadsafe(
             contract.queues.YT_SAVE_CAPTIONS,
@@ -181,6 +219,7 @@ def handle_yt_fetch_audio(event: dict) -> None:
     user_id: str = event["userId"]
 
     _fetch_with_retries(audio_upload_id, url, user_id)
+    _stop_if_cancelled(audio_upload_id)
     # Inside the handler: a transcribe_audio the broker refuses must fail the
     # job, or it would sit queued with nothing coming for it.
     mq.publish_threadsafe(
@@ -191,7 +230,12 @@ def handle_yt_fetch_audio(event: dict) -> None:
 
 
 def _fetch_and_upload(audio_upload_id: str, url: str, user_id: str) -> None:
+    _stop_if_cancelled(audio_upload_id)
     max_bytes = contract.maxAudioBytes
+
+    # yt-dlp calls this as bytes arrive, and an exception here stops the download.
+    def stop_download_if_cancelled(_progress: dict) -> None:
+        _stop_if_cancelled(audio_upload_id)
 
     with tempfile.TemporaryDirectory() as tmp:
         options = {
@@ -225,6 +269,7 @@ def _fetch_and_upload(audio_upload_id: str, url: str, user_id: str) -> None:
             # token. web_embedded is the one whose formats have URLs *and*
             # accept the token.
             "extractor_args": {"youtube": {"player_client": ["web_embedded"]}},
+            "progress_hooks": [stop_download_if_cancelled],
         }
         with yt_dlp.YoutubeDL(options) as ydl:
             # Probe metadata first so oversized audio is rejected before any
@@ -240,6 +285,7 @@ def _fetch_and_upload(audio_upload_id: str, url: str, user_id: str) -> None:
                         f"audio is ~{expected} bytes, over the {max_bytes}-byte limit"
                     )
 
+            _stop_if_cancelled(audio_upload_id)
             ydl.download([url])
 
         # An aborted download (e.g. max_filesize hit mid-transfer) leaves a
@@ -269,6 +315,7 @@ def _fetch_and_upload(audio_upload_id: str, url: str, user_id: str) -> None:
             audio.suffix.removeprefix(".").lower(), "audio/mpeg"
         )
         log.info("Downloaded %s: %d bytes, %s", audio_upload_id, size, content_type)
+        _stop_if_cancelled(audio_upload_id)
         # upload_audio builds the "<userId>/audios/<storageObjectId>" key (same
         # convention as direct uploads, objectPath in backend/src/storage/core.ts),
         # so transcription finds it and ownership stays structural.

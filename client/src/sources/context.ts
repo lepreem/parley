@@ -16,6 +16,7 @@ export type SourcesContextValue = {
   addYoutube: (draftKey: string, url: string) => void;
   attachExisting: (draftKey: string, job: ExistingSource) => void;
   removeSource: (draftKey: string, localId: string) => void;
+  dropDeletedSource: (audioUploadId: string) => void;
   retrySource: (draftKey: string, localId: string) => void;
   /** Hands the draft over and empties it — the send path takes ownership. */
   takeDraft: (draftKey: string) => StagedSource[];

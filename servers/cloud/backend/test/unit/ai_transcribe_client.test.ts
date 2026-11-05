@@ -47,6 +47,8 @@ const sttResponse = {
   ],
 };
 
+const stillWanted = new AbortController().signal;
+
 describe("transcribe", () => {
   it("answers Deepgram's utterances as segments, in the language it detected", async () => {
     mockTranscribeUrl.mockResolvedValue({
@@ -60,7 +62,11 @@ describe("transcribe", () => {
     });
 
     expect(
-      await transcription.transcribe("nova-3-general", "https://audio"),
+      await transcription.transcribe(
+        "nova-3-general",
+        "https://audio",
+        stillWanted,
+      ),
     ).toEqual({
       segments: [
         { start: 0.5, end: 2, text: "Hello there." },
@@ -75,7 +81,7 @@ describe("transcribe", () => {
         detect_language: true,
         utterances: true,
       }),
-      expect.anything(),
+      expect.objectContaining({ abortSignal: stillWanted }),
     );
   });
 
@@ -83,7 +89,11 @@ describe("transcribe", () => {
     mockTranscribeUrl.mockResolvedValue({ results: { channels: [] } });
 
     expect(
-      await transcription.transcribe("nova-3-general", "https://audio"),
+      await transcription.transcribe(
+        "nova-3-general",
+        "https://audio",
+        stillWanted,
+      ),
     ).toEqual({ segments: [], language: null });
   });
 });

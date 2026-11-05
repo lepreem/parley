@@ -41,6 +41,7 @@ does with a message, with `yt_` on the ones only YouTube uploads go through:
 | ------------------- | --------------------------------------- | ----------------------------------- |
 | `yt_fetch_captions` | api → youtube-fetcher                   | `{ audioUploadId, url, userId }`    |
 | `yt_fetch_audio`    | api / youtube-fetcher → youtube-fetcher | `{ audioUploadId, url, userId }`    |
+| `yt_cancel_fetch`   | api → youtube-fetcher                   | `{ audioUploadId }`                 |
 | `yt_save_captions`  | youtube-fetcher → api                   | `{ audioUploadId, segments }`       |
 | `transcribe_audio`  | api / youtube-fetcher → api             | `{ audioUploadId }`                 |
 | `yt_fail_job`       | youtube-fetcher → api                   | `{ audioUploadId, userId, error? }` |
@@ -104,6 +105,12 @@ as the transcript; if it has none, the fetcher publishes
 itself. For that one, the fetcher stores audio under the job's
 `audioUploadId` and publishes `transcribe_audio`. Either fetch that fails
 publishes `yt_fail_job`.
+
+Deleting an unfinished job cancels it. The transcribing worker checks an abort
+signal before each step and passes it to Deepgram. For a YouTube job the API
+also publishes `yt_cancel_fetch`: the fetcher remembers the id, checks before
+each step, and stops yt-dlp through its progress hook. The caption and storage
+calls offer no way to stop midway, so those run to the end of the call.
 
 Completed transcripts are immutable. The API has no rerun route, and a source
 linked to a message or reserved for a response cannot be deleted. Trying another

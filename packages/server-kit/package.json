@@ -19,6 +19,7 @@
     "./runtime/withTimeout": "./src/runtime/withTimeout.ts",
     "./sse/hub": "./src/sse/hub.ts",
     "./sse/eventQueue": "./src/sse/eventQueue.ts",
+    "./transcription/jobCancellation": "./src/transcription/jobCancellation.ts",
     "./transcription/transcript": "./src/transcription/transcript.ts",
     "./webSources": "./src/webSources.ts"
   },

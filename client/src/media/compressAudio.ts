@@ -18,6 +18,7 @@ type CompressOptions = {
 export async function compressAudioForSpeech(
   audioFile: File,
   opts?: CompressOptions,
+  signal?: AbortSignal,
 ): Promise<File> {
   const bitrateKbps = opts?.bitrateKbps ?? 24;
   const sampleRate = opts?.sampleRate ?? 16000;
@@ -78,5 +79,5 @@ export async function compressAudioForSpeech(
     const mime = "audio/webm";
     const blob = new Blob([new Uint8Array(data)], { type: mime });
     return new File([blob], speechFileName(audioFile.name), { type: mime });
-  });
+  }, signal);
 }

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { jobCancellation } from "@parley/server-kit/transcription/jobCancellation";
 
 const {
   mockFindAudioJob,
@@ -8,7 +9,9 @@ const {
   mockDeleteObjects,
   mockFindLedgerEntry,
   mockSignUrlIfStored,
+  mockPublish,
 } = vi.hoisted(() => ({
+  mockPublish: vi.fn(),
   mockFindLedgerEntry: vi.fn(),
   mockSignUrlIfStored: vi.fn(),
   mockFindAudioJob: vi.fn(),
@@ -63,12 +66,13 @@ vi.mock("../../src/message-queue/messageQueue", () => {
     TRANSCRIBE_AUDIO: "transcribe_audio",
     YT_FETCH_CAPTIONS: "yt_fetch_captions",
     YT_FETCH_AUDIO: "yt_fetch_audio",
+    YT_CANCEL_FETCH: "yt_cancel_fetch",
     YT_FAIL_JOB: "yt_fail_job",
   } as const;
 
   return {
     QUEUES: queues,
-    mq: { queues, publish: vi.fn() },
+    mq: { queues, publish: mockPublish },
   };
 });
 
@@ -379,6 +383,38 @@ describe("DELETE /jobs/transcribe/:audioUploadId", () => {
 
     expect(res.status).toBe(200);
     expect(mockDeleteObjects).not.toHaveBeenCalled();
+  });
+
+  it("tells the fetcher to stop a youtube fetch, and survives that failing", async () => {
+    mockDeleteAudioJob.mockResolvedValueOnce({ fetchMayStillWrite: true });
+    mockPublish.mockRejectedValueOnce(new Error("broker down"));
+
+    const res = await (
+      await createApp()
+    ).request(`http://localhost/jobs/transcribe/${audioUploadId}`, {
+      method: "DELETE",
+      headers: await authedHeaders("user_01OWNER"),
+    });
+
+    expect(res.status).toBe(200);
+    expect(mockPublish).toHaveBeenCalledWith("yt_cancel_fetch", {
+      audioUploadId,
+    });
+  });
+
+  it("aborts a transcription this process is running", async () => {
+    const { signal, finish } = jobCancellation.start(audioUploadId);
+
+    await (
+      await createApp()
+    ).request(`http://localhost/jobs/transcribe/${audioUploadId}`, {
+      method: "DELETE",
+      headers: await authedHeaders("user_01OWNER"),
+    });
+    finish();
+
+    expect(signal.aborted).toBe(true);
+    expect(mockPublish).not.toHaveBeenCalled();
   });
 
   it("preserves a source that is linked to a message", async () => {

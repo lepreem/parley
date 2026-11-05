@@ -1,10 +1,15 @@
-"""Entrypoint: run the preflight, then consume both fetch queues until SIGTERM."""
+"""Entrypoint: run the preflight, then consume the fetch and cancel queues until
+SIGTERM."""
 
 import logging
 import signal
 
 from contract import contract
-from handlers import handle_yt_fetch_audio, handle_yt_fetch_captions
+from handlers import (
+    handle_yt_cancel_fetch,
+    handle_yt_fetch_audio,
+    handle_yt_fetch_captions,
+)
 from message_queue import mq
 from startup import verify_fetcher_services
 
@@ -21,6 +26,9 @@ CAPTIONS_PREFETCH = 5
 # container's 1 GB (compose.prod.yaml). Raise this once production shows
 # there's room.
 AUDIO_PREFETCH = 3
+
+# A cancel only records the job's id, so these clear as fast as they arrive.
+CANCEL_PREFETCH = 10
 
 
 def main() -> None:
@@ -48,6 +56,11 @@ def main() -> None:
             contract.queues.YT_FETCH_AUDIO,
             handle_yt_fetch_audio,
             prefetch=AUDIO_PREFETCH,
+        )
+        mq.consume(
+            contract.queues.YT_CANCEL_FETCH,
+            handle_yt_cancel_fetch,
+            prefetch=CANCEL_PREFETCH,
         )
         mq.run()
     except KeyboardInterrupt:

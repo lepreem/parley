@@ -20,6 +20,7 @@ export function useSources(draftKey: string) {
     addYoutube,
     attachExisting,
     removeSource,
+    dropDeletedSource,
     retrySource,
     takeDraft,
     restoreDraft,
@@ -37,6 +38,7 @@ export function useSources(draftKey: string) {
       addYoutube: (url: string) => addYoutube(draftKey, url),
       attachExisting: (job: ExistingSource) => attachExisting(draftKey, job),
       removeSource: (localId: string) => removeSource(draftKey, localId),
+      dropDeletedSource,
       retrySource: (localId: string) => retrySource(draftKey, localId),
       takeSources: () => takeDraft(draftKey),
       /**
@@ -56,6 +58,7 @@ export function useSources(draftKey: string) {
       addYoutube,
       attachExisting,
       removeSource,
+      dropDeletedSource,
       retrySource,
       takeDraft,
       restoreDraft,

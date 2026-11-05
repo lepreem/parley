@@ -73,7 +73,8 @@ function fakeVad(spans: { t0: number; t1: number }[]) {
   };
 }
 
-const transcribe = () => transcribeAI("/data/audios/talk");
+const transcribe = (cancelled = new AbortController().signal) =>
+  transcribeAI("/data/audios/talk", cancelled);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -186,6 +187,46 @@ describe("transcribeAI", () => {
     mocks.initWhisper.mockResolvedValue(whisper);
 
     await expect(transcribe()).rejects.toThrow("native failure");
+    expect(whisper.release).toHaveBeenCalled();
+  });
+});
+
+describe("transcribeAI when cancelled", () => {
+  const reason = new Error("cancelled");
+
+  it("starts nothing when already cancelled", async () => {
+    await expect(transcribe(AbortSignal.abort(reason))).rejects.toBe(reason);
+    expect(mocks.decodeAudio).not.toHaveBeenCalled();
+  });
+
+  it("doesn't start Whisper when cancelled while decoding", async () => {
+    const controller = new AbortController();
+    mocks.decodeAudio.mockImplementationOnce(async () => {
+      controller.abort(reason);
+      return Buffer.alloc(0);
+    });
+
+    await expect(transcribe(controller.signal)).rejects.toBe(reason);
+    expect(mocks.initWhisper).not.toHaveBeenCalled();
+  });
+
+  // Stopping Whisper makes it run for longer, and leaves a context that can't
+  // be released: see runWhisper.
+  it("lets a running Whisper finish, then releases it and gives up", async () => {
+    const controller = new AbortController();
+    const whisper = fakeWhisper([
+      { segment: { t0: 0, t1: 1000, text: " Hi." } },
+    ]);
+    const startRun = whisper.transcribeData.getMockImplementation()!;
+    whisper.transcribeData.mockImplementation((...args) => {
+      const run = startRun(...args);
+      controller.abort(reason);
+      return run;
+    });
+    mocks.initWhisper.mockResolvedValue(whisper);
+
+    await expect(transcribe(controller.signal)).rejects.toBe(reason);
+    expect(whisper.stop).not.toHaveBeenCalled();
     expect(whisper.release).toHaveBeenCalled();
   });
 });

@@ -233,8 +233,9 @@ async function deleteAudioJob(userId: string, audioUploadId: string) {
       );
     if (!deletedAudioUploadId) return null;
 
-    // A youtube fetch runs in another process that nothing here can stop, so
-    // until the job reaches a terminal status its objects may still land.
+    // A youtube fetch runs in another process, which can be told to stop but
+    // may be past its last check, so until the job reaches a terminal status
+    // its objects may still land.
     const fetchMayStillWrite =
       job?.source === "youtube" &&
       job.status !== "completed" &&
