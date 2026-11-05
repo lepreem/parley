@@ -12,6 +12,9 @@ import { sign } from "../storage";
 import { data } from "../data";
 import { tryCatch } from "@parley/server-kit/runtime/try-catch";
 import { logger } from "@parley/server-kit/runtime/logger";
+import { jobCancellation } from "@parley/server-kit/transcription/jobCancellation";
+import type { UploadId } from "@parley/server-kit/ids";
+import { mq } from "../message-queue/messageQueue";
 
 const log = logger.child({ controller: "jobs" });
 
@@ -141,12 +144,25 @@ export const handleDeleteTranscribeJob = authed.createHandlers(
       );
     }
 
-    // Deleting an unfinished youtube job doesn't stop its fetch: the fetcher is
-    // another process taking work off a queue. Removing the objects now would
-    // drop its ledger record before the fetch writes the audio, leaving a file
-    // nothing knows about. The record stays marked deleted instead, and the
-    // sweep removes whatever landed once the fetch is long over.
-    if (!deleted.fetchMayStillWrite) {
+    jobCancellation.cancel(audioUploadId);
+
+    // The fetcher is another process, so an unfinished youtube job's fetch is
+    // told to stop rather than stopped, and may already be past its last
+    // check. Removing the objects now would drop its ledger record before the
+    // fetch writes the audio, leaving a file nothing knows about. The record
+    // stays marked deleted instead, and the sweep removes whatever landed once
+    // the fetch is long over.
+    if (deleted.fetchMayStillWrite) {
+      // The job is already gone, so this can't fail the delete: a fetch that
+      // never hears runs to its end, and its transcription finds no job.
+      const { error } = await tryCatch(
+        mq.publish(mq.queues.YT_CANCEL_FETCH, {
+          audioUploadId: audioUploadId as UploadId,
+        }),
+      );
+      if (error)
+        log.error("Could not cancel the fetch", error, { audioUploadId });
+    } else {
       await uploads.deleteObjects(userId, [
         { kind: "audio", uploadId: audioUploadId },
       ]);

@@ -10,6 +10,7 @@ FULL_CONTRACT = {
     "queues": {
         "YT_FETCH_CAPTIONS": "yt_fetch_captions",
         "YT_FETCH_AUDIO": "yt_fetch_audio",
+        "YT_CANCEL_FETCH": "yt_cancel_fetch",
         "YT_SAVE_CAPTIONS": "yt_save_captions",
         "TRANSCRIBE_AUDIO": "transcribe_audio",
         "YT_FAIL_JOB": "yt_fail_job",
@@ -34,6 +35,7 @@ def test_load_reads_queues_and_limits(monkeypatch):
 
     assert c.queues.YT_FETCH_CAPTIONS == "yt_fetch_captions"
     assert c.queues.YT_FETCH_AUDIO == "yt_fetch_audio"
+    assert c.queues.YT_CANCEL_FETCH == "yt_cancel_fetch"
     assert c.queues.YT_SAVE_CAPTIONS == "yt_save_captions"
     assert c.queues.TRANSCRIBE_AUDIO == "transcribe_audio"
     assert c.queues.YT_FAIL_JOB == "yt_fail_job"

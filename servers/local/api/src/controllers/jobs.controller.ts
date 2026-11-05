@@ -7,6 +7,7 @@ import { files } from "../../../core/files";
 import { data } from "../../../core/data";
 import { tryCatch } from "@parley/server-kit/runtime/try-catch";
 import { logger } from "@parley/server-kit/runtime/logger";
+import { jobCancellation } from "@parley/server-kit/transcription/jobCancellation";
 
 const log = logger.child({ controller: "jobs" });
 
@@ -133,8 +134,10 @@ export async function handleDeleteTranscribeJob(c: Context) {
     );
   }
 
-  // A YouTube fetch still running can write the file after this; the next
-  // startup removes it then.
+  jobCancellation.cancel(audioUploadId);
+
+  // A YouTube fetch past its last check can still write the file after this;
+  // the next startup removes it then.
   await files.delete([{ kind: "audio", uploadId: audioUploadId }]);
   return c.json({ message: "Job Deleted" }, 200);
 }

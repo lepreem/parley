@@ -25,12 +25,33 @@ let queue: Promise<unknown> = Promise.resolve();
  * exec at a time — so dropping several recordings at once has to queue rather
  * than have each overwrite the others' input file mid-run. A failed job doesn't
  * hold up the next one.
+ *
+ * Aborting `signal` skips a job still waiting. One already running can only be
+ * stopped by ending the worker it runs in, so the next job loads a new one.
  */
-export function withFFmpeg<T>(task: (ff: FFmpeg) => Promise<T>): Promise<T> {
-  const run = queue.then(
-    () => getFFmpeg().then(task),
-    () => getFFmpeg().then(task),
-  );
+export function withFFmpeg<T>(
+  task: (ff: FFmpeg) => Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
+  const attempt = async () => {
+    signal?.throwIfAborted();
+    const ff = await getFFmpeg();
+    signal?.throwIfAborted();
+
+    const stop = () => {
+      ffmpeg = null;
+      loadPromise = null;
+      ff.terminate();
+    };
+    signal?.addEventListener("abort", stop, { once: true });
+    try {
+      return await task(ff);
+    } finally {
+      signal?.removeEventListener("abort", stop);
+    }
+  };
+
+  const run = queue.then(attempt, attempt);
   queue = run.catch(() => undefined);
   return run;
 }

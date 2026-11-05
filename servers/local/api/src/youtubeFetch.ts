@@ -3,7 +3,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { logger, messageOf } from "@parley/server-kit/runtime/logger";
 import { mq, type QueuePayloads } from "../../core/message-queue/messageQueue";
+import { data } from "../../core/data";
 import { files, MAX_AUDIO_BYTES } from "../../core/files";
+import { jobCancellation } from "@parley/server-kit/transcription/jobCancellation";
 import type { TranscriptSegment } from "@parley/server-kit/transcription/transcript";
 import { YtDlpError, ytDlp, type VideoInfo } from "./ytDlp";
 
@@ -76,15 +78,17 @@ type CaptionEvents = {
  */
 export async function fetchCaptions(
   url: string,
+  cancelled: AbortSignal,
 ): Promise<TranscriptSegment[] | null> {
   try {
-    const trackUrl = captionTrackUrl(await ytDlp.probe(url));
+    const trackUrl = captionTrackUrl(await ytDlp.probe(url, cancelled));
     if (!trackUrl) {
       log.info("No usable captions", { url });
       return null;
     }
 
-    const response = await fetch(trackUrl);
+    cancelled.throwIfAborted();
+    const response = await fetch(trackUrl, { signal: cancelled });
     if (!response.ok) throw new Error(`captions answered ${response.status}`);
     const { events = [] } = (await response.json()) as CaptionEvents;
     const segments = events.flatMap(
@@ -119,9 +123,14 @@ export async function fetchCaptions(
 }
 
 /** Downloads the audio and stores it under the job's id. */
-async function fetchAndStoreAudio(audioUploadId: string, url: string) {
+async function fetchAndStoreAudio(
+  audioUploadId: string,
+  url: string,
+  cancelled: AbortSignal,
+) {
+  cancelled.throwIfAborted();
   // Probe first, so oversized audio is refused before any bytes move.
-  const info = await ytDlp.probe(url);
+  const info = await ytDlp.probe(url, cancelled);
   const expectedBytes = (info.requested_formats ?? [info]).reduce(
     (sum, format) => sum + (format.filesize ?? format.filesize_approx ?? 0),
     0,
@@ -132,9 +141,11 @@ async function fetchAndStoreAudio(audioUploadId: string, url: string) {
     );
   }
 
+  cancelled.throwIfAborted();
   const directory = await mkdtemp(path.join(tmpdir(), "youtube-fetch-"));
   try {
-    await ytDlp.downloadAudio(url, directory, MAX_AUDIO_BYTES);
+    await ytDlp.downloadAudio(url, directory, MAX_AUDIO_BYTES, cancelled);
+    cancelled.throwIfAborted();
 
     // An aborted download leaves a truncated *.part file behind; never
     // store one.
@@ -167,12 +178,22 @@ async function fetchAndStoreAudio(audioUploadId: string, url: string) {
   }
 }
 
-async function fetchWithRetries(audioUploadId: string, url: string) {
+async function fetchWithRetries(
+  audioUploadId: string,
+  url: string,
+  cancelled: AbortSignal,
+) {
   for (let attempt = 1; ; attempt++) {
     try {
-      return await fetchAndStoreAudio(audioUploadId, url);
+      return await fetchAndStoreAudio(audioUploadId, url, cancelled);
     } catch (error) {
-      if (attempt === FETCH_ATTEMPTS || !isRetryable(error)) throw error;
+      if (
+        cancelled.aborted ||
+        attempt === FETCH_ATTEMPTS ||
+        !isRetryable(error)
+      ) {
+        throw error;
+      }
       const backoffMs = RETRY_BACKOFF_MS * attempt;
       log.warn("Fetch failed; trying again", {
         audioUploadId,
@@ -196,8 +217,15 @@ export async function handleYoutubeFetch({
   url,
   useCaptionsIfAvailable,
 }: QueuePayloads[typeof mq.queues.YT_FETCH]) {
+  // Started before looking for the job, so a delete is seen by one or the other.
+  const { signal: cancelled, finish } = jobCancellation.start(audioUploadId);
   try {
-    const captions = useCaptionsIfAvailable ? await fetchCaptions(url) : null;
+    if (!(await data.jobs.findAudioJob(audioUploadId))) return;
+
+    const captions = useCaptionsIfAvailable
+      ? await fetchCaptions(url, cancelled)
+      : null;
+    cancelled.throwIfAborted();
     if (captions) {
       mq.publish(mq.queues.CAPTION_TRANSCRIPT, {
         audioUploadId,
@@ -206,13 +234,21 @@ export async function handleYoutubeFetch({
       return;
     }
 
-    await fetchWithRetries(audioUploadId, url);
+    await fetchWithRetries(audioUploadId, url, cancelled);
+    cancelled.throwIfAborted();
   } catch (error) {
+    // The user deleted the job, so there's nothing to report it failed on.
+    if (cancelled.aborted) {
+      log.info("YouTube fetch cancelled", { audioUploadId });
+      return;
+    }
     mq.publish(mq.queues.YT_FETCH_FAILED, {
       audioUploadId,
       error: messageOf(error).slice(0, MAX_ERROR_CHARS),
     });
     throw error;
+  } finally {
+    finish();
   }
 
   mq.publish(mq.queues.TRANSCRIBE, { audioUploadId });

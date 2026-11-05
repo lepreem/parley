@@ -45,6 +45,7 @@ export type Transcription = {
 async function transcribe(
   model: string,
   audioUrl: string,
+  abortSignal: AbortSignal,
 ): Promise<Transcription> {
   const response = await deepgram.listen.v1.media.transcribeUrl(
     {
@@ -57,6 +58,7 @@ async function transcribe(
     {
       timeoutInSeconds: TRANSCRIBE_TIMEOUT_SECONDS,
       maxRetries: TRANSCRIBE_MAX_RETRIES,
+      abortSignal,
     },
   );
 

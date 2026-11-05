@@ -41,6 +41,7 @@ vi.mock("../../core/message-queue/messageQueue", async (importActual) => ({
 }));
 
 import { handleTranscribeJob } from "../../api/src/transcribeJob";
+import { jobCancellation } from "@parley/server-kit/transcription/jobCancellation";
 import { DeadLetterError } from "../../core/message-queue/messageQueue";
 
 const audioInput = { audioUploadId } as const;
@@ -58,6 +59,27 @@ describe("handleTranscribeJob", () => {
     mocks.transcribeAI.mockRejectedValue(new Error("Whisper failed"));
     mocks.unclaimAndResetAudioJob.mockResolvedValue(true);
     mocks.failAudioJob.mockResolvedValue(undefined);
+  });
+
+  describe("a job deleted while it's worked on", () => {
+    it("gives up without retrying, failing or saving", async () => {
+      mocks.transcribeAI.mockImplementation(
+        (_path: string, cancelled: AbortSignal) =>
+          new Promise((_, reject) => {
+            cancelled.addEventListener("abort", () => reject(cancelled.reason));
+            jobCancellation.cancel(audioUploadId);
+          }),
+      );
+
+      await expect(
+        handleTranscribeJob(audioInput, firstAttempt),
+      ).resolves.toBeUndefined();
+
+      expect(mocks.unclaimAndResetAudioJob).not.toHaveBeenCalled();
+      expect(mocks.failAudioJob).not.toHaveBeenCalled();
+      expect(mocks.saveCompletedTranscript).not.toHaveBeenCalled();
+      expect(mocks.publish).not.toHaveBeenCalled();
+    });
   });
 
   describe("storing a transcript", () => {
@@ -94,6 +116,7 @@ describe("handleTranscribeJob", () => {
       });
       expect(mocks.transcribeAI).toHaveBeenCalledWith(
         "/data/audios/audio-file",
+        expect.any(AbortSignal),
       );
       expect(mocks.saveCompletedTranscript).toHaveBeenCalledWith(
         audioUploadId,

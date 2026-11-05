@@ -38,6 +38,7 @@ vi.mock("../../src/sse/hub", () => ({
 }));
 
 import { handleTranscribeJob } from "../../src/transcribeJob";
+import { jobCancellation } from "@parley/server-kit/transcription/jobCancellation";
 import { DeadLetterError } from "../../src/message-queue/messageQueue";
 
 const audioInput = { audioUploadId } as const;
@@ -56,6 +57,56 @@ describe("handleTranscribeJob", () => {
     mocks.transcribeAI.mockRejectedValue(new Error("Deepgram unavailable"));
     mocks.unclaimAndResetAudioJob.mockResolvedValue(true);
     mocks.failAudioJob.mockResolvedValue(true);
+  });
+
+  describe("a job deleted while it's worked on", () => {
+    it("aborts the Deepgram call, without retrying, failing or saving", async () => {
+      let signal: AbortSignal | undefined;
+      mocks.transcribeAI.mockImplementation(
+        (_model: string, _url: string, abortSignal: AbortSignal) =>
+          new Promise((_, reject) => {
+            signal = abortSignal;
+            abortSignal.addEventListener("abort", () =>
+              reject(abortSignal.reason),
+            );
+          }),
+      );
+
+      const run = handleTranscribeJob(audioInput, firstAttempt);
+      await vi.waitFor(() => expect(signal).toBeDefined());
+      jobCancellation.cancel(audioUploadId);
+
+      await expect(run).resolves.toBeUndefined();
+      expect(signal?.aborted).toBe(true);
+      expect(mocks.unclaimAndResetAudioJob).not.toHaveBeenCalled();
+      expect(mocks.failAudioJob).not.toHaveBeenCalled();
+      expect(mocks.saveCompletedTranscript).not.toHaveBeenCalled();
+      expect(mocks.sendEvent).not.toHaveBeenCalled();
+    });
+
+    it("never calls Deepgram when deleted before the audio's link is signed", async () => {
+      mocks.signUrl.mockImplementation(async () => {
+        jobCancellation.cancel(audioUploadId);
+        return "https://signed.example/audio";
+      });
+
+      await handleTranscribeJob(audioInput, firstAttempt);
+
+      expect(mocks.transcribeAI).not.toHaveBeenCalled();
+      expect(mocks.failAudioJob).not.toHaveBeenCalled();
+    });
+
+    it("saves nothing when deleted just as Deepgram answers", async () => {
+      mocks.transcribeAI.mockImplementation(async () => {
+        jobCancellation.cancel(audioUploadId);
+        return { segments: [{ start: 0, end: 1, text: "hi" }], language: "en" };
+      });
+
+      await handleTranscribeJob(audioInput, firstAttempt);
+
+      expect(mocks.saveCompletedTranscript).not.toHaveBeenCalled();
+      expect(mocks.sendEvent).not.toHaveBeenCalled();
+    });
   });
 
   describe("storing a transcript", () => {
@@ -108,6 +159,7 @@ describe("handleTranscribeJob", () => {
       expect(mocks.transcribeAI).toHaveBeenCalledWith(
         "nova-3-general",
         "https://signed.example/audio",
+        expect.any(AbortSignal),
       );
       expect(mocks.saveCompletedTranscript).toHaveBeenCalledWith(
         audioUploadId,

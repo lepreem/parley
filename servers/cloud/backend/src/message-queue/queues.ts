@@ -5,11 +5,12 @@ import type { UploadId } from "@parley/server-kit/ids";
 /**
  * Each queue is named for what its consumer does with a message, with `YT_`
  * on the ones only YouTube uploads go through. The YouTube fetcher takes the
- * two fetch queues, the API the rest.
+ * two fetch queues and the cancels, the API the rest.
  */
 export const QUEUES = {
   YT_FETCH_CAPTIONS: "yt_fetch_captions",
   YT_FETCH_AUDIO: "yt_fetch_audio",
+  YT_CANCEL_FETCH: "yt_cancel_fetch",
   YT_SAVE_CAPTIONS: "yt_save_captions",
   TRANSCRIBE_AUDIO: "transcribe_audio",
   YT_FAIL_JOB: "yt_fail_job",
@@ -39,6 +40,11 @@ export const QUEUE_PAYLOAD_SCHEMAS = {
 
   /** Also published by the fetcher, for a video with no usable captions. */
   [QUEUES.YT_FETCH_AUDIO]: youtubeFetch,
+
+  /** The job was deleted, so the fetcher should stop working on it. */
+  [QUEUES.YT_CANCEL_FETCH]: z.object({
+    audioUploadId: uploadId,
+  }),
 
   [QUEUES.YT_SAVE_CAPTIONS]: z.object({
     audioUploadId: uploadId,

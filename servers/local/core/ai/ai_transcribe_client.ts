@@ -157,10 +157,14 @@ const BETWEEN_SEGMENTS_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 /**
  * The audio file at `audioPath`, transcribed: each segment Whisper heard, in
  * order, timed against the original audio. The language is detected.
+ * `cancelled` stops whatever can be stopped and skips whatever hasn't started.
+ * Whisper itself is left to finish: see runWhisper for why that's quicker.
  */
 export async function transcribeAI(
   audioPath: string,
+  cancelled: AbortSignal,
 ): Promise<TranscriptSegment[]> {
+  cancelled.throwIfAborted();
   return withTimeout(
     {
       timeoutMs: TRANSCRIBE_TIMEOUT_MS,
@@ -168,15 +172,17 @@ export async function transcribeAI(
       progressTimeoutMs: BETWEEN_SEGMENTS_TIMEOUT_MS,
     },
     async ({ abortSignal, markProgress }) => {
+      const notWanted = AbortSignal.any([abortSignal, cancelled]);
       const [pcm, vadPath, modelPath] = await Promise.all([
-        decodeAudio(audioPath, abortSignal),
-        modelFile(VAD_MODEL, abortSignal),
-        modelFile(WHISPER_MODEL, abortSignal),
+        decodeAudio(audioPath, notWanted),
+        modelFile(VAD_MODEL, notWanted),
+        modelFile(WHISPER_MODEL, notWanted),
         loadWhisper(),
       ]);
 
+      notWanted.throwIfAborted();
       const spans = await detectSpeech(pcm, vadPath);
-      abortSignal.throwIfAborted();
+      notWanted.throwIfAborted();
       if (spans.length === 0) return [];
       const speech = speechOnly(pcm, spans);
 
@@ -185,12 +191,14 @@ export async function transcribeAI(
         useGpu: whisperUsesGpu(),
       });
       try {
+        notWanted.throwIfAborted();
         const segments = await runWhisper(
           whisper,
           speech.pcm,
           abortSignal,
           markProgress,
         );
+        cancelled.throwIfAborted();
 
         // The binding times segments in milliseconds.
         return segments.map(({ t0, t1, text }) => ({

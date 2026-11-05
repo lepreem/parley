@@ -47,9 +47,14 @@ export function useDeleteJobMutation() {
   const toast = useToast();
 
   return useMutation({
-    mutationFn: ({ audioUploadId }: { audioUploadId: string }) =>
-      deleteJob(server, audioUploadId),
-    onSuccess: (_result, { audioUploadId }) => {
+    mutationFn: ({
+      audioUploadId,
+    }: {
+      audioUploadId: string;
+      /** Cancelling needs no confirmation that it worked; only failing does. */
+      quiet?: boolean;
+    }) => deleteJob(server, audioUploadId),
+    onSuccess: (_result, { audioUploadId, quiet }) => {
       void audioCopies.remove(audioUploadId).catch(() => {});
       queryClient.removeQueries({
         queryKey: queryKeys.job(server.id, audioUploadId),
@@ -57,7 +62,7 @@ export function useDeleteJobMutation() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.jobLists(server.id),
       });
-      toast.show({ kind: "success", message: "Source deleted." });
+      if (!quiet) toast.show({ kind: "success", message: "Source deleted." });
     },
     onError: (error) => {
       toast.show({
