@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { freePort } from "../src/ports";
 import { joinPath, pathFromShellOutput } from "../src/shellPath";
 import { isNewer, newerRelease } from "../src/updates";
-import { installYtDlp, ytDlpName } from "../src/ytDlp";
+import { installYtDlp, settledRelease, ytDlpName } from "../src/ytDlp";
 
 describe("freePort", () => {
   it("takes the preferred port when it's free", async () => {
@@ -112,5 +112,48 @@ describe("installYtDlp", () => {
     await writeFile(installed, "updated");
     await installYtDlp(path.join(dir, "bundled"), dir);
     expect(await readFile(installed, "utf8")).toBe("updated");
+  });
+});
+
+describe("settledRelease", () => {
+  const NOW = Date.parse("2026-11-20T00:00:00Z");
+  const release = (tag: string, published: string, rest = {}) => ({
+    tag_name: tag,
+    published_at: published,
+    draft: false,
+    prerelease: false,
+    ...rest,
+  });
+
+  it("skips a release less than a week old", () => {
+    expect(
+      settledRelease(
+        [
+          release("2026.11.19", "2026-11-19T00:00:00Z"),
+          release("2026.11.10", "2026-11-10T00:00:00Z"),
+          release("2026.10.01", "2026-10-01T00:00:00Z"),
+        ],
+        NOW,
+      ),
+    ).toBe("2026.11.10");
+  });
+
+  it("skips drafts and prereleases", () => {
+    expect(
+      settledRelease(
+        [
+          release("draft", "2026-11-01T00:00:00Z", { draft: true }),
+          release("pre", "2026-11-02T00:00:00Z", { prerelease: true }),
+          release("2026.10.01", "2026-10-01T00:00:00Z"),
+        ],
+        NOW,
+      ),
+    ).toBe("2026.10.01");
+  });
+
+  it("is nothing when no release has settled", () => {
+    expect(
+      settledRelease([release("new", "2026-11-19T00:00:00Z")], NOW),
+    ).toBeUndefined();
   });
 });

@@ -3,7 +3,9 @@ import { PassThrough } from "node:stream";
 import type { Mock } from "vitest";
 import { vi } from "vitest";
 
-export type FakeProcessStep = { afterMs?: number; line: unknown };
+export type FakeProcessStep = { afterMs?: number } & (
+  { line: unknown } | { raw: string }
+);
 
 type FakeProcess = EventEmitter & {
   stdin: PassThrough;
@@ -16,8 +18,8 @@ type FakeProcess = EventEmitter & {
 };
 
 /**
- * A `spawn` stand-in for a program that prints each step's line, as JSON,
- * after its delay, then exits with `code` (or, with `end: false`, stalls).
+ * A `spawn` stand-in for a program that prints each step's line, as JSON (or
+ * its raw text), after its delay, then exits with `code` (or, with `end: false`, stalls).
  * Aborting the spawn's signal kills it the way Node does: an AbortError, then
  * close. Like a real process, it closes only once its output has been read.
  */
@@ -72,7 +74,9 @@ export function fakeProcess(
           await new Promise((resolve) => setTimeout(resolve, step.afterMs));
         }
         if (finished) return;
-        child.stdout.write(`${JSON.stringify(step.line)}\n`);
+        child.stdout.write(
+          `${"raw" in step ? step.raw : JSON.stringify(step.line)}\n`,
+        );
       }
       if (end) finish(code);
     })();

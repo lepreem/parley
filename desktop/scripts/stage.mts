@@ -122,6 +122,26 @@ async function installServerPackages() {
   await rm(copy, { recursive: true, force: true });
   await pruneWhisperBuilds();
   await removeWhatTheServerDoesNotUse();
+  await removeCommandLinks(path.join(serverDir, "node_modules"));
+}
+
+/**
+ * Nothing runs packages' commands here, and links to the ones just removed
+ * would point nowhere, which stops a Mac build being signed.
+ */
+async function removeCommandLinks(modules: string) {
+  const entries = await readdir(modules, {
+    recursive: true,
+    withFileTypes: true,
+  });
+  for (const entry of entries) {
+    if (entry.isDirectory() && entry.name === ".bin") {
+      await rm(path.join(entry.parentPath, entry.name), {
+        recursive: true,
+        force: true,
+      });
+    }
+  }
 }
 
 /**

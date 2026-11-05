@@ -84,13 +84,14 @@ function createWindow() {
 
   // The app shows its own pages. A link to anywhere else opens in the browser,
   // which is also where a page the person didn't choose can do the least.
+  // Loading the setup page doesn't count as navigating, so no page can reach
+  // another file, and the only file: page that ever runs here is that one.
   created.webContents.setWindowOpenHandler(({ url }) => {
     if (isHttp(url)) void shell.openExternal(url);
     return { action: "deny" };
   });
   created.webContents.on("will-navigate", (event, url) => {
     if (server && url.startsWith(`${server.url}/`)) return;
-    if (url.startsWith("file:")) return;
     event.preventDefault();
     if (isHttp(url)) void shell.openExternal(url);
   });
@@ -171,7 +172,7 @@ async function takeNextSteps() {
       }
     });
     await window?.loadURL(`${running.url}/`);
-    updateYtDlp(ytDlpPath);
+    void updateYtDlp(ytDlpPath);
     void offerUpdate();
   } catch (error) {
     showServerFailure(
@@ -206,7 +207,9 @@ async function offerUpdate() {
   const { response } = window
     ? await dialog.showMessageBox(window, options)
     : await dialog.showMessageBox(options);
-  if (response === 0) void shell.openExternal(release.url);
+  if (response === 0 && isHttp(release.url)) {
+    void shell.openExternal(release.url);
+  }
 }
 
 /** Runs one setup step, showing what it prints, then tries again. */
