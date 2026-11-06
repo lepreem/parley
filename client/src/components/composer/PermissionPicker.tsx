@@ -3,13 +3,13 @@ import type { PermissionMode } from "../../api/toolApprovals";
 import { Icon } from "../ui/Icon";
 import { useDismissable } from "../ui/useDismissable";
 
-/** Claude Code's own modes, by what they mean for the person. */
+/** What each program on this computer may do, by what it means for the person. */
 const OPTIONS: { mode: PermissionMode | null; label: string; hint: string }[] =
   [
     {
       mode: null,
       label: "Your settings",
-      hint: "Asks whenever your Claude Code settings say to.",
+      hint: "Asks whenever your Claude Code or Codex settings say to.",
     },
     {
       mode: "acceptEdits",
@@ -19,7 +19,7 @@ const OPTIONS: { mode: PermissionMode | null; label: string; hint: string }[] =
     {
       mode: "bypassPermissions",
       label: "Allow all",
-      hint: "Runs anything without asking, like --dangerously-skip-permissions.",
+      hint: "Runs anything without asking, with nothing sandboxed.",
     },
   ];
 
@@ -27,7 +27,7 @@ export function PermissionPicker({
   value,
   onChange,
 }: {
-  /** Null leaves it to the person's Claude Code settings. */
+  /** Null leaves it to the person's own settings. */
   value: PermissionMode | null;
   onChange: (mode: PermissionMode | null) => void;
 }) {
@@ -41,7 +41,7 @@ export function PermissionPicker({
       <button
         type="button"
         onClick={() => setOpen((isOpen) => !isOpen)}
-        aria-label="Choose what Claude Code may do without asking"
+        aria-label="Choose what chats may do without asking"
         aria-expanded={open}
         className={`flex items-center gap-1 rounded-lg px-2 py-1.5 text-[12px] transition-colors hover:bg-sunk ${
           allowsAll ? "text-live" : "text-muted hover:text-ink"

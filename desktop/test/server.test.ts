@@ -25,6 +25,7 @@ function options(serverDir: string) {
     clientDir: "/client",
     dataDir: path.join(dir, "data"),
     claudePath: "/claude",
+    codexPath: undefined,
     ytDlpPath: "/yt-dlp",
     searchPath: process.env.PATH ?? "",
   };

@@ -194,7 +194,7 @@ export type LocalSendMessageBody = SendMessageBody & {
 };
 
 /**
- * Something Claude Code wants to do that the person's settings say to ask about
+ * Something Claude Code or Codex wants to do that the person's settings say to ask about
  * (local server only). `detail` is exactly what it would run or send.
  * `always` is Claude Code's own "don't ask again", when it offers one: the
  * rules it would add to their settings, or the mode it would switch to.
@@ -204,6 +204,8 @@ export type LocalSendMessageBody = SendMessageBody & {
  */
 export type ToolApproval = {
   id: string;
+  /** The program asking: Claude Code or Codex. */
+  program: string;
   toolName: string;
   detail: string;
   always: {

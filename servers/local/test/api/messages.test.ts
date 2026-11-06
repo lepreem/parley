@@ -133,13 +133,23 @@ vi.mock("../../core/ai/ai_chat_client", async (importActual) => {
     await importActual<typeof import("../../core/ai/ai_chat_client")>();
   return {
     ...actual,
-    findChatModel: mockFindChatModel,
     // The image's file isn't there to read; what matters is where its input goes.
     chatImageInput: async () => IMAGE_INPUT,
     chatAI: mockChatAI,
     generateTitle: mockGenerateTitle,
   };
 });
+
+// The catalog is what the programs listed at startup; here it's whatever a
+// test says the model is.
+vi.mock("../../api/src/memory/chatCatalog", () => ({
+  chatCatalog: {
+    load: async () => ({}),
+    list: async () => [],
+    find: mockFindChatModel,
+    helper: async () => ({ model: "haiku", effort: "none" }),
+  },
+}));
 
 import { createApp } from "../../api/app";
 import { eventHub } from "../../api/src/sse/hub";
@@ -1067,7 +1077,10 @@ describe("POST /conversations/:conversationId/messages", () => {
         claimToken: requestClaimToken(),
       }),
     );
-    expect(mockGenerateTitle).toHaveBeenCalledWith("conversation", "Hi there");
+    expect(mockGenerateTitle).toHaveBeenCalledWith("conversation", "Hi there", {
+      model: "haiku",
+      effort: "none",
+    });
   });
 
   it("uses the first message as a fallback when title generation fails", async () => {

@@ -3,7 +3,7 @@ import type { LocalSendMessageBody, PermissionMode } from "@parley/contract";
 import { takesBody } from "@parley/server-kit/http/takesBody";
 import { REASONING_EFFORTS } from "@parley/server-kit/reasoningEfforts";
 import { CTX_KEYS } from "../../../core/keys";
-import { findChatModel } from "../../../core/ai/ai_chat_client";
+import { memory } from "../memory";
 
 const MAX_MESSAGE_LENGTH = 50_000;
 
@@ -83,7 +83,7 @@ export const messageCreateBodySchema = takesBody<LocalSendMessageBody>()(
       [CTX_KEYS.lastMessageId]: z.string().uuid().nullable(),
     })
     .superRefine(async (data, ctx) => {
-      const model = await findChatModel(data[CTX_KEYS.chosenModelId]);
+      const model = await memory.chatCatalog.find(data[CTX_KEYS.chosenModelId]);
       if (!model) {
         ctx.addIssue({
           code: "custom",

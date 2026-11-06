@@ -32,7 +32,7 @@ function ApprovalCard({
   return (
     <div className="rounded-lg border border-line bg-surface p-4">
       <p className="text-sm font-medium text-ink">
-        Claude Code wants to use {approval.toolName}
+        {approval.program} wants to use {approval.toolName}
       </p>
       {/* All of it, however long: this is what's being agreed to. */}
       <pre className="mt-2 max-h-72 overflow-auto rounded-md bg-sunk p-3 font-mono text-xs whitespace-pre-wrap break-words text-ink">
@@ -84,7 +84,7 @@ function ApprovalCard({
               <code className="font-mono">{rule}</code>
             </span>
           ))}{" "}
-          to your Claude Code settings.
+          to your {approval.program} settings.
         </p>
       )}
     </div>

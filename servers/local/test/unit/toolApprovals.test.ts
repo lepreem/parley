@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { PermissionRequest } from "../../core/ai/ai_chat_client";
 
 const { mockSend } = vi.hoisted(() => ({ mockSend: vi.fn() }));
 
@@ -12,18 +13,17 @@ import { toolApprovals } from "../../api/src/memory/toolApprovals";
 const CONVERSATION = "conversation-1";
 const OTHER_CONVERSATION = "conversation-2";
 
-/** Claude Code's "don't ask again" for a Bash command, as it sends it. */
-const RULE_SUGGESTION = {
-  type: "addRules",
-  rules: [{ toolName: "Bash", ruleContent: "mkdir a *" }],
-  behavior: "allow",
-  destination: "localSettings",
-};
-
-const bash = (command: string, suggestions: unknown[] = []) => ({
+/** A request as an adapter hands it over, already in the card's terms. */
+const command = (
+  detail: string,
+  extra: Partial<PermissionRequest> = {},
+): PermissionRequest => ({
+  program: "Claude Code",
   toolName: "Bash",
-  input: { command },
-  suggestions,
+  detail,
+  always: null,
+  carry: [],
+  ...extra,
 });
 
 describe("tool approvals", () => {
@@ -32,24 +32,23 @@ describe("tool approvals", () => {
   });
 
   /** Opens a run and asks about one command. */
-  function askCommand(command = "mkdir a", suggestions: unknown[] = []) {
+  function askCommand(request = command("mkdir a")) {
     const run = toolApprovals.open(CONVERSATION);
-    const answer = run.ask(
-      bash(command, suggestions),
-      new AbortController().signal,
-    );
+    const answer = run.ask(request, new AbortController().signal);
     const approval = toolApprovals.pending(CONVERSATION).at(-1);
     if (!approval) throw new Error("Nothing is waiting");
     return { run, answer, approval };
   }
 
-  it("shows a command as itself and tells the page", () => {
-    const { run, approval } = askCommand("rm -rf build");
+  it("shows the request as the adapter put it, and tells the page", () => {
+    const always = { label: "Always allow", rules: ["Bash(rm *)"], mode: null };
+    const { run, approval } = askCommand(command("rm -rf build", { always }));
 
     expect(approval).toMatchObject({
+      program: "Claude Code",
       toolName: "Bash",
       detail: "rm -rf build",
-      always: null,
+      always,
     });
     expect(mockSend).toHaveBeenCalledWith("everyone", "toolApprovalsChanged", {
       conversationId: CONVERSATION,
@@ -58,118 +57,41 @@ describe("tool approvals", () => {
     run.close();
   });
 
-  it("shows another tool's whole input", () => {
-    const run = toolApprovals.open(CONVERSATION);
-    void run.ask(
-      {
-        toolName: "Write",
-        input: { file_path: "/a", content: "secret plan" },
-        suggestions: [],
-      },
-      new AbortController().signal,
-    );
-
-    expect(toolApprovals.pending(CONVERSATION)[0]?.detail).toContain(
-      "secret plan",
-    );
-    run.close();
-  });
-
-  it("allows once with the input unchanged, as Claude Code requires", async () => {
+  it("allows once", async () => {
     const { run, answer, approval } = askCommand();
 
     expect(toolApprovals.answer(CONVERSATION, approval.id, "allow")).toBe(true);
 
-    await expect(answer).resolves.toEqual({
-      behavior: "allow",
-      updatedInput: { command: "mkdir a" },
-    });
+    await expect(answer).resolves.toEqual({ decision: "allow" });
     expect(toolApprovals.pending(CONVERSATION)).toEqual([]);
     run.close();
   });
 
-  it("offers Claude Code's own don't-ask-again, and passes it back as it came", async () => {
-    const { run, answer, approval } = askCommand("mkdir a", [RULE_SUGGESTION]);
-
-    expect(approval.always).toEqual({
-      label: "Always allow",
-      rules: ["Bash(mkdir a *)"],
-      mode: null,
-    });
-    toolApprovals.answer(CONVERSATION, approval.id, "always");
-
-    await expect(answer).resolves.toEqual({
-      behavior: "allow",
-      updatedInput: { command: "mkdir a" },
-      updatedPermissions: [RULE_SUGGESTION],
-    });
-    run.close();
-  });
-
-  it("offers allowing all edits when that's what Claude Code suggests", () => {
-    const { run, approval } = askCommand("x", [
-      { type: "setMode", mode: "acceptEdits", destination: "session" },
-    ]);
-
-    expect(approval.always).toEqual({
-      label: "Allow all edits",
-      rules: [],
-      mode: "acceptEdits",
-    });
-    run.close();
-  });
-
-  it("lists only what's saved when Claude Code suggests more for this reply", () => {
-    const { run, approval } = askCommand("touch /elsewhere/f1", [
-      {
-        type: "addRules",
-        rules: [{ toolName: "Bash", ruleContent: "touch /elsewhere/f1" }],
-        behavior: "allow",
-        destination: "localSettings",
-      },
-      {
-        type: "addDirectories",
-        directories: ["/elsewhere"],
-        destination: "session",
-      },
-      { type: "setMode", mode: "acceptEdits", destination: "session" },
-    ]);
-
-    expect(approval.always).toEqual({
-      label: "Always allow",
-      rules: ["Bash(touch /elsewhere/f1)"],
-      mode: null,
-    });
-    run.close();
-  });
-
   it("keeps what lasts for the session for the rest of the conversation", async () => {
-    const { run, answer, approval } = askCommand("touch /elsewhere/f1", [
-      {
-        type: "addRules",
-        rules: [{ toolName: "Bash", ruleContent: "touch /elsewhere/f1" }],
-        behavior: "allow",
-        destination: "localSettings",
-      },
-      {
-        type: "addDirectories",
-        directories: ["/elsewhere"],
-        destination: "session",
-      },
-      { type: "setMode", mode: "acceptEdits", destination: "session" },
-    ]);
-    expect(toolApprovals.sessionGrants(OTHER_CONVERSATION)).toBeUndefined();
+    const carry = [{ any: "thing the adapter reads" }];
+    const { run, answer, approval } = askCommand(command("x", { carry }));
+    expect(toolApprovals.carried(OTHER_CONVERSATION)).toEqual([]);
 
     toolApprovals.answer(CONVERSATION, approval.id, "always");
+
+    await expect(answer).resolves.toEqual({ decision: "always" });
+    expect(toolApprovals.carried(CONVERSATION)).toEqual(carry);
+    expect(toolApprovals.carried(OTHER_CONVERSATION)).toEqual([]);
+    run.close();
+  });
+
+  it("keeps nothing for a plain allow", async () => {
+    const { run, answer, approval } = askCommand(
+      command("y", { carry: [{ not: "kept" }] }),
+    );
+
+    toolApprovals.answer(OTHER_CONVERSATION, approval.id, "allow");
+    toolApprovals.answer(CONVERSATION, approval.id, "allow");
     await answer;
 
-    // The rule itself is Claude Code's to save, in their settings file.
-    expect(toolApprovals.sessionGrants(CONVERSATION)).toEqual({
-      allow: [],
-      directories: ["/elsewhere"],
-      mode: "acceptEdits",
+    expect(toolApprovals.carried(CONVERSATION)).not.toContainEqual({
+      not: "kept",
     });
-    expect(toolApprovals.sessionGrants(OTHER_CONVERSATION)).toBeUndefined();
     run.close();
   });
 
@@ -178,7 +100,7 @@ describe("tool approvals", () => {
 
     toolApprovals.answer(CONVERSATION, approval.id, "deny");
 
-    await expect(answer).resolves.toMatchObject({ behavior: "deny" });
+    await expect(answer).resolves.toMatchObject({ decision: "deny" });
     run.close();
   });
 
@@ -198,18 +120,18 @@ describe("tool approvals", () => {
 
   it("allows the rest of the reply once the person says allow all", async () => {
     const run = toolApprovals.open(CONVERSATION);
-    const first = run.ask(bash("mkdir a"), new AbortController().signal);
-    const second = run.ask(bash("mkdir b"), new AbortController().signal);
+    const first = run.ask(command("mkdir a"), new AbortController().signal);
+    const second = run.ask(command("mkdir b"), new AbortController().signal);
     const [approval] = toolApprovals.pending(CONVERSATION);
 
     toolApprovals.answer(CONVERSATION, approval?.id ?? "", "allowAll");
 
-    await expect(first).resolves.toMatchObject({ behavior: "allow" });
+    await expect(first).resolves.toEqual({ decision: "allow" });
     // One already waiting, and one asked afterwards, go ahead without asking.
-    await expect(second).resolves.toMatchObject({ behavior: "allow" });
+    await expect(second).resolves.toEqual({ decision: "allow" });
     await expect(
-      run.ask(bash("mkdir c"), new AbortController().signal),
-    ).resolves.toMatchObject({ behavior: "allow" });
+      run.ask(command("mkdir c"), new AbortController().signal),
+    ).resolves.toEqual({ decision: "allow" });
     expect(toolApprovals.pending(CONVERSATION)).toEqual([]);
     run.close();
   });
@@ -220,7 +142,7 @@ describe("tool approvals", () => {
     run.close();
 
     const next = toolApprovals.open(CONVERSATION);
-    void next.ask(bash("mkdir d"), new AbortController().signal);
+    void next.ask(command("mkdir d"), new AbortController().signal);
 
     expect(toolApprovals.pending(CONVERSATION)).toHaveLength(1);
     next.close();
@@ -232,21 +154,21 @@ describe("tool approvals", () => {
 
     run.close();
 
-    await expect(answer).resolves.toMatchObject({ behavior: "deny" });
+    await expect(answer).resolves.toMatchObject({ decision: "deny" });
     expect(mockSend).toHaveBeenCalledWith("everyone", "toolApprovalsChanged", {
       conversationId: CONVERSATION,
       approvals: [],
     });
   });
 
-  it("takes the card away when Claude Code stops waiting", async () => {
+  it("takes the card away when the program stops waiting", async () => {
     const run = toolApprovals.open(CONVERSATION);
     const controller = new AbortController();
-    const answer = run.ask(bash("mkdir e"), controller.signal);
+    const answer = run.ask(command("mkdir e"), controller.signal);
 
     controller.abort();
 
-    await expect(answer).resolves.toMatchObject({ behavior: "deny" });
+    await expect(answer).resolves.toMatchObject({ decision: "deny" });
     expect(toolApprovals.pending(CONVERSATION)).toEqual([]);
     run.close();
   });
@@ -271,26 +193,6 @@ describe("tool approvals", () => {
     expect(toolApprovals.answer(CONVERSATION, approval.id, "allow")).toBe(
       false,
     );
-    run.close();
-  });
-
-  it("turns Claude Code's question tool into a question in the reply", async () => {
-    const run = toolApprovals.open(CONVERSATION);
-
-    await expect(
-      run.ask(
-        {
-          toolName: "AskUserQuestion",
-          input: { questions: [] },
-          suggestions: [],
-        },
-        new AbortController().signal,
-      ),
-    ).resolves.toMatchObject({
-      behavior: "deny",
-      message: expect.stringContaining("Ask in your reply"),
-    });
-    expect(toolApprovals.pending(CONVERSATION)).toEqual([]);
     run.close();
   });
 });
