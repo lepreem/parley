@@ -19,6 +19,7 @@ export const cloudServer: Server = {
   appPath: "/chat",
   alwaysOn: true,
   uploads: "signed",
+  toolApprovals: false,
   defaultChatModelId: "~openai/gpt-luna-latest",
   // OpenRouter's "~…-latest" ids follow each family's newest model, but only
   // while the provider keeps the family's name: OpenAI's "GPT Mini" became
@@ -60,6 +61,7 @@ export const localServer: Server = {
   appPath: "/local",
   alwaysOn: false,
   uploads: "direct",
+  toolApprovals: true,
   defaultChatModelId: "sonnet",
   // Its catalog is a handful of Claude models already.
   recommendedChatModelIds: [],

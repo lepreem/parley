@@ -11,6 +11,7 @@ import {
   conversationPatchBodySchema,
 } from "../schema/conversations.schema";
 import { messagesRouter } from "./messages.router";
+import { toolApprovalsRouter } from "./toolApprovals.router";
 
 export const conversationsRouter = new Hono();
 
@@ -44,4 +45,9 @@ conversationsRouter.delete(
 conversationsRouter.route(
   `/:${CTX_KEYS.conversationId}/messages`,
   messagesRouter,
+);
+
+conversationsRouter.route(
+  `/:${CTX_KEYS.conversationId}/tool-approvals`,
+  toolApprovalsRouter,
 );

@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatMessage, TurnStats } from "../../api/messages";
 import { Icon } from "../ui/Icon";
 import { Meter } from "../ui/Meter";
 import { AssistantTurn } from "./AssistantTurn";
+import { ToolApprovals } from "./ToolApprovals";
 import { UserTurn } from "./UserTurn";
 import type { PendingTurn } from "./types";
 
@@ -35,6 +36,7 @@ function LoadingTurns() {
 export function MessageList({
   messages,
   pending,
+  conversationId,
   loading,
   onEdit,
   canEdit,
@@ -42,6 +44,7 @@ export function MessageList({
 }: {
   messages: ChatMessage[];
   pending: PendingTurn | null;
+  conversationId: string | undefined;
   loading: boolean;
   /** Replaces a user message, and every turn after it, with a new turn. */
   onEdit: (message: ChatMessage, content: string) => void;
@@ -67,6 +70,11 @@ export function MessageList({
     const scroller = scrollRef.current;
     if (scroller) scroller.scrollTop = scroller.scrollHeight;
   }, [messages, pending?.assistantContent, pending?.content, stuckToBottom]);
+
+  const followToBottom = useCallback(() => {
+    const scroller = scrollRef.current;
+    if (scroller && stuckToBottom) scroller.scrollTop = scroller.scrollHeight;
+  }, [stuckToBottom]);
 
   // While an edit is answered, the turns it replaces are already gone on the
   // server; show the conversation as it will read once the edit lands.
@@ -127,6 +135,12 @@ export function MessageList({
                     streaming
                     elsewhere={pending.elsewhere}
                   />
+                  {conversationId && (
+                    <ToolApprovals
+                      conversationId={conversationId}
+                      onShown={followToBottom}
+                    />
+                  )}
                 </>
               )}
             </div>

@@ -13,6 +13,8 @@ export const CTX_KEYS = {
   audioUploadId: "audioUploadId",
   conversationId: "conversationId",
   messageId: "messageId",
+  toolApprovalId: "toolApprovalId",
+  allow: "allow",
 
   limit: "limit",
   cursor: "cursor",
