@@ -1,7 +1,6 @@
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from types import SimpleNamespace
 from typing import ClassVar
 from unittest.mock import MagicMock
 
@@ -192,7 +191,7 @@ class TestCancelledFetch:
         self, publish, monkeypatch
     ):
         caption_fetch = MagicMock()
-        monkeypatch.setattr(handlers, "_fetch_captions", caption_fetch)
+        monkeypatch.setattr(handlers.supadata, "fetch_captions", caption_fetch)
         handlers.handle_yt_cancel_fetch(CANCELLED_EVENT)
 
         handlers.handle_yt_fetch_captions(EVENT)
@@ -203,11 +202,11 @@ class TestCancelledFetch:
     def test_sends_nothing_when_cancelled_while_fetching_captions(
         self, publish, monkeypatch
     ):
-        def caption_fetch(_audio_upload_id, _url):
+        def caption_fetch(_url):
             handlers.handle_yt_cancel_fetch(CANCELLED_EVENT)
             return CAPTIONS
 
-        monkeypatch.setattr(handlers, "_fetch_captions", caption_fetch)
+        monkeypatch.setattr(handlers.supadata, "fetch_captions", caption_fetch)
 
         handlers.handle_yt_fetch_captions(EVENT)
 
@@ -297,46 +296,44 @@ class TestHandleYtFetchCaptions:
     ):
         caption_fetch = MagicMock(return_value=CAPTIONS)
         audio_fetch = MagicMock()
-        monkeypatch.setattr(handlers, "_fetch_captions", caption_fetch)
+        monkeypatch.setattr(handlers.supadata, "fetch_captions", caption_fetch)
         monkeypatch.setattr(handlers, "_fetch_with_retries", audio_fetch)
 
         handlers.handle_yt_fetch_captions(EVENT)
 
-        caption_fetch.assert_called_once_with("u1", "https://youtu.be/x")
+        caption_fetch.assert_called_once_with("https://youtu.be/x")
         audio_fetch.assert_not_called()
         publish.assert_called_once_with(
             QueueName("yt_save_captions"),
             {"audioUploadId": "u1", **CAPTIONS},
         )
 
-    def test_unavailable_captions_queue_the_audio_fetch(self, publish, monkeypatch):
+    def test_a_video_without_captions_fails_the_job(self, publish, monkeypatch):
         audio_fetch = MagicMock()
-        monkeypatch.setattr(handlers, "_fetch_captions", MagicMock(return_value=None))
+        monkeypatch.setattr(
+            handlers.supadata, "fetch_captions", MagicMock(return_value=None)
+        )
         monkeypatch.setattr(handlers, "_fetch_with_retries", audio_fetch)
 
-        handlers.handle_yt_fetch_captions(EVENT)
-
-        # Downloaded by the audio queue's consumer, not here.
-        audio_fetch.assert_not_called()
-        publish.assert_called_once_with(QueueName("yt_fetch_audio"), EVENT)
-
-    def test_refused_fallback_publish_fails_the_job(self, publish, monkeypatch):
-        monkeypatch.setattr(handlers, "_fetch_captions", MagicMock(return_value=None))
-        # The yt_fetch_audio publish is refused; the failure report goes
-        # through.
-        publish.side_effect = [RuntimeError("nacked"), None]
-
-        with pytest.raises(RuntimeError, match="nacked"):
+        with pytest.raises(handlers.supadata.CaptionsError):
             handlers.handle_yt_fetch_captions(EVENT)
 
-        publish.assert_called_with(
+        # YouTube won't give the server the audio, so there is no fallback.
+        audio_fetch.assert_not_called()
+        publish.assert_called_once_with(
             QueueName("yt_fail_job"),
-            {"audioUploadId": "u1", "userId": "usr", "error": "nacked"},
+            {
+                "audioUploadId": "u1",
+                "userId": "usr",
+                "error": handlers.supadata.NO_CAPTIONS,
+            },
         )
 
     def test_caption_fetch_failure_fails_the_job(self, publish, monkeypatch):
         monkeypatch.setattr(
-            handlers, "_fetch_captions", MagicMock(side_effect=RuntimeError("boom"))
+            handlers.supadata,
+            "fetch_captions",
+            MagicMock(side_effect=RuntimeError("boom")),
         )
 
         with pytest.raises(RuntimeError, match="boom"):
@@ -363,7 +360,7 @@ class TestHandleYtFetchAudio:
 
     def test_never_fetches_captions(self, publish, monkeypatch):
         caption_fetch = MagicMock(return_value=CAPTIONS)
-        monkeypatch.setattr(handlers, "_fetch_captions", caption_fetch)
+        monkeypatch.setattr(handlers.supadata, "fetch_captions", caption_fetch)
         monkeypatch.setattr(handlers, "_fetch_with_retries", MagicMock())
 
         handlers.handle_yt_fetch_audio(EVENT)
@@ -384,6 +381,21 @@ class TestHandleYtFetchAudio:
             QueueName("yt_fail_job"),
             {"audioUploadId": "u1", "userId": "usr", "error": "boom"},
         )
+
+    def test_youtubes_bot_check_reads_as_a_block(self, publish, monkeypatch):
+        bot_check = yt_dlp.utils.DownloadError(
+            "ERROR: [youtube] x: Sign in to confirm you\u2019re not a bot."
+            " Use --cookies-from-browser or --cookies for the authentication."
+        )
+        monkeypatch.setattr(
+            handlers, "_fetch_with_retries", MagicMock(side_effect=bot_check)
+        )
+
+        with pytest.raises(RuntimeError, match="won't let Parley"):
+            handlers.handle_yt_fetch_audio(EVENT)
+
+        (_, payload), _ = publish.call_args
+        assert payload["error"] == handlers.AUDIO_BLOCKED
 
     def test_refused_transcribe_publish_fails_the_job(self, publish, monkeypatch):
         monkeypatch.setattr(handlers, "_fetch_with_retries", MagicMock())
@@ -434,62 +446,6 @@ class TestMalformedPayloads:
         publish.assert_not_called()
 
 
-class TestFetchCaptions:
-    def test_returns_the_first_available_caption_track_and_its_language(
-        self, monkeypatch
-    ):
-        fetched_transcript = [
-            SimpleNamespace(text="First caption", start=0.5, duration=2.0),
-            SimpleNamespace(text="  ", start=2.5, duration=1.0),
-            SimpleNamespace(text="  Second caption  ", start=3.0, duration=1.5),
-        ]
-        selected_transcript = SimpleNamespace(
-            language_code="de",
-            fetch=MagicMock(return_value=fetched_transcript),
-        )
-        transcript_api = MagicMock()
-        transcript_api.list.return_value = [selected_transcript]
-        monkeypatch.setattr(
-            handlers, "YouTubeTranscriptApi", MagicMock(return_value=transcript_api)
-        )
-        captions = handlers._fetch_captions("u1", "https://youtu.be/dQw4w9WgXcQ")
-
-        transcript_api.list.assert_called_once_with("dQw4w9WgXcQ")
-        assert captions == {
-            "segments": [
-                {"start": 0.5, "end": 2.5, "text": "First caption"},
-                {"start": 3.0, "end": 4.5, "text": "Second caption"},
-            ],
-            "language": "de",
-        }
-
-    def test_empty_caption_track_is_none(self, monkeypatch):
-        selected_transcript = SimpleNamespace(
-            language_code="en",
-            fetch=MagicMock(
-                return_value=[SimpleNamespace(text="  ", start=0.0, duration=1.0)]
-            ),
-        )
-        transcript_api = MagicMock()
-        transcript_api.list.return_value = [selected_transcript]
-        monkeypatch.setattr(
-            handlers, "YouTubeTranscriptApi", MagicMock(return_value=transcript_api)
-        )
-
-        assert handlers._fetch_captions("u1", "https://youtu.be/dQw4w9WgXcQ") is None
-
-    def test_unavailable_captions_are_none(self, monkeypatch):
-        transcript_api = MagicMock()
-        transcript_api.list.side_effect = handlers.CouldNotRetrieveTranscript(
-            "dQw4w9WgXcQ"
-        )
-        monkeypatch.setattr(
-            handlers, "YouTubeTranscriptApi", MagicMock(return_value=transcript_api)
-        )
-
-        assert handlers._fetch_captions("u1", "https://youtu.be/dQw4w9WgXcQ") is None
-
-
 class TestFetchWithRetries:
     """The CDN rejects a signed media URL with 403 often enough that a single
     attempt is not enough. Each retry must re-run the whole fetch, because the
@@ -524,6 +480,20 @@ class TestFetchWithRetries:
     def test_does_not_retry_a_permanently_unavailable_video(self, monkeypatch):
         fetch = MagicMock(
             side_effect=yt_dlp.utils.DownloadError("ERROR: Video unavailable")
+        )
+        monkeypatch.setattr(handlers, "_fetch_and_upload", fetch)
+
+        with pytest.raises(yt_dlp.utils.DownloadError):
+            handlers._fetch_with_retries("u1", "https://youtu.be/x", "usr")
+
+        assert fetch.call_count == 1
+
+    def test_does_not_retry_youtubes_bot_check(self, monkeypatch):
+        # A block on the server's IP outlasts any retry.
+        fetch = MagicMock(
+            side_effect=yt_dlp.utils.DownloadError(
+                "ERROR: [youtube] x: Sign in to confirm you\u2019re not a bot."
+            )
         )
         monkeypatch.setattr(handlers, "_fetch_and_upload", fetch)
 

@@ -4,7 +4,13 @@ import pytest
 
 from env import _Env
 
-REQUIRED = ("MQ_URL", "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "API_BASE_URL")
+REQUIRED = (
+    "MQ_URL",
+    "SUPABASE_URL",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "API_BASE_URL",
+    "SUPADATA_API_KEY",
+)
 
 
 def test_reads_all_required_vars():

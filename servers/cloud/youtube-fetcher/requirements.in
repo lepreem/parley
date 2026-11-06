@@ -6,7 +6,6 @@
 httpx
 pika
 supabase
-youtube-transcript-api
 yt-dlp
 # yt-dlp plugins: yt-dlp-ejs solves YouTube's JavaScript challenges, and
 # bgutil-ytdlp-pot-provider fetches proof-of-origin tokens.

@@ -15,10 +15,10 @@ from startup import verify_fetcher_services
 
 log = logging.getLogger(__name__)
 
-# A caption fetch is one small request to YouTube, so a queue of them clears
-# quickly, and on its own queue it never waits behind an audio download. Every
-# fetch goes out from the server's one IP, though, and YouTube blocks IPs that
-# ask for too many transcripts.
+# A caption fetch is one request to Supadata, a few seconds long, so a queue of
+# them clears quickly, and on its own queue it never waits behind an audio
+# download. Supadata's free plan answers one request a second; supadata.py
+# retries what it turns away.
 CAPTIONS_PREFETCH = 5
 
 # An audio fetch downloads up to 50 MB and uploads it again, while yt-dlp runs

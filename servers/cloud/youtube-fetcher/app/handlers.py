@@ -10,10 +10,9 @@ from collections.abc import Callable
 from pathlib import Path
 
 import yt_dlp
-from youtube_transcript_api import CouldNotRetrieveTranscript, YouTubeTranscriptApi
-from yt_dlp.extractor.youtube import YoutubeIE
 
 import bucket
+import supadata
 from contract import contract
 from message_queue import mq
 
@@ -36,9 +35,18 @@ PERMANENT_FAILURES = (
     "removed by the uploader",
     "members-only",
     "sign in to confirm your age",
+    # YouTube's block on the server's IP, which lasts far longer than a retry.
+    "not a bot",
     "no video formats found",
     "unsupported url",
     "is not a valid url",
+)
+
+# Shown to the person when YouTube refuses the server its audio, which from a
+# datacenter IP is most of the time.
+AUDIO_BLOCKED = (
+    "YouTube won't let Parley download this video's audio. Turn on"
+    " “Use YouTube captions”, or upload the audio or video file instead."
 )
 
 # Stored as the object's content type: the bucket only takes audio/* types,
@@ -114,48 +122,6 @@ def _fetch_with_retries(audio_upload_id: str, url: str, user_id: str) -> None:
             time.sleep(backoff)
 
 
-def _fetch_captions(audio_upload_id: str, url: str) -> dict | None:
-    """The video's first caption track as the yt_save_captions message carries
-    it, or None when it has none worth using: "segments", one per caption line
-    in the shape the API's TranscriptSegment takes ({"start", "end", "text"},
-    in seconds), and "language", the track's language code. The segments
-    travel in the message itself: even a many-hour video's captions are a few
-    hundred KB."""
-    video_id = YoutubeIE.extract_id(url)
-
-    try:
-        transcripts = YouTubeTranscriptApi().list(video_id)
-        selected_transcript = next(iter(transcripts), None)
-        if selected_transcript is None:
-            return None
-        _stop_if_cancelled(audio_upload_id)
-        fetched_transcript = selected_transcript.fetch()
-    except CouldNotRetrieveTranscript as error:
-        log.info("No usable captions for %s: %s", video_id, error)
-        return None
-
-    segments = [
-        {
-            "start": snippet.start,
-            "end": snippet.start + snippet.duration,
-            "text": snippet.text.strip(),
-        }
-        for snippet in fetched_transcript
-        if snippet.text.strip()
-    ]
-    if not segments:
-        log.info("Caption track for %s was empty", video_id)
-        return None
-
-    log.info(
-        "Fetched %s captions for %s: %d segments",
-        selected_transcript.language_code,
-        video_id,
-        len(segments),
-    )
-    return {"segments": segments, "language": selected_transcript.language_code}
-
-
 def _fails_the_job(handler: Callable[[dict], None]) -> Callable[[dict], None]:
     """Tell the API when a fetch fails, so it can mark the job row failed. A
     malformed payload (missing url/userId) must still fail the job if we know
@@ -185,30 +151,28 @@ def _fails_the_job(handler: Callable[[dict], None]) -> Callable[[dict], None]:
 
 @_fails_the_job
 def handle_yt_fetch_captions(event: dict) -> None:
-    """Send the video's captions back as its transcript, or, when it has
-    none, queue its audio to be fetched instead."""
+    """Send the video's captions back as its transcript. One without captions
+    fails rather than falling back to its audio, which YouTube won't give the
+    server."""
     audio_upload_id: str = event["audioUploadId"]
     url: str = event["url"]
-    user_id: str = event["userId"]
 
     _stop_if_cancelled(audio_upload_id)
-    captions = _fetch_captions(audio_upload_id, url)
+    captions = supadata.fetch_captions(url)
     _stop_if_cancelled(audio_upload_id)
-    if captions:
-        mq.publish_threadsafe(
-            contract.queues.YT_SAVE_CAPTIONS,
-            {"audioUploadId": audio_upload_id, **captions},
-        )
-        log.info("Fetched captions for %s, queued yt_save_captions", audio_upload_id)
-        return
+    if not captions:
+        raise supadata.CaptionsError(supadata.NO_CAPTIONS)
 
-    # Inside the handler: a fallback the broker refuses must fail the job, or
-    # it would sit queued with nothing coming for it.
     mq.publish_threadsafe(
-        contract.queues.YT_FETCH_AUDIO,
-        {"audioUploadId": audio_upload_id, "url": url, "userId": user_id},
+        contract.queues.YT_SAVE_CAPTIONS,
+        {"audioUploadId": audio_upload_id, **captions},
     )
-    log.info("No captions for %s, queued yt_fetch_audio", audio_upload_id)
+    log.info(
+        "Fetched %s captions for %s: %d segments, queued yt_save_captions",
+        captions["language"],
+        audio_upload_id,
+        len(captions["segments"]),
+    )
 
 
 @_fails_the_job
@@ -218,7 +182,12 @@ def handle_yt_fetch_audio(event: dict) -> None:
     url: str = event["url"]
     user_id: str = event["userId"]
 
-    _fetch_with_retries(audio_upload_id, url, user_id)
+    try:
+        _fetch_with_retries(audio_upload_id, url, user_id)
+    except yt_dlp.utils.DownloadError as error:
+        if "not a bot" in str(error).lower():
+            raise RuntimeError(AUDIO_BLOCKED) from error
+        raise
     _stop_if_cancelled(audio_upload_id)
     # Inside the handler: a transcribe_audio the broker refuses must fail the
     # job, or it would sit queued with nothing coming for it.

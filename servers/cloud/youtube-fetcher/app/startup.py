@@ -3,6 +3,7 @@ backend/src/startup.ts: aborts startup if any dependency is
 unavailable."""
 
 import bucket
+import supadata
 from contract import contract
 from message_queue import mq
 from preflight import verify_services
@@ -16,5 +17,6 @@ def verify_fetcher_services() -> None:
         [
             ("RabbitMQ", mq.connect),
             ("Supabase Storage", bucket.ping_bucket),
+            ("Supadata", supadata.ping),
         ]
     )

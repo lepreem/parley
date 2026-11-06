@@ -45,6 +45,9 @@ Once per server. Steps 1 to 3 happen on your own machine.
    what guests can spend. Without both, there's no guest chat.
    For dictation, add `OPENROUTER_DICTATION_API_KEY`, another OpenRouter key
    with a credit limit of its own. Without it, the server refuses to dictate.
+   For YouTube captions, add `SUPADATA_API_KEY`, from supadata.ai. Its plan's
+   monthly credits cap what YouTube costs; leave auto recharge off. Without
+   it, the YouTube fetcher won't start.
    Then create a service token for `prd` (Access → Service Tokens) and paste
    it into this, followed by Enter and Ctrl-D:
 

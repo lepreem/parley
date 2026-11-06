@@ -10,6 +10,7 @@ EnvKey = Literal[
     "SUPABASE_URL",
     "SUPABASE_SERVICE_ROLE_KEY",
     "API_BASE_URL",
+    "SUPADATA_API_KEY",
 ]
 
 
@@ -19,6 +20,7 @@ class _Env:
         "SUPABASE_URL",
         "SUPABASE_SERVICE_ROLE_KEY",
         "API_BASE_URL",
+        "SUPADATA_API_KEY",
     )
 
     def __init__(self):
