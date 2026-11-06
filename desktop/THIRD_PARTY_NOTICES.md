@@ -33,3 +33,9 @@ under the MIT license. Its speech models are downloaded when first used.
 The app runs on [Electron](https://www.electronjs.org), under the MIT license.
 Its license and Chromium's are next to the app as `LICENSE.electron.txt` and
 `LICENSES.chromium.html`.
+
+## qrcode-generator
+
+Parley draws the code that opens it on your phone with
+[qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator), by Kazuhiko
+Arase, under the MIT license.

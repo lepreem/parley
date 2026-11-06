@@ -25,6 +25,12 @@ const glyphs = {
     </>
   ),
   waveform: <path d="M4 10v4M8 6.5v11M12 3.5v17M16 7.5v9M20 10.5v3" />,
+  phone: (
+    <>
+      <rect x="7" y="3" width="10" height="18" rx="2" />
+      <path d="M11 18h2" />
+    </>
+  ),
   video: (
     <>
       <rect x="3" y="6" width="12" height="12" rx="2" />

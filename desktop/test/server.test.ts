@@ -59,6 +59,34 @@ describe("startServer", () => {
     await expect(fetch(`${server.url}/health`)).rejects.toThrow();
   });
 
+  it("passes phone access on to the running server", async () => {
+    const server = await startServer(
+      options(
+        await serverDirWith(`
+import { createServer } from "node:http";
+let last = "nothing";
+process.on("message", (message) => { last = message; });
+const http = createServer((_req, res) => res.end(JSON.stringify(last)));
+http.listen(Number(process.env.PORT), "127.0.0.1");
+process.on("SIGTERM", () => { http.close(); process.exit(0); });
+`),
+      ),
+    );
+    server.allowPhoneAccess({
+      hostname: "mac.ts.net",
+      login: "me@example.com",
+    });
+    await expect
+      .poll(async () => (await fetch(`${server.url}/health`)).json())
+      .toEqual({ hostname: "mac.ts.net", login: "me@example.com" });
+
+    server.allowPhoneAccess(undefined);
+    await expect
+      .poll(async () => (await fetch(`${server.url}/health`)).json())
+      .toEqual({ hostname: null, login: null });
+    await server.stop();
+  });
+
   it("fails with what the server printed when it can't start", async () => {
     const serverDir = await serverDirWith(
       `console.error("Claude Code is unavailable"); process.exit(1);`,

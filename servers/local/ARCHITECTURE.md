@@ -172,8 +172,14 @@ same process and shows the page in its own window.
 With no sign-in, the browser is the way in, so the API answers only pages it
 trusts (`api/src/allowedHosts.ts`): this machine's.
 
-- a request addressed to anything but `localhost`, `127.0.0.1`, `[::1]` or a
-  name in `ALLOWED_HOSTS` is refused, which stops DNS rebinding;
+- a request addressed to anything but `localhost`, `127.0.0.1`, `[::1]`, a
+  name in `ALLOWED_HOSTS` or the desktop app's phone access name is refused,
+  which stops DNS rebinding;
+- a request under the phone access name must also carry the account that turned
+  it on, in the `Tailscale-User-Login` header `tailscale serve` sets, since a
+  tailnet can hold other people's devices. The app sends the name and account
+  over its IPC channel (`process.on("message")`), so it can turn this on and off
+  without restarting the server. A name in `ALLOWED_HOSTS` has no such check;
 - CORS lets only a trusted page read a response; any other site's JSON or
   DELETE is refused at the preflight;
 - a form post, which a browser sends cross-site without asking, is refused

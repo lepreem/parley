@@ -15,6 +15,10 @@ import { handleYoutubeFetch } from "./src/youtubeFetch";
 
 import { serve } from "@hono/node-server";
 import { createApp } from "./app";
+import { receivePhoneAccess } from "./src/allowedHosts";
+
+// From the desktop app, when it started this process. Nothing arrives otherwise.
+process.on("message", receivePhoneAccess);
 
 await migrateDb();
 

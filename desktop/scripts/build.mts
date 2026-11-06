@@ -1,7 +1,7 @@
 /**
- * Bundles the main process and the setup page's preload into dist/. Electron
- * provides itself at runtime, so it stays out; nothing else is a dependency of
- * the running app.
+ * Bundles the main process and its pages' preload into dist/. Electron provides
+ * itself at runtime, so it stays out; everything else it uses, like the QR
+ * code library, ends up inside the bundle.
  */
 import { build } from "esbuild";
 
