@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, type DragEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useWebSearchPreference } from "../composer/useWebSearchPreference";
+import { usePermissionModePreference } from "../composer/usePermissionModePreference";
 import {
   CHARS_PER_TOKEN,
   findChatModel,
@@ -78,6 +79,7 @@ export function ChatView() {
   const [modelPick, setModelPick] = useState<string | null>(null);
   const [effortPick, setEffortPick] = useState<ReasoningEffort | null>(null);
   const [webSearchOn, setWebSearchOn] = useWebSearchPreference();
+  const [permissionPick, setPermissionPick] = usePermissionModePreference();
   const {
     pendingTurns,
     sendingKeys,
@@ -153,6 +155,8 @@ export function ChatView() {
   // Likewise: guests can't search, and not every model can.
   const canSearchWeb = !guest && !!chosenModel?.searchesWeb;
   const webSearch = canSearchWeb && webSearchOn;
+  // Only Claude Code on this computer has permissions to loosen.
+  const permissionMode = server.toolApprovals ? permissionPick : null;
 
   const replyInProgress = messagesQuery.data?.replyInProgress ?? null;
   const pending = conversationId
@@ -178,6 +182,7 @@ export function ChatView() {
       modelId,
       reasoningEffort: effort,
       webSearch,
+      permissionMode,
       sources: staged,
       lastMessageId: conversationId
         ? (messagesQuery.data?.lastMessageId ?? null)
@@ -210,6 +215,7 @@ export function ChatView() {
       modelId,
       reasoningEffort: effort,
       webSearch,
+      permissionMode,
       sources: sourcesOfMessage(message),
       lastMessageId: messagesQuery.data?.lastMessageId ?? null,
       onRestore: (restoredContent, restoredSources, restoreKey) => {
@@ -261,6 +267,7 @@ export function ChatView() {
           messages={messagesQuery.data?.messages ?? []}
           pending={pending}
           conversationId={conversationId}
+          onPermissionModeChange={setPermissionPick}
           loading={!!conversationId && messagesQuery.isLoading}
           onEdit={handleEdit}
           canEdit={canEdit}
@@ -280,6 +287,9 @@ export function ChatView() {
         canSearchWeb={canSearchWeb}
         webSearch={webSearch}
         onWebSearchChange={setWebSearchOn}
+        canChoosePermissions={server.toolApprovals}
+        permissionMode={permissionMode}
+        onPermissionModeChange={setPermissionPick}
         modelsLoading={chatModels.loading}
         modelsError={chatModels.error}
         requirements={requirements}

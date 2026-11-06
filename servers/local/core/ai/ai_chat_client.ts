@@ -5,6 +5,7 @@ import { createInterface } from "node:readline";
 import type {
   ChatModel,
   ModelReasoning,
+  PermissionMode,
   ReasoningEffort,
 } from "@parley/contract";
 import { getBaseEnv } from "../env";
@@ -151,20 +152,31 @@ function promptOf(turns: readonly ChatTurn[]): ContentBlock[] {
   return blocks;
 }
 
-/** The MCP tool Claude Code asks when a tool call needs someone's approval. */
-const APPROVAL_SERVER_NAME = "parley-approvals";
-export const APPROVAL_TOOL_NAME = "ask";
-
-/** Where a run's permission prompts go. */
-type ApprovalServer = {
-  url: string;
-  /** Identifies this run to the server. */
-  token: string;
-  /** The longest the server takes to answer a prompt. */
-  timeoutMs: number;
-  /** Receives what to call when a prompt is raised or answered. */
-  onActivity: (markProgress: () => void) => void;
+/** A tool call Claude Code wants the person's say on, as it asks. */
+export type PermissionRequest = {
+  toolName: string;
+  input: Record<string, unknown>;
+  /**
+   * What would stop it asking again, as Claude Code suggests it: the same
+   * choices its terminal offers as "don't ask again".
+   */
+  suggestions: unknown[];
 };
+
+/** What Claude Code takes as the answer to a permission prompt. */
+export type PermissionAnswer =
+  | {
+      behavior: "allow";
+      updatedInput: Record<string, unknown>;
+      updatedPermissions?: unknown[];
+    }
+  | { behavior: "deny"; message: string };
+
+type AskPermission = (
+  request: PermissionRequest,
+  /** Aborts when Claude Code stops waiting for the answer. */
+  signal: AbortSignal,
+) => Promise<PermissionAnswer>;
 
 /** How the app talks to a run; nothing here changes what Claude Code may do. */
 const STREAM_ARGS = [
@@ -185,14 +197,17 @@ const STREAM_ARGS = [
  * conversation, and what the person picked in the app for this message.
  *
  * With --print nothing can answer a permission prompt, so a tool their settings
- * don't already allow is refused, unless `approvalServer` takes the prompts. That
- * changes who's asked, not what gets asked about.
+ * don't already allow is refused, unless the app takes the prompts over the
+ * run's own input and output, as Anthropic's Agent SDK does. That changes who's
+ * asked, not what gets asked about; `permissionMode` is the person's own pick.
  */
 function chatArgs(
   model: string,
   effort: ReasoningEffort | undefined,
   webSearch: boolean,
-  approvalServer: ApprovalServer | undefined,
+  asksPermission: boolean,
+  permissionMode: PermissionMode | undefined,
+  settings: Record<string, unknown> | undefined,
 ) {
   return [
     ...STREAM_ARGS,
@@ -204,27 +219,10 @@ function chatArgs(
     "WebSearch",
     // It has no "none": turning thinking off is an environment variable.
     ...(effort && effort !== "none" ? ["--effort", effort] : []),
-    ...(approvalServer ? approvalArgs(approvalServer) : []),
-  ];
-}
-
-/** Hands the run's permission prompts to `server`, as an MCP tool. */
-function approvalArgs({ url, token, timeoutMs }: ApprovalServer) {
-  return [
-    "--mcp-config",
-    JSON.stringify({
-      mcpServers: {
-        [APPROVAL_SERVER_NAME]: {
-          type: "http",
-          url,
-          headers: { Authorization: `Bearer ${token}` },
-          // Without it, Claude Code gives up on a person after a minute.
-          timeout: timeoutMs,
-        },
-      },
-    }),
-    "--permission-prompt-tool",
-    `mcp__${APPROVAL_SERVER_NAME}__${APPROVAL_TOOL_NAME}`,
+    // Laid over theirs, as a terminal session's "don't ask again" would be.
+    ...(settings ? ["--settings", JSON.stringify(settings)] : []),
+    ...(asksPermission ? ["--permission-prompt-tool", "stdio"] : []),
+    ...(permissionMode ? ["--permission-mode", permissionMode] : []),
   ];
 }
 
@@ -285,7 +283,64 @@ type OutputLine =
     }
   | { type: "user"; tool_use_result?: { results?: unknown } }
   | { type: "result"; is_error: boolean; result?: string }
+  | {
+      type: "control_request";
+      request_id: string;
+      request: {
+        subtype: string;
+        tool_name?: string;
+        input?: Record<string, unknown>;
+        permission_suggestions?: unknown[];
+      };
+    }
+  | { type: "control_cancel_request"; request_id: string }
   | { type: "other" };
+
+/** Somewhere to write a run's control responses to, while it's listening. */
+type ControlInput = { writableEnded: boolean; write: (line: string) => void };
+
+/**
+ * Answers a request Claude Code makes of the app mid-run. Only permission
+ * prompts are answered; it's told the app has nothing else to offer.
+ */
+function answerControlRequest(
+  input: ControlInput,
+  { request_id, request }: Extract<OutputLine, { type: "control_request" }>,
+  askPermission: AskPermission | undefined,
+  waiting: Map<string, AbortController>,
+) {
+  const reply = (response: Record<string, unknown>) => {
+    if (input.writableEnded) return;
+    input.write(
+      `${JSON.stringify({ type: "control_response", response: { request_id, ...response } })}\n`,
+    );
+  };
+  if (request.subtype !== "can_use_tool" || !askPermission) {
+    reply({ subtype: "error", error: `Not supported: ${request.subtype}` });
+    return;
+  }
+
+  const controller = new AbortController();
+  waiting.set(request_id, controller);
+  void askPermission(
+    {
+      toolName: request.tool_name ?? "",
+      input: request.input ?? {},
+      suggestions: request.permission_suggestions ?? [],
+    },
+    controller.signal,
+  )
+    .catch((): PermissionAnswer => ({
+      behavior: "deny",
+      message: "The app couldn't ask about this.",
+    }))
+    .then((answer) => {
+      waiting.delete(request_id);
+      if (!controller.signal.aborted) {
+        reply({ subtype: "success", response: answer });
+      }
+    });
+}
 
 /** Hands over the pages one WebSearch result lists. */
 function readSources(
@@ -327,7 +382,9 @@ async function runChat(
     webSearch,
     onSource,
     instructions,
-    approvalServer,
+    askPermission,
+    permissionMode,
+    settings,
   }: {
     abortSignal: AbortSignal;
     onText: (text: string) => void | Promise<void>;
@@ -336,13 +393,22 @@ async function runChat(
     onSource: (url: unknown, title: unknown) => void;
     /** Makes this a helper's run rather than a chat turn. */
     instructions: string | undefined;
-    approvalServer: ApprovalServer | undefined;
+    askPermission: AskPermission | undefined;
+    permissionMode: PermissionMode | undefined;
+    settings: Record<string, unknown> | undefined;
   },
 ): Promise<string> {
   const child = spawn(
     getBaseEnv().CLAUDE_PATH,
     instructions === undefined
-      ? chatArgs(model, effort, webSearch, approvalServer)
+      ? chatArgs(
+          model,
+          effort,
+          webSearch,
+          !!askPermission,
+          permissionMode,
+          settings,
+        )
       : helperArgs(model, instructions, effort),
     {
       windowsHide: true,
@@ -365,12 +431,16 @@ async function runChat(
   child.stderr.setEncoding("utf8").on("data", (chunk) => (stderr += chunk));
   // A run that dies before reading its input says why when it closes.
   child.stdin.on("error", () => {});
-  child.stdin.end(
-    `${JSON.stringify({
-      type: "user",
-      message: { role: "user", content: promptOf(turns) },
-    })}\n`,
-  );
+  const prompt = `${JSON.stringify({
+    type: "user",
+    message: { role: "user", content: promptOf(turns) },
+  })}\n`;
+  // A run that may ask for permission reads its answers from the same input,
+  // so it stays open until the run's result is in.
+  if (askPermission) child.stdin.write(prompt);
+  else child.stdin.end(prompt);
+  /** The prompts Claude Code is waiting on, by request. */
+  const waiting = new Map<string, AbortController>();
 
   let answer = "";
   let result: Extract<OutputLine, { type: "result" }> | undefined;
@@ -382,8 +452,14 @@ async function runChat(
       const output = parseLine(line);
       if (!output) continue;
 
-      if (output.type === "result") result = output;
-      else if (output.type === "user") {
+      if (output.type === "result") {
+        result = output;
+        child.stdin.end();
+      } else if (output.type === "control_request") {
+        answerControlRequest(child.stdin, output, askPermission, waiting);
+      } else if (output.type === "control_cancel_request") {
+        waiting.get(output.request_id)?.abort();
+      } else if (output.type === "user") {
         readSources(output.tool_use_result?.results, onSource);
       } else if (
         output.type === "stream_event" &&
@@ -416,21 +492,16 @@ async function runChat(
     }
     return answer;
   } finally {
-    // Whatever stopped reading the answer, the run doesn't outlive it.
+    // Whatever stopped reading the answer, the run doesn't outlive it, and
+    // nobody is left being asked on its behalf.
+    for (const controller of waiting.values()) controller.abort();
     if (child.exitCode === null) child.kill();
   }
 }
 
-// Until the call ends, the handler holds the conversation claim and attachment
-// reservations, so a run that stalls has to be ended. The total stays under
-// CLAIM_LEASE_MS (10 minutes) so the turn can still be persisted afterwards.
-const CHAT_TOTAL_TIMEOUT_MS = 8 * 60 * 1000; // 8 minutes
-// Claude Code takes a few seconds to start, and at a high effort a model can
-// think for minutes before its first token.
-const CHAT_FIRST_TOKEN_TIMEOUT_MS = 6 * 60 * 1000; // 6 minutes
-// A model can stop partway through a reply to run a tool, which prints nothing
-// until it's done.
-const CHAT_BETWEEN_CHUNKS_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+// A chat turn has no time limit, as Claude Code in a terminal has none: a tool
+// can run for as long as it takes, and a prompt can wait for the person. The
+// stop button ends one.
 const TITLE_TIMEOUT_MS = 15 * 1000; // 15 seconds
 
 type ChatOptions = {
@@ -449,9 +520,13 @@ type ChatOptions = {
    * is a chat turn, on the person's own Claude Code setup.
    */
   instructions?: string | undefined;
-  /** Takes a chat turn's permission prompts, which are refused without it. */
-  approvalServer?: ApprovalServer | undefined;
-  /** Ceiling on the whole call. Defaults to CHAT_TOTAL_TIMEOUT_MS. */
+  /** Asks the person about a chat turn's prompts, which are refused without it. */
+  askPermission?: AskPermission | undefined;
+  /** How freely the turn acts, beyond the person's own settings. */
+  permissionMode?: PermissionMode | undefined;
+  /** Claude Code settings laid over the person's own for this run. */
+  settings?: Record<string, unknown> | undefined;
+  /** Ceiling on the whole call. None when left out. */
   timeoutMs?: number | undefined;
   /** Ends the call early: the stop button, through the reply registry. */
   signal?: AbortSignal | undefined;
@@ -463,31 +538,24 @@ export async function chatAI(
   opts: ChatOptions = {},
 ): Promise<string> {
   const { onDelta } = opts;
-  const timeoutOptions = {
-    timeoutMs: opts.timeoutMs ?? CHAT_TOTAL_TIMEOUT_MS,
-    firstProgressTimeoutMs: onDelta ? CHAT_FIRST_TOKEN_TIMEOUT_MS : undefined,
-    progressTimeoutMs: onDelta ? CHAT_BETWEEN_CHUNKS_TIMEOUT_MS : undefined,
-    signal: opts.signal,
-  };
 
-  return withTimeout(timeoutOptions, ({ abortSignal, markProgress }) => {
-    // A person deciding isn't a stalled run.
-    opts.approvalServer?.onActivity(markProgress);
-    return runChat(model, messages, {
-      abortSignal,
-      effort: opts.effort,
-      webSearch: opts.webSearch ?? false,
-      onSource: opts.onSource ?? (() => {}),
-      instructions: opts.instructions,
-      approvalServer: opts.approvalServer,
-      // Only text counts: a model can think silently for longer than the
-      // between-chunk limit before it starts answering.
-      onText: async (text) => {
-        markProgress();
-        await onDelta?.(text);
-      },
-    });
-  });
+  return withTimeout(
+    { timeoutMs: opts.timeoutMs, signal: opts.signal },
+    ({ abortSignal }) =>
+      runChat(model, messages, {
+        abortSignal,
+        effort: opts.effort,
+        webSearch: opts.webSearch ?? false,
+        onSource: opts.onSource ?? (() => {}),
+        instructions: opts.instructions,
+        askPermission: opts.askPermission,
+        permissionMode: opts.permissionMode,
+        settings: opts.settings,
+        onText: async (text) => {
+          await onDelta?.(text);
+        },
+      }),
+  );
 }
 
 /** Claude Code's --effort levels, plus turning thinking off. */

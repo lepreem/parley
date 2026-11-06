@@ -7,7 +7,8 @@ class TimeoutError extends Error {
 
 export async function withTimeout<T>(
   options: {
-    timeoutMs: number;
+    /** None when left out. */
+    timeoutMs?: number | undefined;
     firstProgressTimeoutMs?: number;
     progressTimeoutMs?: number;
     /** Ends the operation early too, with this signal's reason. */
@@ -30,10 +31,13 @@ export async function withTimeout<T>(
       controller.abort(new TimeoutError(message));
     }, ms);
 
-  const totalTimer = abortAfter(
-    options.timeoutMs,
-    `Operation took longer than ${options.timeoutMs} ms`,
-  );
+  const totalTimer =
+    options.timeoutMs === undefined
+      ? undefined
+      : abortAfter(
+          options.timeoutMs,
+          `Operation took longer than ${options.timeoutMs} ms`,
+        );
 
   if (options.firstProgressTimeoutMs) {
     progressTimer = abortAfter(

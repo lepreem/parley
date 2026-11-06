@@ -91,6 +91,14 @@ async function claimAttachments(
   });
 }
 
+/** Pushes back the expiry of the reservations a turn holds. */
+async function renewAttachmentClaims(claimToken: string) {
+  await db
+    .update(AttachmentTurnReservations)
+    .set({ expiresAt: new Date(Date.now() + CLAIM_LEASE_MS) })
+    .where(eq(AttachmentTurnReservations.claimToken, claimToken));
+}
+
 async function unclaimAttachments(claimToken: string, executor: Executor = db) {
   await executor
     .delete(AttachmentTurnReservations)
@@ -151,6 +159,7 @@ export const attachments = {
   attachmentsOfKind,
   claimAttachments,
   unclaimAttachments,
+  renewAttachmentClaims,
   createAttachment,
   deleteUnlinkedUnreservedAttachment,
   deleteUnlinkedUnreservedAttachments,
