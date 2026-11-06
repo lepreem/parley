@@ -18,6 +18,8 @@ import { Icon } from "../ui/Icon";
 import { Meter } from "../ui/Meter";
 import { AttachMenu } from "./AttachMenu";
 import { EffortPicker } from "./EffortPicker";
+import { PermissionPicker } from "./PermissionPicker";
+import type { PermissionMode } from "../../api/toolApprovals";
 import { insertSpoken } from "./insertSpoken";
 import { ModelPicker } from "./ModelPicker";
 import { SourceChip } from "./SourceChip";
@@ -42,6 +44,10 @@ type ComposerProps = {
   canSearchWeb: boolean;
   webSearch: boolean;
   onWebSearchChange: (on: boolean) => void;
+  /** Whether this server's model asks before it acts: Claude Code does. */
+  canChoosePermissions: boolean;
+  permissionMode: PermissionMode | null;
+  onPermissionModeChange: (mode: PermissionMode | null) => void;
   modelsLoading: boolean;
   modelsError: string | null;
   requirements: MessageRequirements;
@@ -67,6 +73,9 @@ export function Composer({
   canSearchWeb,
   webSearch,
   onWebSearchChange,
+  canChoosePermissions,
+  permissionMode,
+  onPermissionModeChange,
   modelsLoading,
   modelsError,
   requirements,
@@ -247,6 +256,12 @@ export function Composer({
               >
                 <Icon name="globe" className="h-4 w-4" />
               </button>
+            )}
+            {canChoosePermissions && (
+              <PermissionPicker
+                value={permissionMode}
+                onChange={onPermissionModeChange}
+              />
             )}
             <span className="flex-1" />
             {dictation.status === "recording" && (

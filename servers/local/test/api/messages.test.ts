@@ -495,6 +495,53 @@ describe("POST /conversations/:conversationId/messages", () => {
     });
   });
 
+  describe("with a permission mode", () => {
+    it("starts Claude Code in the mode the person picked, and lets them answer its prompts", async () => {
+      mockChatAI.mockResolvedValueOnce("Answer");
+
+      const res = await postMessage({
+        messageContent: "Hi",
+        chosenModelId: modelId,
+        permissionMode: "bypassPermissions",
+      });
+      await res.text();
+
+      expect(mockChatAI).toHaveBeenCalledWith(
+        modelId,
+        expect.anything(),
+        expect.objectContaining({
+          permissionMode: "bypassPermissions",
+          askPermission: expect.any(Function),
+        }),
+      );
+    });
+
+    it("leaves it to the person's settings when none is picked", async () => {
+      mockChatAI.mockResolvedValueOnce("Answer");
+
+      await (
+        await postMessage({ messageContent: "Hi", chosenModelId: modelId })
+      ).text();
+
+      expect(mockChatAI).toHaveBeenCalledWith(
+        modelId,
+        expect.anything(),
+        expect.objectContaining({ permissionMode: undefined }),
+      );
+    });
+
+    it("refuses one Claude Code doesn't have", async () => {
+      const res = await postMessage({
+        messageContent: "Hi",
+        chosenModelId: modelId,
+        permissionMode: "yolo",
+      });
+
+      expect(res.status).toBe(400);
+      expect(mockChatAI).not.toHaveBeenCalled();
+    });
+  });
+
   describe("with a reasoning effort", () => {
     const offersEfforts = () =>
       mockFindChatModel.mockResolvedValue({

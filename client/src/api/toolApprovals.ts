@@ -1,8 +1,13 @@
-import type { AnswerToolApprovalBody, ToolApproval } from "@parley/contract";
+import type {
+  AnswerToolApprovalBody,
+  PermissionMode,
+  ToolApproval,
+  ToolApprovalChoice,
+} from "@parley/contract";
 import { apiFetch, apiJson, jsonRequest } from "./http";
 import type { Server } from "./server";
 
-export type { ToolApproval };
+export type { PermissionMode, ToolApproval, ToolApprovalChoice };
 
 export function fetchToolApprovals(
   server: Server,
@@ -18,11 +23,11 @@ export async function answerToolApproval(
   server: Server,
   conversationId: string,
   id: string,
-  allow: boolean,
+  answer: ToolApprovalChoice,
 ): Promise<void> {
   await apiFetch(
     server,
     `/conversations/${conversationId}/tool-approvals/${id}`,
-    jsonRequest("POST", { allow } satisfies AnswerToolApprovalBody),
+    jsonRequest("POST", { answer } satisfies AnswerToolApprovalBody),
   );
 }

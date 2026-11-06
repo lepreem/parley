@@ -5,8 +5,8 @@ import type {
   MessagesResponse,
   MessageTranscript,
   ReplyInProgress,
+  LocalSendMessageBody,
   ReplyStreamEvents,
-  SendMessageBody,
   TurnStats,
 } from "@parley/contract";
 import { readServerSentEvents, type ServerSentEvent } from "../sse/reader";
@@ -31,7 +31,7 @@ export type {
  */
 export const MAX_CONTEXT_MESSAGES = 50;
 
-export type SendMessageInput = SendMessageBody & {
+export type SendMessageInput = LocalSendMessageBody & {
   conversationId: string;
   /**
    * Set to edit that message instead of adding one: the server drops it and
@@ -136,9 +136,10 @@ export async function streamMessage(
         ? { reasoningEffort: input.reasoningEffort }
         : {}),
       ...(input.webSearch ? { webSearch: true } : {}),
+      ...(input.permissionMode ? { permissionMode: input.permissionMode } : {}),
       attachments: input.attachments,
       lastMessageId: input.lastMessageId,
-    } satisfies SendMessageBody),
+    } satisfies LocalSendMessageBody),
   );
 
   if (!response.body) throw new Error("The response stream was empty");

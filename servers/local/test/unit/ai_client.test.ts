@@ -1,6 +1,5 @@
 import { homedir, tmpdir } from "node:os";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { CLAIM_LEASE_MS } from "../../core/data/conversations.data";
 import { fakeProcess, spawned, valueOf } from "../helpers/fakeProcess";
 
 const { mockSpawn } = vi.hoisted(() => ({ mockSpawn: vi.fn() }));
@@ -65,35 +64,64 @@ beforeEach(() => {
   mockSpawn.mockReset();
 });
 
+/** Claude Code asking the app about a tool call, as it does over stdio. */
+const permissionLine = (
+  requestId: string,
+  suggestions: unknown[] = [],
+): Line => ({
+  type: "control_request",
+  request_id: requestId,
+  request: {
+    subtype: "can_use_tool",
+    tool_name: "Bash",
+    input: { command: "mkdir a" },
+    permission_suggestions: suggestions,
+  },
+});
+
+/** The control responses the app wrote back to a run. */
+function controlResponsesOf(n = 0) {
+  return runOf(n)
+    .child.input()
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line) as Record<string, unknown>)
+    .filter((line) => line.type === "control_response")
+    .map((line) => line.response);
+}
+
 describe("permission prompts", () => {
-  const approvalServer = {
-    url: "http://127.0.0.1:3002/tool-approvals/mcp",
-    token: "run-token",
-    timeoutMs: 270_000,
-    onActivity: vi.fn(),
-  };
-
-  it("sends a chat turn's prompts to the app, on the person's own settings", async () => {
-    mockSpawn.mockImplementation(answers("Hi"));
-
-    await chatAI("sonnet", [{ role: "user", content: "Hi" }], {
-      approvalServer,
-    });
-
-    const { args } = runOf();
-    expect(valueOf(args, "--permission-prompt-tool")).toBe(
-      "mcp__parley-approvals__ask",
+  it("asks the app over the run's own input, on the person's own settings", async () => {
+    const suggestions = [{ type: "addRules", rules: [] }];
+    mockSpawn.mockImplementation(
+      fakeProcess([
+        { line: permissionLine("r1", suggestions) },
+        { afterMs: 10, line: textLine("Made it.") },
+        { line: resultLine("Made it.") },
+      ]),
     );
-    expect(JSON.parse(valueOf(args, "--mcp-config") as string)).toEqual({
-      mcpServers: {
-        "parley-approvals": {
-          type: "http",
-          url: approvalServer.url,
-          headers: { Authorization: "Bearer run-token" },
-          timeout: approvalServer.timeoutMs,
-        },
-      },
+    const askPermission = vi.fn().mockResolvedValue({
+      behavior: "allow",
+      updatedInput: { command: "mkdir a" },
     });
+
+    await expect(
+      chatAI("sonnet", [{ role: "user", content: "Hi" }], { askPermission }),
+    ).resolves.toBe("Made it.");
+
+    expect(askPermission).toHaveBeenCalledWith(
+      { toolName: "Bash", input: { command: "mkdir a" }, suggestions },
+      expect.any(AbortSignal),
+    );
+    expect(controlResponsesOf()).toEqual([
+      {
+        request_id: "r1",
+        subtype: "success",
+        response: { behavior: "allow", updatedInput: { command: "mkdir a" } },
+      },
+    ]);
+    const { args } = runOf();
+    expect(valueOf(args, "--permission-prompt-tool")).toBe("stdio");
     // Only who's asked changes: nothing that would decide what's asked about.
     for (const flag of [
       "--permission-mode",
@@ -105,47 +133,107 @@ describe("permission prompts", () => {
     }
   });
 
+  it("keeps the input open for answers until the result is in", async () => {
+    mockSpawn.mockImplementation(
+      fakeProcess([{ afterMs: 10, line: resultLine("Hi") }]),
+    );
+    const reply = chatAI("sonnet", [{ role: "user", content: "Hi" }], {
+      askPermission: vi.fn(),
+    });
+
+    await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalled());
+    expect(runOf().child.stdin.writableEnded).toBe(false);
+    await reply;
+    expect(runOf().child.stdin.writableEnded).toBe(true);
+  });
+
+  it("refuses anything else Claude Code asks of the app", async () => {
+    mockSpawn.mockImplementation(
+      fakeProcess([
+        {
+          line: {
+            type: "control_request",
+            request_id: "r2",
+            request: { subtype: "hook_callback" },
+          },
+        },
+        { afterMs: 10, line: resultLine("Hi") },
+      ]),
+    );
+
+    await chatAI("sonnet", [{ role: "user", content: "Hi" }], {
+      askPermission: vi.fn(),
+    });
+
+    expect(controlResponsesOf()).toEqual([
+      expect.objectContaining({ request_id: "r2", subtype: "error" }),
+    ]);
+  });
+
+  it("stops asking once Claude Code stops waiting", async () => {
+    let signal: AbortSignal | undefined;
+    mockSpawn.mockImplementation(
+      fakeProcess([
+        { line: permissionLine("r3") },
+        {
+          afterMs: 10,
+          line: { type: "control_cancel_request", request_id: "r3" },
+        },
+        { afterMs: 10, line: resultLine("Hi") },
+      ]),
+    );
+
+    await chatAI("sonnet", [{ role: "user", content: "Hi" }], {
+      askPermission: (_request, abortSignal) => {
+        signal = abortSignal;
+        return new Promise(() => {});
+      },
+    });
+
+    expect(signal?.aborted).toBe(true);
+    expect(controlResponsesOf()).toEqual([]);
+  });
+
+  it("starts in the mode the person picked", async () => {
+    mockSpawn.mockImplementation(answers("Hi"));
+
+    await chatAI("sonnet", [{ role: "user", content: "Hi" }], {
+      askPermission: vi.fn(),
+      permissionMode: "bypassPermissions",
+    });
+
+    expect(valueOf(runOf().args, "--permission-mode")).toBe(
+      "bypassPermissions",
+    );
+  });
+
+  it("lays the conversation's grants over the person's settings", async () => {
+    mockSpawn.mockImplementation(answers("Hi"));
+    const settings = {
+      permissions: {
+        allow: ["Bash(touch /x/f 1)"],
+        additionalDirectories: ["/x"],
+      },
+    };
+
+    await chatAI("sonnet", [{ role: "user", content: "Hi" }], {
+      askPermission: vi.fn(),
+      settings,
+    });
+
+    // As JSON, so a rule with spaces stays one rule.
+    expect(JSON.parse(valueOf(runOf().args, "--settings") as string)).toEqual(
+      settings,
+    );
+  });
+
   it("leaves a run nobody can answer for alone", async () => {
     mockSpawn.mockImplementation(answers("Hi"));
 
     await chatAI("sonnet", [{ role: "user", content: "Hi" }]);
 
     expect(runOf().args).not.toContain("--permission-prompt-tool");
-    expect(runOf().args).not.toContain("--mcp-config");
-  });
-
-  it("doesn't count a person deciding as a stalled run", async () => {
-    vi.useFakeTimers();
-    try {
-      mockSpawn.mockImplementation(
-        fakeProcess([
-          { afterMs: 4 * 60 * 1000, line: textLine("Part one. ") },
-          // Longer than the between-chunk limit in all, with an answer between.
-          { afterMs: 4 * 60 * 1000, line: textLine("Part two.") },
-          { line: resultLine("Part one. Part two.") },
-        ]),
-      );
-      let markProgress = () => {};
-      const reply = chatAI("sonnet", [{ role: "user", content: "Hi" }], {
-        onDelta: () => {},
-        timeoutMs: 20 * 60 * 1000,
-        approvalServer: {
-          ...approvalServer,
-          onActivity: (mark) => {
-            markProgress = mark;
-          },
-        },
-      });
-
-      await vi.advanceTimersByTimeAsync(4 * 60 * 1000);
-      await vi.advanceTimersByTimeAsync(3 * 60 * 1000);
-      markProgress();
-      await vi.advanceTimersByTimeAsync(1 * 60 * 1000);
-
-      await expect(reply).resolves.toBe("Part one. Part two.");
-    } finally {
-      vi.useRealTimers();
-    }
+    expect(runOf().child.stdin.writableEnded).toBe(true);
   });
 });
 
@@ -574,95 +662,25 @@ describe("chatAI timeouts", () => {
     vi.useRealTimers();
   });
 
-  const TOTAL_TIMEOUT_MS = 8 * 60_000;
-  const FIRST_TOKEN_TIMEOUT_MS = 6 * 60_000;
-  const BETWEEN_CHUNKS_TIMEOUT_MS = 5 * 60_000;
   const TITLE_TIMEOUT_MS = 15_000;
 
-  const streamChat = () =>
-    chatAI("sonnet", [{ role: "user", content: "yo" }], {
-      onDelta: () => {},
-    });
-
-  it("gives up when the stream goes quiet after the first token, and ends the run", async () => {
-    mockSpawn.mockImplementation(
-      fakeProcess([{ afterMs: 1_000, line: textLine("hello") }], {
-        end: false,
-      }),
-    );
-    const outcome = track(streamChat());
-
-    await vi.advanceTimersByTimeAsync(1_000 + BETWEEN_CHUNKS_TIMEOUT_MS - 1);
-    expect(outcome.settled).toBe(false);
-    await vi.advanceTimersByTimeAsync(1);
-    expect(outcome.value).toEqual(timedOut("No progress for 300000 ms"));
-    // Aborting the spawn's signal is what kills the run.
-    expect(runOf().options.signal?.aborted).toBe(true);
-  });
-
-  it("waits longer for the first token than between chunks", async () => {
-    mockSpawn.mockImplementation(fakeProcess([], { end: false }));
-    const outcome = track(streamChat());
-
-    await vi.advanceTimersByTimeAsync(FIRST_TOKEN_TIMEOUT_MS - 1);
-    expect(outcome.settled).toBe(false);
-    await vi.advanceTimersByTimeAsync(1);
-    expect(outcome.value).toEqual(timedOut("No progress within 360000 ms"));
-  });
-
-  it("keeps waiting for the first token while the model thinks", async () => {
+  it("lets a chat turn take as long as it takes, as a terminal does", async () => {
     mockSpawn.mockImplementation(
       fakeProcess([
-        { line: thinkingLine },
-        { afterMs: 60_000, line: textLine("answer") },
-        { line: resultLine("answer") },
+        { afterMs: 60_000, line: textLine("Starting the build. ") },
+        // A tool that runs for half an hour prints nothing meanwhile.
+        { afterMs: 30 * 60_000, line: textLine("Done.") },
+        { line: resultLine("Starting the build. Done.") },
       ]),
-    );
-    const outcome = track(streamChat());
-
-    await vi.advanceTimersByTimeAsync(60_000);
-    expect(outcome.value).toBe("answer");
-  });
-
-  it("keeps a slow but steady stream going", async () => {
-    const steps = Array.from({ length: 5 }, (_, index) => ({
-      afterMs: 60_000,
-      line: textLine(`t${index}`),
-    }));
-    const deltas: string[] = [];
-    mockSpawn.mockImplementation(
-      fakeProcess([...steps, { line: resultLine("t0t1t2t3t4") }]),
     );
     const outcome = track(
       chatAI("sonnet", [{ role: "user", content: "yo" }], {
-        onDelta: (delta) => {
-          deltas.push(delta);
-        },
+        onDelta: () => {},
       }),
     );
 
-    await vi.advanceTimersByTimeAsync(5 * 60_000);
-    expect(outcome.value).toBe("t0t1t2t3t4");
-    expect(deltas).toEqual(["t0", "t1", "t2", "t3", "t4"]);
-  });
-
-  it("ends a stream that never stops sending before the claim lease expires", async () => {
-    mockSpawn.mockImplementation(
-      fakeProcess(
-        (function* () {
-          for (;;) yield { afterMs: 10_000, line: textLine(".") };
-        })(),
-      ),
-    );
-    const outcome = track(streamChat());
-
-    await vi.advanceTimersByTimeAsync(TOTAL_TIMEOUT_MS - 1);
-    expect(outcome.settled).toBe(false);
-    await vi.advanceTimersByTimeAsync(1);
-    expect(outcome.value).toEqual(
-      timedOut("Operation took longer than 480000 ms"),
-    );
-    expect(TOTAL_TIMEOUT_MS).toBeLessThan(CLAIM_LEASE_MS);
+    await vi.advanceTimersByTimeAsync(31 * 60_000);
+    expect(outcome.value).toBe("Starting the build. Done.");
   });
 
   it("gives up on a title that never arrives", async () => {

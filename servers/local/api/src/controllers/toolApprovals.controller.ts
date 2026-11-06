@@ -17,7 +17,7 @@ export function handleAnswerToolApproval(c: Context) {
   return memory.toolApprovals.answer(
     c.get(CTX_KEYS.conversationId),
     c.get(CTX_KEYS.toolApprovalId),
-    c.get(CTX_KEYS.allow),
+    c.get(CTX_KEYS.toolApprovalAnswer),
   )
     ? c.body(null, 204)
     : c.json({ message: "This is no longer waiting for an answer" }, 404);
