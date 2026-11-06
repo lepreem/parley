@@ -37,7 +37,7 @@ vi.mock("../../src/sse/hub", () => ({
   eventHub: { send: mocks.sendEvent },
 }));
 
-import { handleTranscribeJob } from "../../src/transcribeJob";
+import { handleTranscribeJob } from "../../src/transcription/transcribeJob";
 import { jobCancellation } from "@parley/server-kit/transcription/jobCancellation";
 import { DeadLetterError } from "../../src/message-queue/messageQueue";
 

@@ -35,7 +35,10 @@ servers/cloud/backend/src/controllers/*
 servers/cloud/backend/src/rateLimit/*
 servers/cloud/backend/src/middleware/*
 servers/cloud/backend/src/routes/*
-servers/cloud/backend/src/utils/*
+servers/cloud/backend/src/metrics/*
+servers/cloud/backend/src/uploads/*
+servers/cloud/backend/src/transcription/*
+servers/cloud/backend/src/recurring/*
 servers/cloud/backend/src/*
 servers/cloud/backend/scripts/*
 servers/cloud/backend/test/*

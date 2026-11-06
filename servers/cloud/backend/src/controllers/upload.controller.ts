@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { QueuedYoutube, UploadedAudio } from "@parley/contract";
 import { data } from "../data";
-import { audioTranscription } from "../audioTranscription";
-import { uploads } from "../uploads";
+import { audioTranscription } from "../transcription/audioTranscription";
+import { uploads } from "../uploads/uploads";
 import { mq } from "../message-queue/messageQueue";
 import { authed } from "../middleware/auth.middleware";
 import { validate } from "../middleware/validate.middleware";
@@ -10,7 +10,7 @@ import {
   audioConfirmSchema,
   youtubeUploadSchema,
 } from "../schema/upload.schema";
-import { ALREADY_CONFIRMED, uploadRejection } from "../utils/uploadRejection";
+import { ALREADY_CONFIRMED, uploadRejection } from "../uploads/uploadRejection";
 import type { UploadId } from "@parley/server-kit/ids";
 import { youtubeWatchUrl } from "@parley/contract/youtube";
 import { eventHub } from "../sse/hub";

@@ -20,7 +20,12 @@
     "prepare": "simple-git-hooks"
   },
   "lint-staged": {
-    "{servers/cloud/backend,servers/local,client,packages,desktop}/**/*.{css,html,js,json,md,ts,tsx,yaml,yml}": "prettier --write",
+    "{client,servers/cloud/backend,servers/local}/**/*.{js,ts,tsx}": [
+      "prettier --write",
+      "node scripts/eslintStaged.mjs"
+    ],
+    "{client,servers/cloud/backend,servers/local}/**/*.{css,html,json,md,yaml,yml}": "prettier --write",
+    "{packages,desktop}/**/*.{css,html,js,json,md,ts,tsx,yaml,yml}": "prettier --write",
     "servers/cloud/youtube-fetcher/**/*.py": [
       "servers/cloud/youtube-fetcher/.venv/bin/ruff check --fix",
       "servers/cloud/youtube-fetcher/.venv/bin/ruff format"

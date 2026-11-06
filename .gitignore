@@ -3,7 +3,9 @@
 !.env.example
 node_modules
 dist/
+# Uploaded files, wherever a server keeps them; not the cloud API's source folder.
 uploads
+!/servers/cloud/backend/src/uploads/
 /output/
 /test_data/*
 !/test_data/README.md

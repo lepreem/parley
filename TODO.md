@@ -6,7 +6,7 @@ Paths are under `servers/cloud/backend/`.
 ## Message latency
 
 Every turn logs its timings ("Message preparation operation completed",
-`src/preparationMetrics.ts`). The last measurement put the model's own time
+`src/metrics/preparationMetrics.ts`). The last measurement put the model's own time
 to first token (median 1.76 s) far ahead of everything the server does.
 
 1. **The model.** A faster default, or telling OpenRouter to prefer faster

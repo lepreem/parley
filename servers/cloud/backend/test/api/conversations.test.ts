@@ -50,7 +50,7 @@ vi.mock("../../src/db", async () => ({
 }));
 
 // Controllers release deleted objects through the upload module.
-vi.mock("../../src/uploads", () => ({
+vi.mock("../../src/uploads/uploads", () => ({
   uploads: { deleteObjects: mockDeleteObjects },
 }));
 

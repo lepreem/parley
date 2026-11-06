@@ -1,14 +1,14 @@
-import { transcription, type Transcription } from "./ai";
-import { sign } from "./storage";
-import { data } from "./data";
+import { transcription, type Transcription } from "../ai";
+import { sign } from "../storage";
+import { data } from "../data";
 import { logger } from "@parley/server-kit/runtime/logger";
 import {
   DeadLetterError,
   type DeliveryMetadata,
-} from "./message-queue/messageQueue";
+} from "../message-queue/messageQueue";
 import type { TranscriptSegment } from "@parley/server-kit/transcription/transcript";
 import type { UploadId } from "@parley/server-kit/ids";
-import { eventHub } from "./sse/hub";
+import { eventHub } from "../sse/hub";
 import { jobCancellation } from "@parley/server-kit/transcription/jobCancellation";
 
 const log = logger.child({ component: "transcribe" });

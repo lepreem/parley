@@ -9,8 +9,8 @@ import { logger, messageOf } from "@parley/server-kit/runtime/logger";
 import { addSource } from "@parley/server-kit/webSources";
 import { data, type HistoryCandidate, type HistoryTranscript } from "../data";
 import { buildUserTurn, chat, type ChatTurn } from "../ai";
-import { measurePreparation } from "../preparationMetrics";
-import { uploads } from "../uploads";
+import { measurePreparation } from "../metrics/preparationMetrics";
+import { uploads } from "../uploads/uploads";
 import type { messageCreateBodySchema } from "../schema/messages.schema";
 import {
   MAX_CONTEXT_CHARS,

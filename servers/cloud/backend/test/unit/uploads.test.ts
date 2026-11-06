@@ -19,7 +19,7 @@ vi.mock("../../src/data/storageLedger.data", () => ({
   storageLedger: ledger,
 }));
 
-import { uploads } from "../../src/uploads";
+import { uploads } from "../../src/uploads/uploads";
 
 const USER = "user_01";
 const HOUR_MS = 60 * 60 * 1000;

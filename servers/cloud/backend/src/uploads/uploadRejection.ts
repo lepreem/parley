@@ -1,4 +1,4 @@
-import type { uploads } from "../uploads";
+import type { uploads } from "./uploads";
 
 type Rejection = Extract<
   Awaited<ReturnType<typeof uploads.check>>,

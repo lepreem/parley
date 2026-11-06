@@ -1,7 +1,7 @@
-import { data } from "./data";
-import { mq } from "./message-queue/messageQueue";
+import { data } from "../data";
+import { mq } from "../message-queue/messageQueue";
 import type { UploadId } from "@parley/server-kit/ids";
-import { uploads } from "./uploads";
+import { uploads } from "../uploads/uploads";
 
 /**
  * Confirms an uploaded audio file as a transcription job and hands it to the

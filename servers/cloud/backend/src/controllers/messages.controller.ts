@@ -12,8 +12,8 @@ import {
 import {
   measurePreparation,
   withPreparationMetrics,
-} from "../preparationMetrics";
-import { uploads } from "../uploads";
+} from "../metrics/preparationMetrics";
+import { uploads } from "../uploads/uploads";
 import { memory } from "../memory";
 import { streamTurn, type TurnMetrics } from "../chat/replyStream";
 import { authed } from "../middleware/auth.middleware";
