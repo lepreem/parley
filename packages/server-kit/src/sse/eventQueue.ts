@@ -1,4 +1,5 @@
-import type { SSEStreamingApi } from "hono/streaming";
+import type { Context } from "hono";
+import { streamSSE, type SSEStreamingApi } from "hono/streaming";
 
 /**
  * Emits a named SSE event with a JSON payload. Returns writeSSE's promise so
@@ -51,11 +52,16 @@ export class SSEEventQueue<Events extends Record<string, unknown>> {
     this.signal();
   }
 
+  /** The queue's events as the response to `c`, for as long as the client stays. */
+  respond(c: Context) {
+    return streamSSE(c, (stream) => this.pipeTo(stream, c.req.raw.signal));
+  }
+
   /**
    * Forwards events to `stream` until `end()` and the queue is drained, or
    * until `disconnectSignal` fires — the producer keeps running either way.
    */
-  async pipeTo(stream: SSEStreamingApi, disconnectSignal: AbortSignal) {
+  private async pipeTo(stream: SSEStreamingApi, disconnectSignal: AbortSignal) {
     const disconnected = whenAborted(disconnectSignal);
 
     while (!disconnectSignal.aborted) {

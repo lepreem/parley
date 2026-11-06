@@ -152,7 +152,7 @@ There are two kinds of stream, and both are read with fetch, not EventSource
 | A chat reply's stream                      | `src/chat/replyStream.ts`                                 |
 | Replies being written, for stop and reload | `src/memory/repliesInProgress.ts`                         |
 | The queue between a reply and its stream   | `@parley/server-kit/sse/eventQueue`                       |
-| `GET /events`, one stream per user         | `src/sse/hub.ts`, `src/sse/events.controller.ts`          |
+| `GET /events`, one stream per user         | `src/sse/hub.ts`, `src/controllers/events.controller.ts`  |
 | The hub behind it                          | `@parley/server-kit/sse/hub`                              |
 | Event names and payloads                   | `ReplyStreamEvents`, `ServerEvents` in `@parley/contract` |
 | The client side                            | `client/src/sse/`                                         |
@@ -202,11 +202,11 @@ randomize it.
 
 Running more than one instance needs more than a replica count. Everything
 in `src/memory/` (`memory.<what>` in the code) lives in the process that
-wrote it: the model lists, the history text below, and the replies being
-written, so a stop request or a reloaded page has to reach the instance
-writing the reply. Rate limits and
-event streams are per process too (see the root TODO.md). The instances
-have to split the transcription concurrency between them (see
+wrote it: the model lists, the history text below, the rate limit counts, the
+session refreshes, and the replies being written, so a stop request or a
+reloaded page has to reach the instance writing the reply. Lint keeps new
+state in that folder. Event streams are per process too, in `src/sse/` (see
+the root TODO.md). The instances have to split the transcription concurrency between them (see
 [Message queues](#message-queues)), and each holds its own database
 connections out of the session pooler's fixed budget, so adding one means
 shrinking the pool in `src/db/pool.ts`.

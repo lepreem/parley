@@ -3,7 +3,6 @@
 
 import { randomUUID } from "node:crypto";
 import type { Context } from "hono";
-import { streamSSE } from "hono/streaming";
 import type {
   ChatMessage,
   MessageSource,
@@ -512,7 +511,7 @@ async function streamAndPersistMessageTurn(
     entry,
     sseEvents,
   }).catch((error: unknown) => log.error("Writing a reply failed", error));
-  return streamSSE(c, (stream) => sseEvents.pipeTo(stream, c.req.raw.signal));
+  return sseEvents.respond(c);
 }
 
 /**

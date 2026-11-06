@@ -169,7 +169,7 @@ vi.mock("../../src/preparationMetrics", async (importActual) => {
 import { createApp } from "../../src/app";
 import { eventHub } from "../../src/sse/hub";
 import { resetHistoryTextCache } from "../../src/memory/historyText";
-import { resetRateLimits } from "../../src/middleware/rateLimit.middleware";
+import { resetRateLimits } from "../../src/memory/rateLimitCounts";
 import { measurePreparation } from "../../src/preparationMetrics";
 import {
   completionTokenCeiling,

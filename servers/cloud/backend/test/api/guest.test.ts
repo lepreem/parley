@@ -30,7 +30,7 @@ vi.mock("../../src/db", async () => ({
 
 import { createApp } from "../../src/app";
 import { COOKIE_KEYS } from "../../src/cookies/session";
-import { resetRateLimits } from "../../src/middleware/rateLimit.middleware";
+import { resetRateLimits } from "../../src/memory/rateLimitCounts";
 import { guestCookieHeader, sessionCookieHeader } from "../helpers/session";
 
 const guestId = "guest_00000000-0000-4000-8000-000000000002";

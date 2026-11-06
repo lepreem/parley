@@ -1,5 +1,4 @@
 import type { Context } from "hono";
-import { streamSSE } from "hono/streaming";
 import type { ReplyStreamEvents, TurnStats } from "@parley/contract";
 import type { ReplyInProgressEntry } from "@parley/server-kit/memory/repliesInProgress";
 import { logger } from "@parley/server-kit/runtime/logger";
@@ -77,7 +76,7 @@ export async function streamTurn(
     entry,
     sseEvents,
   }).catch((error: unknown) => logger.error("Writing a reply failed", error));
-  return streamSSE(c, (stream) => sseEvents.pipeTo(stream, c.req.raw.signal));
+  return sseEvents.respond(c);
 }
 
 /**
