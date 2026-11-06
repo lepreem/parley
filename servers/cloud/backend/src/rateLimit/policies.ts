@@ -77,6 +77,17 @@ export const RATE_LIMIT_POLICIES = {
    */
   dictation: { limit: 30, windowMs: FIFTEEN_MINUTES_MS, key: "userId" },
   dictationDaily: { limit: 200, windowMs: ONE_DAY_MS, key: "userId" },
+
+  /**
+   * Adding a YouTube video, on top of upload. A new video spends one of
+   * Supadata's monthly credits, which everyone shares, so this keeps one
+   * person from using them up. Every video counts, even one another user
+   * already fetched (which is free), so the limit is one people can predict;
+   * a link refused as invalid doesn't. Like every count here it starts over
+   * when the API restarts, which is fine: the plan's own credit limit is
+   * what stops spending for good.
+   */
+  youtubeDaily: { limit: 10, windowMs: ONE_DAY_MS, key: "userId" },
 } as const satisfies Record<string, RateLimitPolicy>;
 
 export type RateLimitName = keyof typeof RATE_LIMIT_POLICIES;

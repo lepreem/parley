@@ -3,6 +3,7 @@ import * as uploadController from "../controllers/upload.controller";
 import {
   uploadConfirmRateLimiter,
   uploadRateLimiter,
+  youtubeDailyRateLimiter,
 } from "../middleware/rateLimit.middleware";
 import {
   refuseGuests,
@@ -34,5 +35,6 @@ uploadRouter.post(
 uploadRouter.post(
   "/youtube",
   uploadRateLimiter,
+  youtubeDailyRateLimiter,
   ...uploadController.handleYoutubeUpload,
 );

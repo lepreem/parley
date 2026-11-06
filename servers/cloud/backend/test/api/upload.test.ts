@@ -125,6 +125,7 @@ vi.mock("../../src/message-queue/messageQueue", () => ({
 }));
 
 import { createApp } from "../../src/app";
+import { resetRateLimits } from "../../src/memory/rateLimitCounts";
 import { authedHeaders, sessionCookieHeader } from "../helpers/session";
 
 async function postJson(path: string, body: unknown, userId = "user_01") {
@@ -530,6 +531,7 @@ describe("POST /upload/youtube", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    resetRateLimits();
     mockValues = vi.fn().mockResolvedValue(undefined);
     mockInsert.mockReturnValue({ values: mockValues });
     mockUpdateSet.mockReturnValue({ where: vi.fn().mockResolvedValue([]) });
@@ -664,6 +666,37 @@ describe("POST /upload/youtube", () => {
       url: YT_URL,
       userId: "user_01",
     });
+  });
+
+  it("lets each user add ten videos a day", async () => {
+    for (let i = 0; i < 10; i++) {
+      expect(
+        (await postJson("/upload/youtube", { youtubeUrl: YT_URL })).status,
+      ).toBe(200);
+    }
+
+    const refused = await postJson("/upload/youtube", { youtubeUrl: YT_URL });
+    expect(refused.status).toBe(429);
+    expect(((await refused.json()) as { message: string }).message).toMatch(
+      /^You can add 10 YouTube videos a day/,
+    );
+    expect(
+      (await postJson("/upload/youtube", { youtubeUrl: YT_URL }, "user_02"))
+        .status,
+    ).toBe(200);
+  });
+
+  it("doesn't count a link it refuses toward the day's videos", async () => {
+    for (let i = 0; i < 12; i++) {
+      const res = await postJson("/upload/youtube", {
+        youtubeUrl: "https://www.youtube.com/@somechannel",
+      });
+      expect(res.status).toBe(400);
+    }
+
+    expect(
+      (await postJson("/upload/youtube", { youtubeUrl: YT_URL })).status,
+    ).toBe(200);
   });
 
   it("returns 400 for a YouTube link that isn't to one video", async () => {

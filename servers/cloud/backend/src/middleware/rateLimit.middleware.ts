@@ -65,7 +65,17 @@ const keyOf: Record<RateLimitKey, (c: Context) => string> = {
  */
 function createLimiter(
   name: RateLimitName,
-  { onlyGuests = false }: { onlyGuests?: boolean } = {},
+  {
+    onlyGuests = false,
+    message = rateLimitMessage,
+    skipFailedRequests = false,
+  }: {
+    onlyGuests?: boolean;
+    /** What a refused request is told, in place of the generic message. */
+    message?: { message: string };
+    /** Don't count requests that fail, such as a 400 for a bad body. */
+    skipFailedRequests?: boolean;
+  } = {},
 ) {
   const { windowMs, key } = RATE_LIMIT_POLICIES[name];
   const limit =
@@ -77,7 +87,8 @@ function createLimiter(
     standardHeaders: "draft-6",
     keyGenerator: keyOf[key],
     store: memory.rateLimitCounts.createStore(),
-    message: rateLimitMessage,
+    message,
+    skipFailedRequests,
     // Behind requireAuth, which says who's a guest.
     ...(onlyGuests ? { skip: (c: Context) => c.get("isGuest") !== true } : {}),
   });
@@ -103,3 +114,9 @@ export const uploadRateLimiter = createLimiter("upload");
 export const uploadConfirmRateLimiter = createLimiter("uploadConfirm");
 export const dictationRateLimiter = createLimiter("dictation");
 export const dictationDailyRateLimiter = createLimiter("dictationDaily");
+export const youtubeDailyRateLimiter = createLimiter("youtubeDaily", {
+  message: {
+    message: `You can add ${RATE_LIMIT_POLICIES.youtubeDaily.limit} YouTube videos a day, and you've reached that. Upload the audio or video file instead, or try again tomorrow.`,
+  },
+  skipFailedRequests: true,
+});
