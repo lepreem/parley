@@ -44,6 +44,18 @@ tags, its images in place. The models are Claude Code's aliases (`opus`,
 `sonnet`, `haiku`), which follow the newest of each family. `CLAUDE_PATH`
 names the program when it isn't on PATH.
 
+Chat can also run on the user's own Codex (`core/ai/codex.ts`), on their
+ChatGPT plan: each turn is one `codex app-server` run, spoken to in JSON-RPC
+over stdin and stdout, with an ephemeral, read-only thread whose config
+turns off the shell, web search, apps, plugins, skills, sub-agents, hooks,
+memories, AGENTS.md files and each of the user's MCP servers, and drops the
+coding agent's own instructions for the app's. Requests the server makes of
+the app (approvals) are refused, and a turn in which a tool turns up anyway
+fails. It's handed the same one message. Its models are its own catalog's,
+listed at startup, with ids prefixed `codex/` to keep them apart from Claude
+Code's; titles go to Haiku, or Codex's default model without Claude Code.
+`CODEX_PATH` names the program when it isn't on PATH.
+
 ## Transcription
 
 Audio is transcribed on this machine by faster-whisper, in
@@ -57,9 +69,11 @@ copies the script next to the bundle.
 
 ## External dependencies
 
-The programs the API runs: Claude Code (logged in), uv and yt-dlp. It runs a
-**fail-fast preflight** on boot (`startup.ts` → `verifyServices`): if any of
-them can't run, it aborts instead of starting half-alive.
+The programs the API runs: Claude Code or Codex (logged in), uv and yt-dlp.
+It runs a **fail-fast preflight** on boot (`startup.ts` → `verifyServices`):
+if any of them can't run, it aborts instead of starting half-alive. Chat
+needs only one of Claude Code and Codex; a missing one is logged, and its
+models aren't listed until a restart finds it.
 
 ## Message queues
 

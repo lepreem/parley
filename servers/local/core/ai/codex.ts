@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import { createInterface } from "node:readline";
+import { withTimeout } from "@parley/server-kit/runtime/withTimeout";
 import { getBaseEnv } from "../env";
 
 /**
@@ -29,7 +30,17 @@ export type CodexModel = {
   name: string;
   acceptsImages: boolean;
   isDefault: boolean;
+  /** The least reasoning it takes, for answers that need none. */
+  lowestEffort: string | undefined;
 };
+
+/** Codex's reasoning efforts, least first. */
+const EFFORTS = ["none", "minimal", "low", "medium", "high", "xhigh"];
+
+/** The least of these efforts, among those Codex is known to take. */
+function lowestEffortOf(efforts: readonly string[]): string | undefined {
+  return EFFORTS.find((effort) => efforts.includes(effort));
+}
 
 type RpcMessage = {
   id?: number | string;
@@ -99,9 +110,9 @@ const CHAT_ITEMS = new Set(["userMessage", "agentMessage", "reasoning"]);
 
 /**
  * One `codex app-server` run. `request` sends a request and reads up to its
- * response; `next` reads the next notification. Requests the server makes of
- * the app (approvals, questions) are refused, since a chat has nothing to
- * approve.
+ * response; `next` reads the next notification, including any that came
+ * before that response. Requests the server makes of the app (approvals,
+ * questions) are refused, since a chat has nothing to approve.
  */
 function startAppServer(signal?: AbortSignal) {
   const child = spawn(getBaseEnv().CODEX_PATH, ["app-server"], {
@@ -153,6 +164,13 @@ function startAppServer(signal?: AbortSignal) {
     }
   }
 
+  type Notification = { method: string; params: Record<string, unknown> };
+  const notifications: Notification[] = [];
+  const notificationOf = (message: RpcMessage): Notification | undefined =>
+    message.method
+      ? { method: message.method, params: message.params ?? {} }
+      : undefined;
+
   let lastId = 0;
   return {
     async request(method: string, params: object) {
@@ -160,7 +178,11 @@ function startAppServer(signal?: AbortSignal) {
       send({ id, method, params });
       for (;;) {
         const message = await read();
-        if (message.id !== id) continue;
+        if (message.id !== id) {
+          const notification = notificationOf(message);
+          if (notification) notifications.push(notification);
+          continue;
+        }
         if (message.error) {
           throw new CodexError(message.error.message ?? `${method} failed`);
         }
@@ -169,12 +191,12 @@ function startAppServer(signal?: AbortSignal) {
     },
 
     /** The next notification: a message with a method and no id. */
-    async next(): Promise<{ method: string; params: Record<string, unknown> }> {
+    async next(): Promise<Notification> {
+      const queued = notifications.shift();
+      if (queued) return queued;
       for (;;) {
-        const message = await read();
-        if (message.method) {
-          return { method: message.method, params: message.params ?? {} };
-        }
+        const notification = notificationOf(await read());
+        if (notification) return notification;
       }
     },
 
@@ -194,12 +216,22 @@ function startAppServer(signal?: AbortSignal) {
 
 type AppServer = ReturnType<typeof startAppServer>;
 
+// Listing the models can fetch the catalog; a Codex that hangs mustn't hold
+// up a startup that could chat on Claude Code.
+const CONNECT_TIMEOUT_MS = 30 * 1000; // 30 seconds
+
 /**
  * Startup health check and catalog: fails if Codex can't be run or isn't
  * logged in, and otherwise resolves with the models the user's plan offers.
  */
-export async function connectCodex(): Promise<CodexModel[]> {
-  const server = startAppServer();
+export function connectCodex(): Promise<CodexModel[]> {
+  return withTimeout({ timeoutMs: CONNECT_TIMEOUT_MS }, ({ abortSignal }) =>
+    listCodexModels(abortSignal),
+  );
+}
+
+async function listCodexModels(signal: AbortSignal): Promise<CodexModel[]> {
+  const server = startAppServer(signal);
   try {
     await server.initialize();
     // A provider of the user's own, set in their config, may need no account.
@@ -221,6 +253,7 @@ export async function connectCodex(): Promise<CodexModel[]> {
           hidden: boolean;
           inputModalities: string[];
           isDefault: boolean;
+          supportedReasoningEfforts: { reasoningEffort: string }[];
         }[];
         nextCursor: string | null;
       };
@@ -231,10 +264,16 @@ export async function connectCodex(): Promise<CodexModel[]> {
           name: model.displayName,
           acceptsImages: model.inputModalities.includes("image"),
           isDefault: model.isDefault,
+          lowestEffort: lowestEffortOf(
+            model.supportedReasoningEfforts.map(
+              ({ reasoningEffort }) => reasoningEffort,
+            ),
+          ),
         });
       }
       cursor = page.nextCursor;
     } while (cursor);
+    if (models.length === 0) throw new CodexError("Codex lists no models");
     return models;
   } finally {
     server.close();
@@ -243,8 +282,9 @@ export async function connectCodex(): Promise<CodexModel[]> {
 
 /**
  * Runs one turn on Codex, passing each piece of the answer's text to `onText`
- * as it arrives, and resolving with the whole answer. Aborting `abortSignal`
- * kills the run and rejects with the signal's reason.
+ * as it arrives, and resolving with the whole answer. Without an `effort`, the
+ * model reasons as much as it would by default. Aborting `abortSignal` kills
+ * the run and rejects with the signal's reason.
  */
 export async function runCodexChat(
   model: string,
@@ -252,12 +292,12 @@ export async function runCodexChat(
   {
     abortSignal,
     onText,
-    thinking,
+    effort,
     instructions,
   }: {
     abortSignal: AbortSignal;
     onText: (text: string) => void | Promise<void>;
-    thinking: boolean;
+    effort?: string | undefined;
     instructions: string;
   },
 ): Promise<string> {
@@ -281,8 +321,7 @@ export async function runCodexChat(
           ? { type: "text", text: part.text, text_elements: [] }
           : { type: "image", url: `data:${part.mimeType};base64,${part.data}` },
       ),
-      // Every Codex model reasons; low is the least it takes.
-      ...(thinking ? {} : { effort: "low" }),
+      ...(effort === undefined ? {} : { effort }),
     });
 
     let answer = "";

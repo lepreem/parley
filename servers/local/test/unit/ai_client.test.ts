@@ -98,21 +98,21 @@ describe("listChatModels", () => {
     expect(await listChatModels()).toEqual([
       {
         id: "opus",
-        name: "Claude Opus",
+        name: "Claude Code: Claude Opus",
         contextTokens: 200_000,
         acceptsImages: true,
         pricing: null,
       },
       {
         id: "sonnet",
-        name: "Claude Sonnet",
+        name: "Claude Code: Claude Sonnet",
         contextTokens: 200_000,
         acceptsImages: true,
         pricing: null,
       },
       {
         id: "haiku",
-        name: "Claude Haiku",
+        name: "Claude Code: Claude Haiku",
         contextTokens: 200_000,
         acceptsImages: true,
         pricing: null,

@@ -328,8 +328,8 @@ async function runClaudeChat(
 // reservations, so a run that stalls has to be ended. The total stays under
 // CLAIM_LEASE_MS (10 minutes) so the turn can still be persisted afterwards.
 const CHAT_TOTAL_TIMEOUT_MS = 8 * 60 * 1000; // 8 minutes
-// Claude Code takes a few seconds to start, and a model can think for minutes
-// before its first token.
+// Claude Code and Codex take a few seconds to start, and a model can think
+// for minutes before its first token.
 const CHAT_FIRST_TOKEN_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
 const CHAT_BETWEEN_CHUNKS_TIMEOUT_MS = 30 * 1000; // 30 seconds
 const TITLE_TIMEOUT_MS = 15 * 1000; // 15 seconds
@@ -365,22 +365,31 @@ export async function chatAI(
     signal: opts.signal,
   };
 
+  const thinking = opts.thinking ?? true;
   const codexModel = codexModelOf(model);
-  const run = codexModel === undefined ? runClaudeChat : runCodexChat;
 
-  return withTimeout(timeoutOptions, ({ abortSignal, markProgress }) =>
-    run(codexModel ?? model, promptOf(messages), {
+  return withTimeout(timeoutOptions, ({ abortSignal, markProgress }) => {
+    const prompt = promptOf(messages);
+    const runOptions = {
       abortSignal,
-      thinking: opts.thinking ?? true,
       instructions: opts.instructions ?? CHAT_INSTRUCTIONS,
       // Only text counts: a model can think silently for longer than the
       // between-chunk limit before it starts answering.
-      onText: async (text) => {
+      onText: async (text: string) => {
         markProgress();
         await onDelta?.(text);
       },
-    }),
-  );
+    };
+    if (!codexModel) {
+      return runClaudeChat(model, prompt, { ...runOptions, thinking });
+    }
+    // Every Codex model reasons; without thinking, it reasons the least it
+    // can.
+    return runCodexChat(codexModel.id, prompt, {
+      ...runOptions,
+      effort: thinking ? undefined : codexModel.lowestEffort,
+    });
+  });
 }
 
 /**
@@ -420,9 +429,21 @@ const CLAUDE_CODE_MODELS: readonly ChatModel[] = [
  */
 const CODEX_PREFIX = "codex/";
 
-/** The Codex model an app id names, or undefined for a Claude Code one. */
-function codexModelOf(id: string): string | undefined {
-  return id.startsWith(CODEX_PREFIX) ? id.slice(CODEX_PREFIX.length) : undefined;
+/**
+ * The Codex model an app id names, or undefined for a Claude Code one. One
+ * that isn't in the catalog is still run, for Codex to say what's wrong.
+ */
+function codexModelOf(
+  id: string,
+): Pick<CodexModel, "id" | "lowestEffort"> | undefined {
+  if (!id.startsWith(CODEX_PREFIX)) return undefined;
+  const codexId = id.slice(CODEX_PREFIX.length);
+  return (
+    providers.codexModels.find((model) => model.id === codexId) ?? {
+      id: codexId,
+      lowestEffort: undefined,
+    }
+  );
 }
 
 /**

@@ -47,7 +47,10 @@ export const servedByLocalServer =
     .querySelector('meta[name="parley-server"]')
     ?.getAttribute("content") === "local";
 
-/** The server on the user's own machine, which chats through their Claude Code. */
+/**
+ * The server on the user's own machine, which chats through their Claude Code
+ * or Codex.
+ */
 export const localServer: Server = {
   id: "local",
   baseUrl: servedByLocalServer
@@ -61,7 +64,7 @@ export const localServer: Server = {
   uploads: "direct",
   defaultChatModelId: "sonnet",
   defaultTranscribeModelId: "small",
-  // Its catalog is a handful of Claude models already.
+  // Its catalog is just what the user's Claude Code and Codex offer.
   recommendedChatModelIds: [],
 };
 
