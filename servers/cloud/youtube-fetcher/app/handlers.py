@@ -42,6 +42,44 @@ PERMANENT_FAILURES = (
     "is not a valid url",
 )
 
+# The fetcher never signs in to YouTube as anyone: YouTube bans accounts it
+# sees fetching like this. These are yt-dlp's defaults already; saying so keeps
+# a later release from changing them. The Python API reads no config files.
+SIGNED_OUT_OPTIONS = {"cookiefile": None, "cookiesfrombrowser": None, "usenetrc": False}
+
+# Options that would make yt-dlp act as someone. Never pass one to make
+# YouTube work: a signed-in fetch puts that Google account at risk.
+SIGNED_IN_OPTIONS = frozenset(
+    {
+        "cookiefile",
+        "cookiesfrombrowser",
+        "username",
+        "password",
+        "twofactor",
+        "usenetrc",
+        "netrc_location",
+        "netrc_cmd",
+        "videopassword",
+        "ap_mso",
+        "ap_username",
+        "ap_password",
+        "client_certificate",
+        "client_certificate_key",
+        "client_certificate_password",
+        # A Cookie or Authorization header would sign in just the same.
+        "http_headers",
+    }
+)
+
+
+def _signed_out(options: dict) -> dict:
+    """`options` with signing in ruled out, or an error if they'd sign in."""
+    signed_in = sorted(SIGNED_IN_OPTIONS & options.keys())
+    if signed_in:
+        raise RuntimeError(f"yt-dlp must never run signed in: {signed_in}")
+    return {**options, **SIGNED_OUT_OPTIONS}
+
+
 # Shown to the person when YouTube refuses the server its audio, which from a
 # datacenter IP is most of the time.
 AUDIO_BLOCKED = (
@@ -240,7 +278,7 @@ def _fetch_and_upload(audio_upload_id: str, url: str, user_id: str) -> None:
             "extractor_args": {"youtube": {"player_client": ["web_embedded"]}},
             "progress_hooks": [stop_download_if_cancelled],
         }
-        with yt_dlp.YoutubeDL(options) as ydl:
+        with yt_dlp.YoutubeDL(_signed_out(options)) as ydl:
             # Probe metadata first so oversized audio is rejected before any
             # bytes are downloaded.
             info = ydl.extract_info(url, download=False)

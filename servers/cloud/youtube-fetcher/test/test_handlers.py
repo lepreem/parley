@@ -534,3 +534,27 @@ class TestYoutubeAccess:
         assert ydl.last.options["extractor_args"] == {
             "youtube": {"player_client": ["web_embedded"]}
         }
+
+    def test_never_signs_in(self, ydl, upload):
+        handlers._fetch_and_upload("u1", "https://youtu.be/x", "usr")
+
+        options = ydl.last.options
+        assert options["cookiefile"] is None
+        assert options["cookiesfrombrowser"] is None
+        assert options["usenetrc"] is False
+        assert not {"username", "password", "http_headers"} & options.keys()
+
+
+@pytest.mark.parametrize(
+    "option",
+    [
+        {"cookiefile": "cookies.txt"},
+        {"cookiesfrombrowser": ("chrome",)},
+        {"username": "me", "password": "secret"},
+        {"usenetrc": True},
+        {"http_headers": {"Cookie": "SID=1"}},
+    ],
+)
+def test_refuses_options_that_would_sign_in(option):
+    with pytest.raises(RuntimeError, match="never run signed in"):
+        handlers._signed_out({"format": "worstaudio", **option})

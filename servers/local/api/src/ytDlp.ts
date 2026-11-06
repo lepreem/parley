@@ -10,6 +10,63 @@ export class YtDlpError extends Error {
 }
 
 /**
+ * Passed ahead of everything else on every run, so yt-dlp never acts as
+ * anyone. It runs on people's own computers, where their browser's cookies,
+ * or a yt-dlp config file of their own, would sign it in to their Google
+ * account, and YouTube bans accounts it sees fetching like this. Each is
+ * yt-dlp's default already; saying so keeps a config file, a plugin or a
+ * later release (the desktop app updates yt-dlp by itself) from changing it.
+ * test/integration/ytDlpSignedOut.test.ts checks it against the real yt-dlp.
+ */
+const SIGNED_OUT_ARGS = [
+  // No config file: the person's, the system's, or one next to yt-dlp.
+  "--ignore-config",
+  // No plugins, such as the ones that sign in to YouTube with OAuth.
+  "--no-plugin-dirs",
+  "--no-cookies",
+  "--no-cookies-from-browser",
+];
+
+/**
+ * Options that would make yt-dlp act as someone, refused whatever passes
+ * them. Never take one off this list to make YouTube work: a signed-in fetch
+ * puts the person's Google account at risk.
+ */
+const SIGNED_IN_FLAGS = new Set([
+  "--cookies",
+  "--cookies-from-browser",
+  "-u",
+  "--username",
+  "-p",
+  "--password",
+  "-2",
+  "--twofactor",
+  "-n",
+  "--netrc",
+  "--netrc-location",
+  "--netrc-cmd",
+  "--video-password",
+  "--ap-mso",
+  "--ap-username",
+  "--ap-password",
+  "--client-certificate",
+  "--client-certificate-key",
+  "--client-certificate-password",
+  // A Cookie or Authorization header would sign in just the same.
+  "--add-header",
+  "--add-headers",
+  // A config file or plugin could pass any of the above.
+  "--config-location",
+  "--config-locations",
+  "--plugin-dirs",
+]);
+
+/** The first of `args` that would sign yt-dlp in, if any. */
+export function signedInFlag(args: readonly string[]): string | undefined {
+  return args.find((arg) => SIGNED_IN_FLAGS.has(arg.split("=", 1)[0]));
+}
+
+/**
  * Lowest-bitrate audio-only stream: speech-to-text downsamples to 16kHz mono,
  * so anything above ~48kbps is discarded work.
  */
@@ -38,11 +95,22 @@ function run(
   abortSignal?: AbortSignal,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn(getApiEnv().YT_DLP_PATH, args, {
-      windowsHide: true,
-      stdio: ["ignore", "pipe", "pipe"],
-      ...(abortSignal ? { signal: abortSignal } : {}),
-    });
+    const refused = signedInFlag(args);
+    if (refused) {
+      reject(
+        new Error(`yt-dlp must never run signed in, so ${refused} is refused`),
+      );
+      return;
+    }
+    const child = spawn(
+      getApiEnv().YT_DLP_PATH,
+      [...SIGNED_OUT_ARGS, ...args],
+      {
+        windowsHide: true,
+        stdio: ["ignore", "pipe", "pipe"],
+        ...(abortSignal ? { signal: abortSignal } : {}),
+      },
+    );
     let stdout = "";
     let stderr = "";
     child.stdout.setEncoding("utf8").on("data", (chunk) => (stdout += chunk));

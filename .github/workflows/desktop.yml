@@ -68,6 +68,16 @@ jobs:
         working-directory: desktop
         run: npm run package
 
+      # Parley must never run yt-dlp signed in to anyone's account. This runs
+      # the yt-dlp the app ships with, the way the app runs it, on a computer
+      # set up to sign it in: servers/local/test/integration/ytDlpSignedOut.test.ts.
+      - name: yt-dlp runs signed out
+        working-directory: servers/local
+        run: |
+          bin="$GITHUB_WORKSPACE/desktop/build/bin/yt-dlp"
+          if [ "$RUNNER_OS" = Windows ]; then bin="$bin.exe"; fi
+          YT_DLP_PATH="$bin" npx vitest run test/unit/ytDlp.test.ts test/integration/ytDlpSignedOut.test.ts
+
       - name: What a Linux window needs
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y xvfb libgtk-3-0t64 libnss3 libgbm1 libasound2t64

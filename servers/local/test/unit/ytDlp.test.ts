@@ -6,7 +6,7 @@ const { mockSpawn } = vi.hoisted(() => ({ mockSpawn: vi.fn() }));
 
 vi.mock("node:child_process", () => ({ spawn: mockSpawn }));
 
-import { YtDlpError, ytDlp } from "../../api/src/ytDlp";
+import { YtDlpError, signedInFlag, ytDlp } from "../../api/src/ytDlp";
 
 /** A yt-dlp run that prints `stdout` and `stderr`, then exits with `code`. */
 function exitsWith(code: number, { stdout = "", stderr = "" } = {}) {
@@ -38,6 +38,38 @@ beforeEach(() => {
 });
 
 describe("ytDlp", () => {
+  it("runs signed out every time, ahead of anything else it's told", async () => {
+    await ytDlp.probe("https://youtu.be/abc");
+    await ytDlp.downloadAudio("https://youtu.be/abc", "/tmp/f", 1_000);
+    await ytDlp.ping();
+
+    for (const call of mockSpawn.mock.calls) {
+      expect(call[1].slice(0, 4)).toEqual([
+        "--ignore-config",
+        "--no-plugin-dirs",
+        "--no-cookies",
+        "--no-cookies-from-browser",
+      ]);
+      expect(signedInFlag(call[1])).toBeUndefined();
+    }
+  });
+
+  it.each([
+    ["--cookies", "cookies.txt"],
+    ["--cookies-from-browser", "chrome"],
+    ["--cookies=cookies.txt"],
+    ["-u", "me"],
+    ["--password", "secret"],
+    ["--netrc"],
+    ["--add-headers", "Cookie:SID=1"],
+    ["--config-locations", "mine.conf"],
+    ["--plugin-dirs", "plugins"],
+  ])("refuses options that would sign in: %s", (...flag) => {
+    expect(
+      signedInFlag(["--no-playlist", ...flag, "https://youtu.be/abc"]),
+    ).toBe(flag[0]);
+  });
+
   it("hands the abort signal to the process it runs", async () => {
     const { signal } = new AbortController();
 
