@@ -15,7 +15,7 @@ import { authRouter } from "./routes/auth.router";
 import { modelsRouter } from "./routes/models.router";
 import { conversationsRouter } from "./routes/conversations.router";
 import { speechRouter } from "./routes/speech.router";
-import { handleEvents } from "./sse/events.controller";
+import { handleEvents } from "./controllers/events.controller";
 import { requireAuth } from "./middleware/auth.middleware";
 
 import { AUDIO_BUCKET, MAX_AUDIO_BYTES } from "./storage";

@@ -25,7 +25,7 @@ vi.mock("../../src/ai/ai_transcribe_client/dictation", () => ({
 
 import { createApp } from "../../src/app";
 import { RATE_LIMIT_POLICIES } from "../../src/rateLimit/policies";
-import { resetRateLimits } from "../../src/middleware/rateLimit.middleware";
+import { resetRateLimits } from "../../src/memory/rateLimitCounts";
 import { authedHeaders, guestCookieHeader } from "../helpers/session";
 
 const clip = new Uint8Array([1, 2, 3]);

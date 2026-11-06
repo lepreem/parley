@@ -70,12 +70,12 @@ Nothing needs this yet. Everything below is per process today:
   `job_updates` fanout exchange; each instance binds its own exclusive queue
   and forwards what it hears. Work that must happen once (failing a job) stays
   on a work queue and publishes to the fanout after.
-- **Rate limits** are counted in memory (`src/middleware/rateLimit.middleware.ts`).
+- **Rate limits** are counted in memory (`src/memory/rateLimitCounts.ts`).
   The policies are plain data (`src/rateLimit/policies.ts`) so they can move
   to a load balancer, which must verify the WorkOS token itself, since most
   are per user. Caddy needs a plugin (`caddy-ratelimit`) for that. Until
   then, divide the limits by the replica count.
-- **Refresh replay** (`src/auth/refreshSession.ts`) dedupes refreshes per
+- **Refresh replay** (`src/memory/sessionRefreshes.ts`) dedupes refreshes per
   process.
 - **Shared budgets.** Deepgram's 40 concurrent transcriptions
   (`getTranscriptionConcurrency`) and the session pooler's 15 connections
