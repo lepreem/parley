@@ -18,7 +18,6 @@ async function createJob() {
     fileName: "YouTube audio",
     mimeType: null,
     sizeBytes: 0,
-    transcriptModelId: "small",
   });
   return audioUploadId;
 }
@@ -180,8 +179,7 @@ describe("audio jobs", () => {
         fileName: "YouTube audio",
         mimeType: null,
         sizeBytes: 0,
-        transcriptModelId: "small",
-        youtubeSourceUrl: "https://www.youtube.com/watch?v=abc",
+        youtubeVideoId: "dQw4w9WgXcQ",
         useCaptionsIfAvailable: true,
       });
       const uploadedJob = randomUUID();
@@ -191,7 +189,6 @@ describe("audio jobs", () => {
         fileName: "talk.mp3",
         mimeType: "audio/mpeg",
         sizeBytes: 10,
-        transcriptModelId: "small",
       });
       await jobs.claimAudioJob(uploadedJob);
 
@@ -203,13 +200,13 @@ describe("audio jobs", () => {
         {
           audioUploadId: uploadedJob,
           source: "audio",
-          youtubeSourceUrl: null,
+          youtubeVideoId: null,
           useCaptionsIfAvailable: null,
         },
         {
           audioUploadId: youtubeJob,
           source: "youtube",
-          youtubeSourceUrl: "https://www.youtube.com/watch?v=abc",
+          youtubeVideoId: "dQw4w9WgXcQ",
           useCaptionsIfAvailable: true,
         },
       ]);

@@ -1,0 +1,112 @@
+name: Desktop app
+
+# Builds the desktop app on each platform and uses it there: desktop/scripts/
+# smoke.mts opens the packaged app and transcribes a clip. A tag like v0.2.0
+# also publishes the builds as a GitHub release, which is what the download page
+# and the app's "new version" notice read. The tag must match
+# desktop/package.json's version.
+
+on:
+  push:
+    branches: [main, desktop]
+    tags: ["v*"]
+    paths:
+      - desktop/**
+      - client/**
+      - servers/local/**
+      - packages/**
+      - package-lock.json
+      - .github/workflows/desktop.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Actions are pinned to a commit, as in deploy.yml.
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner:
+          - macos-15 # Apple silicon
+          - macos-15-intel
+          - windows-2025
+          - ubuntu-24.04
+          - ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - name: Tag matches the app's version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(node -p "require('./desktop/package.json').version")
+          test "$GITHUB_REF_NAME" = "v$version"
+
+      - name: Install
+        run: |
+          npm ci --ignore-scripts
+          npm ci --ignore-scripts --prefix desktop
+
+      - name: Test
+        working-directory: desktop
+        run: |
+          npm run typecheck
+          npm test
+
+      - name: Package
+        working-directory: desktop
+        run: npm run package
+
+      - name: What a Linux window needs
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y xvfb libgtk-3-0t64 libnss3 libgbm1 libasound2t64
+
+      - name: Smoke test
+        working-directory: desktop
+        run: |
+          if [ "$RUNNER_OS" = Linux ]; then
+            xvfb-run -a npm run smoke
+          else
+            npm run smoke
+          fi
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: parley-${{ matrix.runner }}
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            desktop/release/Parley-*.dmg
+            desktop/release/Parley-*.exe
+            desktop/release/Parley-*.deb
+            desktop/release/Parley-*.AppImage
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: builds
+          merge-multiple: true
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          (cd builds && sha256sum -- * > SHA256SUMS)
+          gh release create "$GITHUB_REF_NAME" builds/* --generate-notes

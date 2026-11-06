@@ -95,7 +95,8 @@ function catalogModel(id: string, name: string, inputModalities: string[]) {
     id,
     canonical_slug: id,
     name,
-    created: 1_700_000_000,
+    // Today: the backend leaves out models past an age.
+    created: Math.floor(Date.now() / 1000),
     context_length: 128_000,
     architecture: {
       input_modalities: inputModalities,
@@ -112,9 +113,19 @@ function catalogModel(id: string, name: string, inputModalities: string[]) {
   };
 }
 
-/** Includes the model titles are generated with (ai_chat_client.ts). */
+/**
+ * Includes the model titles are generated with, and the alias they name it by
+ * (ai_chat_client/ai_chat_client.ts).
+ */
 const CHAT_MODELS = [
-  catalogModel("openai/gpt-4o-mini", "GPT-4o mini", ["text", "image"]),
+  catalogModel("openai/gpt-6-luna", "GPT-6 Luna", ["text", "image"]),
+  {
+    ...catalogModel("~openai/gpt-luna-latest", "GPT Luna Latest", [
+      "text",
+      "image",
+    ]),
+    alias_target: { slug: "openai/gpt-6-luna", name: "OpenAI: GPT-6 Luna" },
+  },
   catalogModel("loadtest/text-model", "Load test text model", ["text"]),
 ];
 
@@ -123,18 +134,45 @@ const REPLY_WORDS =
     " ",
   );
 
-function chatChunk(
+/** A response as the SDK expects to read it, with what the app doesn't use blank. */
+function responseResult(
   id: string,
   model: string,
-  delta: object,
-  finishReason: string | null,
+  status: "in_progress" | "completed",
+  text?: string,
 ) {
   return {
     id,
-    object: "chat.completion.chunk",
-    created: Math.floor(Date.now() / 1000),
+    object: "response",
+    created_at: Math.floor(Date.now() / 1000),
     model,
-    choices: [{ index: 0, delta, finish_reason: finishReason }],
+    status,
+    completed_at: null,
+    error: null,
+    incomplete_details: null,
+    instructions: null,
+    metadata: null,
+    output:
+      text === undefined
+        ? []
+        : [
+            {
+              id: `msg-${id}`,
+              type: "message",
+              role: "assistant",
+              status: "completed",
+              content: [
+                { type: "output_text", text, annotations: [], logprobs: [] },
+              ],
+            },
+          ],
+    tools: [],
+    tool_choice: "auto",
+    parallel_tool_calls: true,
+    temperature: null,
+    top_p: null,
+    presence_penalty: null,
+    frequency_penalty: null,
   };
 }
 
@@ -161,16 +199,31 @@ async function streamChat(
       signal,
     });
 
+  let sequenceNumber = 0;
+  const sendEvent = (type: string, fields: object) =>
+    send({ type, sequence_number: sequenceNumber++, ...fields });
+
   await until(DELAYS.chatFirstTokenMs);
-  send(chatChunk(id, model, { role: "assistant", content: "" }, null));
+  sendEvent("response.created", {
+    response: responseResult(id, model, "in_progress"),
+  });
+  let reply = "";
   for (let i = 0; i < DELAYS.chatTokens; i++) {
     const word = REPLY_WORDS[i % REPLY_WORDS.length];
-    send(
-      chatChunk(id, model, { content: `${i === 0 ? "" : " "}${word}` }, null),
-    );
+    const delta = `${i === 0 ? "" : " "}${word}`;
+    reply += delta;
+    sendEvent("response.output_text.delta", {
+      item_id: `msg-${id}`,
+      output_index: 0,
+      content_index: 0,
+      delta,
+      logprobs: [],
+    });
     await until(DELAYS.chatFirstTokenMs + (i + 1) * DELAYS.chatTokenIntervalMs);
   }
-  send(chatChunk(id, model, {}, "stop"));
+  sendEvent("response.completed", {
+    response: responseResult(id, model, "completed", reply),
+  });
   res.end("data: [DONE]\n\n");
 }
 
@@ -180,20 +233,16 @@ async function completeChat(
   signal: AbortSignal,
 ) {
   await sleep(DELAYS.titleMs, undefined, { signal });
-  json(res, 200, {
-    id: `gen-${randomUUID()}`,
-    object: "chat.completion",
-    created: Math.floor(Date.now() / 1000),
-    model,
-    system_fingerprint: null,
-    choices: [
-      {
-        index: 0,
-        finish_reason: "stop",
-        message: { role: "assistant", content: "Load test conversation" },
-      },
-    ],
-  });
+  json(
+    res,
+    200,
+    responseResult(
+      `gen-${randomUUID()}`,
+      model,
+      "completed",
+      "Load test conversation",
+    ),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -314,7 +363,7 @@ const routes: Record<string, Route> = {
       links: { next: null },
       total_count: CHAT_MODELS.length,
     }),
-  "POST /openrouter/chat/completions": async (req, res, _url, signal) => {
+  "POST /openrouter/responses": async (req, res, _url, signal) => {
     const body = await readJson(req);
     const model =
       typeof body.model === "string" ? body.model : "loadtest/text-model";

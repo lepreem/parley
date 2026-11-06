@@ -13,9 +13,8 @@ import {
   uploadImage,
 } from "../api/uploads";
 import { errorMessage } from "../api/http";
-import { resolveDefaultModel } from "../api/models";
-import { extractAudioFromVideo } from "../media/extractAudio";
-import { compressAudioForSpeech } from "../media/compressAudio";
+import { audioCopies } from "../media/audioCopies";
+import { prepareSpeech } from "../media/speech";
 import {
   classifyFile,
   formatBytes,
@@ -25,10 +24,9 @@ import {
   type FileKind,
 } from "../media/fileKind";
 import { youtubeLabel } from "../media/youtube";
+import { useDeleteJobMutation } from "../hooks/queries/useJobQueries";
 import { useServer } from "../hooks/server/useServer";
 import { useToast } from "../hooks/toast/useToast";
-import { useTranscriptionModelsQuery } from "../hooks/queries/useModelsQuery";
-import { useServerReady } from "../hooks/server/useServerReady";
 import { SourcesContext, type ExistingSource } from "./context";
 import { stageSource, type StagedSource } from "./types";
 import { useTranscriptWatcher } from "./useTranscriptWatcher";
@@ -49,29 +47,36 @@ function releasePreview(source: StagedSource) {
 export function SourcesProvider({ children }: { children: ReactNode }) {
   const toast = useToast();
   const server = useServer();
-  const ready = useServerReady();
-  const { models: transcriptionModels } = useTranscriptionModelsQuery(ready);
+  const { mutate: deleteJob } = useDeleteJobMutation();
   const [drafts, setDrafts] = useState<Drafts>({});
-  const [transcriptModelPick, setTranscriptModelPick] = useState<string | null>(
-    null,
-  );
-
-  const transcriptModelId =
-    transcriptModelPick ??
-    resolveDefaultModel(
-      transcriptionModels.map((model) => model.id),
-      server.defaultTranscribeModelId,
-    );
+  // On by default: a video's captions are free and immediate, where
+  // transcribing its audio is billed.
+  const [useCaptionsIfAvailable, setUseCaptionsIfAvailable] = useState(true);
 
   // Mirrors read by the async upload runs and by callbacks that must not change
   // identity every time a draft does. Synced after commit, which is always
   // before the next event handler or resumed upload can read them.
   const draftsRef = useRef<Drafts>(drafts);
-  const transcriptModelRef = useRef(transcriptModelId);
+  const captionsRef = useRef(useCaptionsIfAvailable);
   useEffect(() => {
     draftsRef.current = drafts;
-    transcriptModelRef.current = transcriptModelId;
-  }, [drafts, transcriptModelId]);
+    captionsRef.current = useCaptionsIfAvailable;
+  }, [drafts, useCaptionsIfAvailable]);
+
+  // What cancels each upload or fetch still on its way to becoming a job.
+  const cancels = useRef(new Map<string, AbortController>());
+  const startRun = useCallback((localId: string) => {
+    const controller = new AbortController();
+    cancels.current.set(localId, controller);
+    return {
+      signal: controller.signal,
+      finish: () => {
+        if (cancels.current.get(localId) === controller) {
+          cancels.current.delete(localId);
+        }
+      },
+    };
+  }, []);
 
   const patchSource = useCallback(
     (draftKey: string, localId: string, patch: Partial<StagedSource>) => {
@@ -79,7 +84,7 @@ export function SourcesProvider({ children }: { children: ReactNode }) {
         const draft = current[draftKey];
         if (!draft) return current;
         const index = draft.findIndex((source) => source.localId === localId);
-        // Removed mid-upload — the run finishes into nothing, by design.
+        // Removed mid-run, which has cancelled it: nothing left to update.
         if (index === -1) return current;
         const next = draft.slice();
         next[index] = { ...next[index], ...patch };
@@ -129,6 +134,7 @@ export function SourcesProvider({ children }: { children: ReactNode }) {
   const runFileUpload = useCallback(
     async (draftKey: string, localId: string, file: File, kind: FileKind) => {
       const patch = patcherFor(draftKey, localId);
+      const { signal, finish } = startRun(localId);
 
       try {
         if (kind === "image") {
@@ -149,9 +155,8 @@ export function SourcesProvider({ children }: { children: ReactNode }) {
         }
 
         patch({ status: "preparing" });
-        const speech = await compressAudioForSpeech(
-          kind === "video" ? await extractAudioFromVideo(file) : file,
-        );
+        const speech = await prepareSpeech(file, kind, signal);
+        signal.throwIfAborted();
 
         if (speech.size > MAX_AUDIO_BYTES) {
           patch({
@@ -162,36 +167,51 @@ export function SourcesProvider({ children }: { children: ReactNode }) {
         }
 
         patch({ status: "uploading" });
-        const uploaded = await uploadAudio(server, {
-          file: speech,
-          source: kind,
-          transcriptModelId:
-            transcriptModelRef.current ?? server.defaultTranscribeModelId,
-        });
+        const uploaded = await uploadAudio(
+          server,
+          { file: speech, source: kind },
+          signal,
+        );
+        if (signal.aborted) {
+          deleteJob({ audioUploadId: uploaded.audioUploadId, quiet: true });
+          return;
+        }
         patch({
           status: "transcribing",
           sourceUploadId: uploaded.audioUploadId,
         });
+        // What plays the source once the server no longer keeps its audio.
+        void audioCopies.save(uploaded.audioUploadId, speech).catch(() => {});
       } catch (error) {
+        if (signal.aborted) return;
         patch({
           status: "failed",
           error: errorMessage(error, "Upload failed."),
         });
+      } finally {
+        finish();
       }
     },
-    [patcherFor, server],
+    [deleteJob, patcherFor, server, startRun],
   );
 
   const runYoutubeFetch = useCallback(
     async (draftKey: string, localId: string, url: string) => {
       const patch = patcherFor(draftKey, localId);
+      const { signal, finish } = startRun(localId);
       try {
         patch({ status: "uploading" });
+        // Not given the signal: it creates the job, and only its answer says
+        // which job to delete.
         const queued = await requestYoutubeTranscript(
           server,
           url,
-          transcriptModelRef.current ?? server.defaultTranscribeModelId,
+          captionsRef.current,
         );
+        if (signal.aborted) {
+          deleteJob({ audioUploadId: queued.audioUploadId, quiet: true });
+          return;
+        }
         patch({
           status: "transcribing",
           sourceUploadId: queued.audioUploadId,
@@ -201,9 +221,11 @@ export function SourcesProvider({ children }: { children: ReactNode }) {
           status: "failed",
           error: errorMessage(error, "Could not queue that video."),
         });
+      } finally {
+        finish();
       }
     },
-    [patcherFor, server],
+    [deleteJob, patcherFor, server, startRun],
   );
 
   const addFiles = useCallback(
@@ -316,7 +338,13 @@ export function SourcesProvider({ children }: { children: ReactNode }) {
       );
       if (!removed) return;
 
+      cancels.current.get(localId)?.abort();
       releasePreview(removed);
+      // Only one still transcribing is cancelled: a finished source stays in
+      // the library, which is also where one attached from there came from.
+      if (removed.status === "transcribing" && removed.sourceUploadId) {
+        deleteJob({ audioUploadId: removed.sourceUploadId, quiet: true });
+      }
       if (
         removed.kind === "image" &&
         removed.status === "ready" &&
@@ -339,8 +367,21 @@ export function SourcesProvider({ children }: { children: ReactNode }) {
         };
       });
     },
-    [server, toast],
+    [deleteJob, server, toast],
   );
+
+  /** Takes a source deleted from the library off any draft carrying it. */
+  const dropDeletedSource = useCallback((audioUploadId: string) => {
+    setDrafts((current) => {
+      const next: Drafts = {};
+      for (const [key, draft] of Object.entries(current)) {
+        next[key] = draft.filter(
+          (source) => source.sourceUploadId !== audioUploadId,
+        );
+      }
+      return next;
+    });
+  }, []);
 
   const retrySource = useCallback(
     (draftKey: string, localId: string) => {
@@ -389,11 +430,12 @@ export function SourcesProvider({ children }: { children: ReactNode }) {
       addYoutube,
       attachExisting,
       removeSource,
+      dropDeletedSource,
       retrySource,
       takeDraft,
       restoreDraft,
-      transcriptModelId,
-      setTranscriptModelId: setTranscriptModelPick,
+      useCaptionsIfAvailable,
+      setUseCaptionsIfAvailable,
     }),
     [
       drafts,
@@ -401,10 +443,11 @@ export function SourcesProvider({ children }: { children: ReactNode }) {
       addYoutube,
       attachExisting,
       removeSource,
+      dropDeletedSource,
       retrySource,
       takeDraft,
       restoreDraft,
-      transcriptModelId,
+      useCaptionsIfAvailable,
     ],
   );
 

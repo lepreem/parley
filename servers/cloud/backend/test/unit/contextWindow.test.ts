@@ -3,6 +3,7 @@ import {
   MAX_CONTEXT_CHARS,
   MAX_HISTORY_MESSAGES,
   admitHistory,
+  completionTokenCeiling,
   countMessagesInContextWindow,
 } from "../../src/chat/contextWindow";
 
@@ -15,6 +16,38 @@ function turn(name: string, contextCharCount: number, imageCount = 0) {
 }
 
 const tenth = MAX_CONTEXT_CHARS / 10;
+
+describe("completionTokenCeiling", () => {
+  const offering = (defaultEffort: "low" | null) => ({
+    maxOutputTokens: null,
+    reasoning: { efforts: ["none" as const, "low" as const], defaultEffort },
+  });
+
+  it("makes room for the thinking the chosen effort needs", () => {
+    expect(completionTokenCeiling(undefined, "none")).toBe(4_000);
+    expect(completionTokenCeiling(undefined, "medium")).toBe(12_000);
+    expect(completionTokenCeiling(undefined, "max")).toBe(36_000);
+  });
+
+  it("goes by the model's own default when none is chosen", () => {
+    expect(completionTokenCeiling(offering("low"), undefined)).toBe(8_000);
+    expect(completionTokenCeiling(offering("low"), "medium")).toBe(12_000);
+  });
+
+  it("leaves plenty of room when the model doesn't say", () => {
+    expect(completionTokenCeiling(offering(null), undefined)).toBe(20_000);
+    expect(completionTokenCeiling(undefined, undefined)).toBe(20_000);
+  });
+
+  it("stays within what the model can write", () => {
+    expect(completionTokenCeiling({ maxOutputTokens: 8_192 }, "max")).toBe(
+      8_192,
+    );
+    expect(completionTokenCeiling({ maxOutputTokens: 128_000 }, "max")).toBe(
+      36_000,
+    );
+  });
+});
 
 describe("admitHistory", () => {
   it("admits turns newest first while they fit beside the new one", () => {

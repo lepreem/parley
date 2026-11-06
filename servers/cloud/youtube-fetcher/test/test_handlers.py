@@ -1,3 +1,5 @@
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from types import SimpleNamespace
 from typing import ClassVar
@@ -10,7 +12,10 @@ import handlers
 from contract import QueueName, _Queues, contract
 
 MAX_BYTES = 1000
-CAPTIONS = [{"start": 0.0, "end": 1.5, "text": "the captions"}]
+CAPTIONS = {
+    "segments": [{"start": 0.0, "end": 1.5, "text": "the captions"}],
+    "language": "de",
+}
 
 
 @pytest.fixture(autouse=True)
@@ -19,6 +24,7 @@ def fake_contract():
     contract.queues = _Queues(
         YT_FETCH_CAPTIONS=QueueName("yt_fetch_captions"),
         YT_FETCH_AUDIO=QueueName("yt_fetch_audio"),
+        YT_CANCEL_FETCH=QueueName("yt_cancel_fetch"),
         YT_SAVE_CAPTIONS=QueueName("yt_save_captions"),
         TRANSCRIBE_AUDIO=QueueName("transcribe_audio"),
         YT_FAIL_JOB=QueueName("yt_fail_job"),
@@ -164,6 +170,127 @@ class TestFetchAndUpload:
 EVENT = {"audioUploadId": "u1", "url": "https://youtu.be/x", "userId": "usr"}
 
 
+@pytest.fixture(autouse=True)
+def forget_cancelled():
+    handlers._cancelled.clear()
+
+
+CANCELLED_EVENT = {"audioUploadId": "u1"}
+
+
+class TestCancelledFetch:
+    def test_skips_a_job_cancelled_before_its_fetch_arrived(self, ydl, upload, publish):
+        handlers.handle_yt_cancel_fetch(CANCELLED_EVENT)
+
+        handlers.handle_yt_fetch_audio(EVENT)
+
+        assert ydl.last is None
+        upload.assert_not_called()
+        publish.assert_not_called()
+
+    def test_skips_captions_for_a_job_cancelled_before_its_fetch_arrived(
+        self, publish, monkeypatch
+    ):
+        caption_fetch = MagicMock()
+        monkeypatch.setattr(handlers, "_fetch_captions", caption_fetch)
+        handlers.handle_yt_cancel_fetch(CANCELLED_EVENT)
+
+        handlers.handle_yt_fetch_captions(EVENT)
+
+        caption_fetch.assert_not_called()
+        publish.assert_not_called()
+
+    def test_sends_nothing_when_cancelled_while_fetching_captions(
+        self, publish, monkeypatch
+    ):
+        def caption_fetch(_audio_upload_id, _url):
+            handlers.handle_yt_cancel_fetch(CANCELLED_EVENT)
+            return CAPTIONS
+
+        monkeypatch.setattr(handlers, "_fetch_captions", caption_fetch)
+
+        handlers.handle_yt_fetch_captions(EVENT)
+
+        publish.assert_not_called()
+
+    def test_stores_nothing_when_cancelled_as_the_download_ends(
+        self, ydl, upload, publish, monkeypatch
+    ):
+        class CancelledAsItEnds(ydl):
+            def download(self, urls):
+                super().download(urls)
+                handlers.handle_yt_cancel_fetch(CANCELLED_EVENT)
+
+        monkeypatch.setattr(handlers.yt_dlp, "YoutubeDL", CancelledAsItEnds)
+
+        handlers.handle_yt_fetch_audio(EVENT)
+
+        upload.assert_not_called()
+        publish.assert_not_called()
+
+    def test_doesnt_retry_a_cancelled_fetch(self, monkeypatch):
+        fetch = MagicMock(side_effect=handlers.JobCancelled("u1"))
+        monkeypatch.setattr(handlers, "_fetch_and_upload", fetch)
+
+        with pytest.raises(handlers.JobCancelled):
+            handlers._fetch_with_retries("u1", "https://youtu.be/x", "usr")
+
+        assert fetch.call_count == 1
+
+    def test_forgets_a_cancel_once_it_expires(self, monkeypatch):
+        handlers.handle_yt_cancel_fetch(CANCELLED_EVENT)
+        later = handlers.time.monotonic() + handlers.CANCELLED_TTL_SECONDS + 1
+        monkeypatch.setattr(handlers.time, "monotonic", lambda: later)
+
+        handlers.handle_yt_cancel_fetch({"audioUploadId": "u2"})
+
+        assert list(handlers._cancelled) == ["u2"]
+
+    def test_really_stops_yt_dlp_midway(self, upload, publish, monkeypatch, caplog):
+        """Against the real yt-dlp: a fake couldn't show that an exception from
+        a progress hook gets out of it, rather than being retried or wrapped."""
+
+        class Audio(BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200)
+                self.send_header("Content-Type", "audio/mpeg")
+                self.send_header("Content-Length", str(MAX_BYTES))
+                self.end_headers()
+                self.wfile.write(b"x" * MAX_BYTES)
+
+            def log_message(self, *args):
+                pass
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Audio)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+
+        real_download = yt_dlp.YoutubeDL.download
+
+        def cancel_then_download(ydl_self, urls):
+            handlers.handle_yt_cancel_fetch(CANCELLED_EVENT)
+            return real_download(ydl_self, urls)
+
+        monkeypatch.setattr(yt_dlp.YoutubeDL, "download", cancel_then_download)
+        caplog.set_level("INFO", logger=handlers.log.name)
+
+        try:
+            handlers.handle_yt_fetch_audio(
+                {
+                    **EVENT,
+                    "url": f"http://127.0.0.1:{server.server_port}/a.mp3",
+                }
+            )
+        finally:
+            server.shutdown()
+
+        assert "Stopped the fetch for cancelled job" in caplog.text
+        # The check after the download comes later than this line, so its
+        # absence means the hook is what stopped it.
+        assert "Downloaded u1" not in caplog.text
+        upload.assert_not_called()
+        publish.assert_not_called()
+
+
 class TestHandleYtFetchCaptions:
     def test_captions_travel_in_the_yt_save_captions_message(
         self, publish, monkeypatch
@@ -175,11 +302,11 @@ class TestHandleYtFetchCaptions:
 
         handlers.handle_yt_fetch_captions(EVENT)
 
-        caption_fetch.assert_called_once_with("https://youtu.be/x")
+        caption_fetch.assert_called_once_with("u1", "https://youtu.be/x")
         audio_fetch.assert_not_called()
         publish.assert_called_once_with(
             QueueName("yt_save_captions"),
-            {"audioUploadId": "u1", "segments": CAPTIONS},
+            {"audioUploadId": "u1", **CAPTIONS},
         )
 
     def test_unavailable_captions_queue_the_audio_fetch(self, publish, monkeypatch):
@@ -308,14 +435,16 @@ class TestMalformedPayloads:
 
 
 class TestFetchCaptions:
-    def test_returns_the_first_available_caption_track(self, monkeypatch):
+    def test_returns_the_first_available_caption_track_and_its_language(
+        self, monkeypatch
+    ):
         fetched_transcript = [
             SimpleNamespace(text="First caption", start=0.5, duration=2.0),
             SimpleNamespace(text="  ", start=2.5, duration=1.0),
             SimpleNamespace(text="  Second caption  ", start=3.0, duration=1.5),
         ]
         selected_transcript = SimpleNamespace(
-            language_code="en",
+            language_code="de",
             fetch=MagicMock(return_value=fetched_transcript),
         )
         transcript_api = MagicMock()
@@ -323,13 +452,16 @@ class TestFetchCaptions:
         monkeypatch.setattr(
             handlers, "YouTubeTranscriptApi", MagicMock(return_value=transcript_api)
         )
-        segments = handlers._fetch_captions("https://youtu.be/dQw4w9WgXcQ")
+        captions = handlers._fetch_captions("u1", "https://youtu.be/dQw4w9WgXcQ")
 
         transcript_api.list.assert_called_once_with("dQw4w9WgXcQ")
-        assert segments == [
-            {"start": 0.5, "end": 2.5, "text": "First caption"},
-            {"start": 3.0, "end": 4.5, "text": "Second caption"},
-        ]
+        assert captions == {
+            "segments": [
+                {"start": 0.5, "end": 2.5, "text": "First caption"},
+                {"start": 3.0, "end": 4.5, "text": "Second caption"},
+            ],
+            "language": "de",
+        }
 
     def test_empty_caption_track_is_none(self, monkeypatch):
         selected_transcript = SimpleNamespace(
@@ -344,7 +476,7 @@ class TestFetchCaptions:
             handlers, "YouTubeTranscriptApi", MagicMock(return_value=transcript_api)
         )
 
-        assert handlers._fetch_captions("https://youtu.be/dQw4w9WgXcQ") is None
+        assert handlers._fetch_captions("u1", "https://youtu.be/dQw4w9WgXcQ") is None
 
     def test_unavailable_captions_are_none(self, monkeypatch):
         transcript_api = MagicMock()
@@ -355,7 +487,7 @@ class TestFetchCaptions:
             handlers, "YouTubeTranscriptApi", MagicMock(return_value=transcript_api)
         )
 
-        assert handlers._fetch_captions("https://youtu.be/dQw4w9WgXcQ") is None
+        assert handlers._fetch_captions("u1", "https://youtu.be/dQw4w9WgXcQ") is None
 
 
 class TestFetchWithRetries:

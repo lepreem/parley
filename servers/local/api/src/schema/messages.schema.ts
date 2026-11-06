@@ -1,6 +1,7 @@
 import { z } from "zod";
-import type { SendMessageBody } from "@parley/contract";
+import type { LocalSendMessageBody, PermissionMode } from "@parley/contract";
 import { takesBody } from "@parley/server-kit/http/takesBody";
+import { REASONING_EFFORTS } from "@parley/server-kit/reasoningEfforts";
 import { CTX_KEYS } from "../../../core/keys";
 import { findChatModel } from "../../../core/ai/ai_chat_client";
 
@@ -49,7 +50,12 @@ export const messageReqParamSchema = z.object({
 });
 
 /** Body for POST /conversations/:id/messages — the user turn to answer. */
-export const messageCreateBodySchema = takesBody<SendMessageBody>()(
+const PERMISSION_MODES = [
+  "acceptEdits",
+  "bypassPermissions",
+] as const satisfies readonly PermissionMode[];
+
+export const messageCreateBodySchema = takesBody<LocalSendMessageBody>()(
   z
     .object({
       [CTX_KEYS.messageContent]: z
@@ -58,6 +64,9 @@ export const messageCreateBodySchema = takesBody<SendMessageBody>()(
         .min(1, "Message must not be empty")
         .max(MAX_MESSAGE_LENGTH, "Message is too long"),
       [CTX_KEYS.chosenModelId]: z.string().min(1),
+      [CTX_KEYS.reasoningEffort]: z.enum(REASONING_EFFORTS).optional(),
+      [CTX_KEYS.webSearch]: z.boolean().optional(),
+      [CTX_KEYS.permissionMode]: z.enum(PERMISSION_MODES).optional(),
       [CTX_KEYS.messageAttachmentsIds]: z
         .array(messageAttachmentSchema)
         .optional()
@@ -82,6 +91,21 @@ export const messageCreateBodySchema = takesBody<SendMessageBody>()(
           path: [CTX_KEYS.chosenModelId],
         });
         return;
+      }
+      const effort = data[CTX_KEYS.reasoningEffort];
+      if (effort && !model.reasoning?.efforts.includes(effort)) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Invalid effort: this model doesn't offer it",
+          path: [CTX_KEYS.reasoningEffort],
+        });
+      }
+      if (data[CTX_KEYS.webSearch] && !model.searchesWeb) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Invalid model: can't search the web",
+          path: [CTX_KEYS.webSearch],
+        });
       }
       const imageCount = data[CTX_KEYS.messageAttachmentsIds].filter(
         (attachment) => attachment.type === "image",

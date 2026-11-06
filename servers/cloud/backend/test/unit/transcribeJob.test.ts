@@ -24,9 +24,11 @@ vi.mock("../../src/data", () => ({
   },
 }));
 
-vi.mock("../../src/ai/ai_transcribe_client", () => ({
-  DEFAULT_TRANSCRIBE_MODEL: "nova-3-general",
-  transcription: { transcribe: mocks.transcribeAI },
+vi.mock("../../src/ai/ai_transcribe_client/ai_transcribe_client", () => ({
+  transcription: {
+    transcribe: mocks.transcribeAI,
+    model: async () => "nova-3-general",
+  },
 }));
 
 vi.mock("../../src/storage/sign", () => ({ sign: { url: mocks.signUrl } }));
@@ -35,7 +37,8 @@ vi.mock("../../src/sse/hub", () => ({
   eventHub: { send: mocks.sendEvent },
 }));
 
-import { handleTranscribeJob } from "../../src/transcribeJob";
+import { handleTranscribeJob } from "../../src/transcription/transcribeJob";
+import { jobCancellation } from "@parley/server-kit/transcription/jobCancellation";
 import { DeadLetterError } from "../../src/message-queue/messageQueue";
 
 const audioInput = { audioUploadId } as const;
@@ -47,7 +50,6 @@ describe("handleTranscribeJob", () => {
     vi.clearAllMocks();
     mocks.claimAudioJob.mockResolvedValue({
       audioUploadId,
-      transcriptModelId: null,
       userId: "user_01",
       claimToken,
     });
@@ -57,18 +59,71 @@ describe("handleTranscribeJob", () => {
     mocks.failAudioJob.mockResolvedValue(true);
   });
 
+  describe("a job deleted while it's worked on", () => {
+    it("aborts the Deepgram call, without retrying, failing or saving", async () => {
+      let signal: AbortSignal | undefined;
+      mocks.transcribeAI.mockImplementation(
+        (_model: string, _url: string, abortSignal: AbortSignal) =>
+          new Promise((_, reject) => {
+            signal = abortSignal;
+            abortSignal.addEventListener("abort", () =>
+              reject(abortSignal.reason),
+            );
+          }),
+      );
+
+      const run = handleTranscribeJob(audioInput, firstAttempt);
+      await vi.waitFor(() => expect(signal).toBeDefined());
+      jobCancellation.cancel(audioUploadId);
+
+      await expect(run).resolves.toBeUndefined();
+      expect(signal?.aborted).toBe(true);
+      expect(mocks.unclaimAndResetAudioJob).not.toHaveBeenCalled();
+      expect(mocks.failAudioJob).not.toHaveBeenCalled();
+      expect(mocks.saveCompletedTranscript).not.toHaveBeenCalled();
+      expect(mocks.sendEvent).not.toHaveBeenCalled();
+    });
+
+    it("never calls Deepgram when deleted before the audio's link is signed", async () => {
+      mocks.signUrl.mockImplementation(async () => {
+        jobCancellation.cancel(audioUploadId);
+        return "https://signed.example/audio";
+      });
+
+      await handleTranscribeJob(audioInput, firstAttempt);
+
+      expect(mocks.transcribeAI).not.toHaveBeenCalled();
+      expect(mocks.failAudioJob).not.toHaveBeenCalled();
+    });
+
+    it("saves nothing when deleted just as Deepgram answers", async () => {
+      mocks.transcribeAI.mockImplementation(async () => {
+        jobCancellation.cancel(audioUploadId);
+        return { segments: [{ start: 0, end: 1, text: "hi" }], language: "en" };
+      });
+
+      await handleTranscribeJob(audioInput, firstAttempt);
+
+      expect(mocks.saveCompletedTranscript).not.toHaveBeenCalled();
+      expect(mocks.sendEvent).not.toHaveBeenCalled();
+    });
+  });
+
   describe("storing a transcript", () => {
     const transcribed = [{ start: 0, end: 2, text: "the audio, transcribed" }];
     const captions = [{ start: 0, end: 2, text: "the captions" }];
 
     beforeEach(() => {
-      mocks.transcribeAI.mockResolvedValue(transcribed);
+      mocks.transcribeAI.mockResolvedValue({
+        segments: transcribed,
+        language: "de",
+      });
       mocks.saveCompletedTranscript.mockResolvedValue(true);
     });
 
     it("stores the captions the message carries, without transcribing audio", async () => {
       await handleTranscribeJob(
-        { audioUploadId, segments: captions },
+        { audioUploadId, segments: captions, language: "ar" },
         firstAttempt,
       );
 
@@ -76,7 +131,20 @@ describe("handleTranscribeJob", () => {
       expect(mocks.transcribeAI).not.toHaveBeenCalled();
       expect(mocks.saveCompletedTranscript).toHaveBeenCalledWith(
         audioUploadId,
-        captions,
+        { segments: captions, language: "ar", fromCaptions: true },
+        claimToken,
+      );
+    });
+
+    it("stores captions from a message without a language as in none", async () => {
+      await handleTranscribeJob(
+        { audioUploadId, segments: captions },
+        firstAttempt,
+      );
+
+      expect(mocks.saveCompletedTranscript).toHaveBeenCalledWith(
+        audioUploadId,
+        { segments: captions, language: null, fromCaptions: true },
         claimToken,
       );
     });
@@ -91,10 +159,11 @@ describe("handleTranscribeJob", () => {
       expect(mocks.transcribeAI).toHaveBeenCalledWith(
         "nova-3-general",
         "https://signed.example/audio",
+        expect.any(AbortSignal),
       );
       expect(mocks.saveCompletedTranscript).toHaveBeenCalledWith(
         audioUploadId,
-        transcribed,
+        { segments: transcribed, language: "de", fromCaptions: false },
         claimToken,
       );
     });
@@ -141,7 +210,10 @@ describe("handleTranscribeJob", () => {
 
   describe("before the last attempt", () => {
     it("treats an empty transcript as a failure", async () => {
-      mocks.transcribeAI.mockResolvedValue([{ start: 0, end: 1, text: "   " }]);
+      mocks.transcribeAI.mockResolvedValue({
+        segments: [{ start: 0, end: 1, text: "   " }],
+        language: null,
+      });
 
       await expect(
         handleTranscribeJob(audioInput, firstAttempt),
@@ -219,7 +291,10 @@ describe("handleTranscribeJob", () => {
     });
 
     it("says so when the audio had no speech in it", async () => {
-      mocks.transcribeAI.mockResolvedValue([{ start: 0, end: 1, text: "   " }]);
+      mocks.transcribeAI.mockResolvedValue({
+        segments: [{ start: 0, end: 1, text: "   " }],
+        language: null,
+      });
 
       await handleTranscribeJob(audioInput, lastAttempt);
 

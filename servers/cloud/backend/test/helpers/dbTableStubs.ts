@@ -16,7 +16,6 @@ export const tableStubs = {
     status: "status",
     error: "error",
     claimToken: "claim_token",
-    transcriptModelId: "transcription_model_id",
   },
 
   Attachments: {

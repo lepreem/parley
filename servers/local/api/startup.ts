@@ -9,7 +9,7 @@ import { ytDlp } from "./src/ytDlp";
  */
 export function verifyApiServices(): Promise<void> {
   return verifyServices([
-    { name: "Chat", check: pingChatAI },
+    { name: "Claude Code", check: pingChatAI },
     { name: "Whisper", check: pingTranscribeAI },
     { name: "yt-dlp", check: ytDlp.ping },
   ]);

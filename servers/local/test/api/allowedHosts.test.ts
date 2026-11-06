@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../core/db", async () =>
   (await import("../helpers/inMemoryDb")).inMemoryDbModule(),
@@ -7,10 +7,9 @@ vi.mock("../../core/db", async () =>
 // The Tailscale name a phone would reach the app by. Read when the app is
 // first built, which is after this.
 process.env.ALLOWED_HOSTS = "macbook.tail1234.ts.net";
-// The hosted client, which calls this machine from the browser.
-process.env.ALLOWED_ORIGINS = "https://parley.example.app/";
 
 import { createApp } from "../../api/app";
+import { receivePhoneAccess } from "../../api/src/allowedHosts";
 
 async function request(url: string, init: RequestInit = {}) {
   return (await createApp()).request(url, init);
@@ -72,6 +71,84 @@ describe("requests from off this machine", () => {
   });
 });
 
+describe("the desktop app's phone access", () => {
+  const PHONE_NAME = "laptop.tail1234.ts.net";
+  const PHONE_URL = `https://${PHONE_NAME}/conversations`;
+  const fromAccount = (login: string) => ({
+    headers: { "Tailscale-User-Login": login },
+  });
+
+  afterEach(() => {
+    receivePhoneAccess({ hostname: null, login: null });
+  });
+
+  it("answers no one under its name until the app turns it on", async () => {
+    const res = await request(PHONE_URL, fromAccount("me@example.com"));
+    expect(res.status).toBe(403);
+  });
+
+  describe("once on", () => {
+    beforeEach(() => {
+      receivePhoneAccess({ hostname: PHONE_NAME, login: "me@example.com" });
+    });
+
+    it("answers the account that turned it on", async () => {
+      const res = await request(PHONE_URL, fromAccount("me@example.com"));
+      expect(res.status).toBe(200);
+    });
+
+    it("refuses another account on the same tailnet", async () => {
+      const res = await request(PHONE_URL, fromAccount("them@example.com"));
+      expect(res.status).toBe(403);
+    });
+
+    it("refuses a request that names no account, as from outside the tailnet", async () => {
+      expect((await request(PHONE_URL)).status).toBe(403);
+    });
+
+    it("lets its own page post a form", async () => {
+      const res = await request(`https://${PHONE_NAME}/upload/image`, {
+        method: "POST",
+        headers: {
+          Origin: `https://${PHONE_NAME}`,
+          "Tailscale-User-Login": "me@example.com",
+        },
+        body: new FormData(),
+      });
+      // Past the origin check, the empty form fails validation instead.
+      expect(res.status).toBe(400);
+    });
+
+    it("leaves this machine's own requests alone", async () => {
+      const res = await request("http://127.0.0.1/conversations");
+      expect(res.status).toBe(200);
+    });
+
+    it("still refuses other names", async () => {
+      const res = await request(
+        "https://evil.test/conversations",
+        fromAccount("me@example.com"),
+      );
+      expect(res.status).toBe(403);
+    });
+  });
+
+  it("stops answering once the app turns it off", async () => {
+    receivePhoneAccess({ hostname: PHONE_NAME, login: "me@example.com" });
+    receivePhoneAccess({ hostname: null, login: null });
+    const res = await request(PHONE_URL, fromAccount("me@example.com"));
+    expect(res.status).toBe(403);
+  });
+
+  it("ignores a message that isn't one of its own", async () => {
+    receivePhoneAccess({ hostname: PHONE_NAME, login: "me@example.com" });
+    receivePhoneAccess("anything");
+    receivePhoneAccess({ hostname: 7 });
+    const res = await request(PHONE_URL, fromAccount("me@example.com"));
+    expect(res.status).toBe(200);
+  });
+});
+
 /** The preflight a browser sends before another origin's JSON request. */
 function preflight(origin: string, headers: Record<string, string> = {}) {
   return request("http://localhost/conversations", {
@@ -86,14 +163,6 @@ function preflight(origin: string, headers: Record<string, string> = {}) {
 }
 
 describe("pages from another origin", () => {
-  it("may call the API when the origin is in ALLOWED_ORIGINS", async () => {
-    const res = await preflight("https://parley.example.app");
-
-    expect(res.headers.get("Access-Control-Allow-Origin")).toBe(
-      "https://parley.example.app",
-    );
-  });
-
   it("may call the API from this machine, as the Vite dev server does", async () => {
     const res = await preflight("http://localhost:5173");
 
@@ -106,27 +175,5 @@ describe("pages from another origin", () => {
     const res = await preflight("https://evil.test");
 
     expect(res.headers.get("Access-Control-Allow-Origin")).toBeNull();
-  });
-
-  it("are told this machine may be reached, when Chrome asks", async () => {
-    const res = await preflight("https://parley.example.app", {
-      "Access-Control-Request-Private-Network": "true",
-    });
-
-    expect(res.headers.get("Access-Control-Allow-Private-Network")).toBe(
-      "true",
-    );
-  });
-
-  it("aren't told so when the origin isn't trusted", async () => {
-    const res = await preflight("https://evil.test", {
-      "Access-Control-Request-Private-Network": "true",
-    });
-
-    expect(res.headers.get("Access-Control-Allow-Private-Network")).toBeNull();
-  });
-
-  it("may post a form from an origin in ALLOWED_ORIGINS", async () => {
-    expect((await formPost("https://parley.example.app")).status).toBe(400);
   });
 });

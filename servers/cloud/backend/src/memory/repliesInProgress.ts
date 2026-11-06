@@ -1,9 +1,17 @@
 import { createRepliesInProgress } from "@parley/server-kit/memory/repliesInProgress";
 
-/** The replies this instance is writing, by owner and conversation. */
-export const repliesInProgress = createRepliesInProgress();
+const byKey = createRepliesInProgress();
 
 /** A user only ever reaches their own conversations' replies. */
-export function replyKey(userId: string, conversationId: string) {
-  return `${userId}/${conversationId}`;
-}
+const keyOf = (userId: string, conversationId: string) =>
+  `${userId}/${conversationId}`;
+
+/** The replies this instance is writing, by owner and conversation. */
+export const repliesInProgress = {
+  add: (userId: string, conversationId: string, content: string) =>
+    byKey.add(keyOf(userId, conversationId), content),
+  find: (userId: string, conversationId: string) =>
+    byKey.find(keyOf(userId, conversationId)),
+  stop: (userId: string, conversationId: string) =>
+    byKey.stop(keyOf(userId, conversationId)),
+};

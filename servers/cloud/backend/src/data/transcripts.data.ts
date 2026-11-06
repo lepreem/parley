@@ -24,9 +24,18 @@ import { attachments } from "./attachments.data";
  * of a row means a valid transcript is ready.
  */
 
+/** A transcript as it's stored: what was said, with when, and in what language. */
+type TranscriptToSave = {
+  segments: readonly TranscriptSegment[];
+  /** A BCP-47 tag ("de", "ar-JO"); null when the transcriber named none. */
+  language: string | null;
+  /** A YouTube video's own captions, not its audio transcribed. */
+  fromCaptions: boolean;
+};
+
 async function insertTranscript(
   audioUploadId: UploadId,
-  segments: readonly TranscriptSegment[],
+  { segments, language, fromCaptions }: TranscriptToSave,
   executor: Executor = db,
 ) {
   const content = transcriptText(segments);
@@ -34,6 +43,8 @@ async function insertTranscript(
     audioUploadId,
     content,
     segments: [...segments],
+    language,
+    fromCaptions,
     charCount: content.length,
   });
 }
@@ -45,15 +56,79 @@ async function insertTranscript(
  */
 async function saveCompletedTranscript(
   audioUploadId: UploadId,
-  segments: readonly TranscriptSegment[],
+  transcript: TranscriptToSave,
   claimToken: string,
 ) {
   return db.transaction(async (tx) => {
     const ownsJob = await jobs.completeAudioJob(audioUploadId, claimToken, tx);
     if (!ownsJob) return false;
 
-    await insertTranscript(audioUploadId, segments, tx);
+    await insertTranscript(audioUploadId, transcript, tx);
     return true;
+  });
+}
+
+/**
+ * A completed YouTube job's transcript of the video, whoever's job it is, or
+ * null when no one has one. The one read here not scoped by owner: it only
+ * matches YouTube transcripts, the text of a public video, and the caller
+ * copies it into a job of its own rather than linking anyone to this one.
+ *
+ * The video's captions are only for a request that takes them.
+ */
+async function findYoutubeTranscript(
+  youtubeVideoId: string,
+  { useCaptionsIfAvailable }: { useCaptionsIfAvailable: boolean },
+) {
+  const [row] = await db
+    .select({
+      content: TranscriptContents.content,
+      segments: TranscriptContents.segments,
+      language: TranscriptContents.language,
+      fromCaptions: TranscriptContents.fromCaptions,
+      charCount: TranscriptContents.charCount,
+    })
+    .from(AudioTranscriptionJobs)
+    .innerJoin(
+      TranscriptContents,
+      eq(
+        TranscriptContents.audioUploadId,
+        AudioTranscriptionJobs.audioUploadId,
+      ),
+    )
+    .where(
+      and(
+        eq(AudioTranscriptionJobs.youtubeVideoId, youtubeVideoId),
+        eq(AudioTranscriptionJobs.status, "completed"),
+        useCaptionsIfAvailable
+          ? undefined
+          : eq(TranscriptContents.fromCaptions, false),
+      ),
+    )
+    .limit(1);
+
+  return row ?? null;
+}
+
+type ReusableTranscript = NonNullable<
+  Awaited<ReturnType<typeof findYoutubeTranscript>>
+>;
+
+/**
+ * A YouTube job that starts out completed, with a copy of a transcript the
+ * video already has, in one transaction. Nothing is fetched or transcribed
+ * for it, so no audio is recorded for it either.
+ */
+async function createReusedYoutubeJob(
+  job: Omit<Parameters<typeof jobs.createAudioJob>[0], "status">,
+  transcript: ReusableTranscript,
+) {
+  await db.transaction(async (tx) => {
+    await jobs.createAudioJob({ ...job, status: "completed" }, tx);
+    await tx.insert(TranscriptContents).values({
+      audioUploadId: job.audioUploadId,
+      ...transcript,
+    });
   });
 }
 
@@ -151,6 +226,8 @@ async function findMessageTranscriptAttachments(
 
 export const transcripts = {
   saveCompletedTranscript,
+  findYoutubeTranscript,
+  createReusedYoutubeJob,
   findTranscripts,
   findMessageTranscriptAttachments,
 };

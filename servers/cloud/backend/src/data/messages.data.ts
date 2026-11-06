@@ -1,3 +1,4 @@
+import type { MessageSource } from "@parley/contract";
 import { and, asc, desc, eq, gt, lt, or, sql } from "drizzle-orm";
 import {
   Attachments,
@@ -23,6 +24,7 @@ const messageColumns = {
   content: ChatMessages.content,
   chosenModelId: ChatMessages.chosenModelId,
   stopped: ChatMessages.stopped,
+  sources: ChatMessages.sources,
   conversationId: ChatMessages.conversationId,
   createdAt: ChatMessages.createdAt,
 };
@@ -310,6 +312,7 @@ async function createMessage(
     userId: string;
     chosenModelId?: string;
     stopped?: boolean;
+    sources?: MessageSource[];
   },
   executor: Executor = db,
 ) {
@@ -470,6 +473,7 @@ async function persistAndUnclaimChatTurn(turn: {
   assistantContent: string;
   /** The reply was stopped partway, so `assistantContent` is what came. */
   stopped?: boolean;
+  sources?: MessageSource[];
   conversationTitle?: string;
   contextWindowMessageCount: number;
   claimToken: string;
@@ -491,6 +495,7 @@ async function persistAndUnclaimChatTurn(turn: {
           content: turn.assistantContent,
           chosenModelId: turn.chosenModelId,
           stopped: turn.stopped ?? false,
+          sources: turn.sources ?? [],
           conversationId: turn.conversationId,
           userId: turn.userId,
         },

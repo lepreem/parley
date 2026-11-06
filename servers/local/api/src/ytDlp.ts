@@ -33,10 +33,15 @@ function commonArgs() {
   ];
 }
 
-function run(args: readonly string[]): Promise<string> {
+function run(
+  args: readonly string[],
+  abortSignal?: AbortSignal,
+): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(getApiEnv().YT_DLP_PATH, args, {
+      windowsHide: true,
       stdio: ["ignore", "pipe", "pipe"],
+      ...(abortSignal ? { signal: abortSignal } : {}),
     });
     let stdout = "";
     let stderr = "";
@@ -71,14 +76,14 @@ export type VideoInfo = FormatSize & {
 };
 
 /** The video's metadata, with the audio format a download would pick. */
-async function probe(url: string): Promise<VideoInfo> {
-  const json = await run([
-    ...commonArgs(),
-    "--dump-single-json",
-    "--format",
-    AUDIO_FORMAT,
-    url,
-  ]);
+async function probe(
+  url: string,
+  abortSignal?: AbortSignal,
+): Promise<VideoInfo> {
+  const json = await run(
+    [...commonArgs(), "--dump-single-json", "--format", AUDIO_FORMAT, url],
+    abortSignal,
+  );
   return JSON.parse(json) as VideoInfo;
 }
 
@@ -90,22 +95,26 @@ async function downloadAudio(
   url: string,
   directory: string,
   maxBytes: number,
+  abortSignal?: AbortSignal,
 ): Promise<void> {
-  await run([
-    ...commonArgs(),
-    "--quiet",
-    "--no-warnings",
-    "--format",
-    AUDIO_FORMAT,
-    "--output",
-    `${directory}/audio.%(ext)s`,
-    "--max-filesize",
-    String(maxBytes),
-    // YouTube's media servers can refuse downloads that aren't ranged.
-    "--http-chunk-size",
-    "1M",
-    url,
-  ]);
+  await run(
+    [
+      ...commonArgs(),
+      "--quiet",
+      "--no-warnings",
+      "--format",
+      AUDIO_FORMAT,
+      "--output",
+      `${directory}/audio.%(ext)s`,
+      "--max-filesize",
+      String(maxBytes),
+      // YouTube's media servers can refuse downloads that aren't ranged.
+      "--http-chunk-size",
+      "1M",
+      url,
+    ],
+    abortSignal,
+  );
 }
 
 /** Startup health check: fails if yt-dlp can't be run. */

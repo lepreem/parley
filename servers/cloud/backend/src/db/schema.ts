@@ -1,3 +1,4 @@
+import type { MessageSource } from "@parley/contract";
 import {
   bigint,
   boolean,
@@ -12,6 +13,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { pgEnum } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import type { TranscriptSegment } from "@parley/server-kit/transcription/transcript";
 
 export const jobStatusEnum = pgEnum("job_status", [
@@ -86,32 +88,40 @@ export const Attachments = pgTable(
 ).enableRLS();
 
 /** Transcription processing state for an audio attachment. */
-export const AudioTranscriptionJobs = pgTable("audio_transcription_jobs", {
-  audioUploadId: text("audio_upload_id")
-    .notNull()
-    .primaryKey()
-    .references(() => Attachments.attachmentId, {
-      onDelete: "cascade",
-    }),
-  source: text("source", { enum: jobSources }).notNull(),
-  // Origin URL for 'youtube' jobs; null for direct uploads. Stored for history
-  // display and to enable transcript caching by video id later.
-  YT_sourceUrl: text("YT_source_url"),
-  status: jobStatusEnum("status").notNull().default("queued"),
-  // queued | processing | completed | failed
-  error: text("error"),
-  // RabbitMQ redelivers an unACKed message after its consumer connection closes,
-  // but that worker may still finish its AI call after a network split. Every
-  // claim replaces this fencing token, and terminal writes must still own it so
-  // a disconnected worker cannot commit after its replacement has taken over.
-  claimToken: uuid("claim_token"),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .defaultNow()
-    .$onUpdate(() => new Date())
-    .notNull(),
-  // Model used to transcribe the audio. Null falls back to the default
-  transcriptModelId: text("transcription_model_id"),
-}).enableRLS();
+export const AudioTranscriptionJobs = pgTable(
+  "audio_transcription_jobs",
+  {
+    audioUploadId: text("audio_upload_id")
+      .notNull()
+      .primaryKey()
+      .references(() => Attachments.attachmentId, {
+        onDelete: "cascade",
+      }),
+    source: text("source", { enum: jobSources }).notNull(),
+    // The video a 'youtube' job transcribes; null for direct uploads, and for
+    // YouTube jobs from before it was kept. A completed one's transcript is
+    // reused for the same video rather than transcribed again.
+    youtubeVideoId: text("youtube_video_id"),
+    status: jobStatusEnum("status").notNull().default("queued"),
+    // queued | processing | completed | failed
+    error: text("error"),
+    // RabbitMQ redelivers an unACKed message after its consumer connection closes,
+    // but that worker may still finish its AI call after a network split. Every
+    // claim replaces this fencing token, and terminal writes must still own it so
+    // a disconnected worker cannot commit after its replacement has taken over.
+    claimToken: uuid("claim_token"),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    // findYoutubeTranscript: only a completed job has a transcript to reuse.
+    index("audio_transcription_jobs_youtube_video_completed_idx")
+      .on(table.youtubeVideoId)
+      .where(sql`${table.status} = 'completed'`),
+  ],
+).enableRLS();
 
 /** Chat conversations owned by a user. */
 export const Conversations = pgTable(
@@ -171,6 +181,8 @@ export const ChatMessages = pgTable(
     // An assistant reply someone stopped partway; its content is what came
     // before they did.
     stopped: boolean("stopped").default(false).notNull(),
+    // The web pages a search found for an assistant message.
+    sources: jsonb("sources").$type<MessageSource[]>().default([]).notNull(),
 
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
@@ -256,6 +268,11 @@ export const AttachmentTurnReservations = pgTable(
  *   paragraph (transcriptText in @parley/server-kit/transcription/transcript).
  * - segments: what the transcriber heard, with when; null for transcripts
  *   made before timestamps were kept.
+ * - language: the BCP-47 tag of the language it's in ("de", "ar-JO"), as
+ *   Deepgram detected it or the captions were labelled; null when neither
+ *   named one.
+ * - fromCaptions: it's a YouTube video's own captions, not its audio
+ *   transcribed, so it's reused only for a request that takes captions.
  * - charCount lets a chat turn be budgeted without reading the body.
  */
 export const TranscriptContents = pgTable("transcript_contents", {
@@ -267,6 +284,8 @@ export const TranscriptContents = pgTable("transcript_contents", {
     }),
   content: text("content").notNull(),
   segments: jsonb("segments").$type<TranscriptSegment[]>(),
+  language: text("language"),
+  fromCaptions: boolean("from_captions").notNull().default(false),
   charCount: integer("char_count").notNull(),
 }).enableRLS();
 

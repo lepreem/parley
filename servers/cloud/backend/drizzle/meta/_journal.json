@@ -43,6 +43,34 @@
       "when": 1793269926893,
       "tag": "0005_tolerate_owner_change",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793352363482,
+      "tag": "0006_youtube_video_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793507605526,
+      "tag": "0007_transcript_language",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793654542355,
+      "tag": "0008_transcript_from_captions",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793778075794,
+      "tag": "0009_message_sources",
+      "breakpoints": true
     }
   ]
 }

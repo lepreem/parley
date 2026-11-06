@@ -1,102 +1,149 @@
-import { spawn } from "node:child_process";
-import path from "node:path";
-import { createInterface } from "node:readline";
-import { fileURLToPath } from "node:url";
-import type { TranscribeModel } from "@parley/contract";
-import type { TranscriptSegment } from "@parley/server-kit/transcription/transcript";
-import { getBaseEnv } from "../env";
+import {
+  addNativeLogListener,
+  initWhisper,
+  initWhisperVad,
+  loadWhisperModule,
+  toggleNativeLog,
+} from "@fugood/whisper.node";
+import { logger } from "@parley/server-kit/runtime/logger";
 import { withTimeout } from "@parley/server-kit/runtime/withTimeout";
+import type { TranscriptSegment } from "@parley/server-kit/transcription/transcript";
+import { decodeAudio, pingFfmpeg } from "./decodeAudio";
+import { type ModelSource, modelFile } from "./modelFiles";
+import { type Span, speechOnly } from "./speechOnly";
+
+const log = logger.child({ component: "whisper" });
 
 /**
- * Transcription runs on this machine: faster-whisper, in whisper.py, which uv
- * runs with the dependencies the script declares. The build puts the script
- * next to the bundle, so it sits beside this module either way.
+ * Transcription runs on this machine, with whisper.cpp through
+ * @fugood/whisper.node, whose prebuilt binding npm installs for this platform:
+ * Metal on Apple Silicon, the CPU elsewhere. ffmpeg decodes the file first,
+ * and voice detection cuts out the silences.
  */
-const SCRIPT_PATH = fileURLToPath(new URL("./whisper.py", import.meta.url));
 
-/** Transcription couldn't finish; the message is what Whisper said went wrong. */
-class WhisperError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "WhisperError";
-  }
+/**
+ * The Whisper model every file is transcribed with, in whisper.cpp's format:
+ * Small, fast enough on a CPU for long audio and accurate enough to
+ * summarize. It comes from Hugging Face at a fixed commit, rather than
+ * whatever the repo holds today, and is checked against the sha256 Hugging
+ * Face lists for it there. Moving to a newer commit, or another model, means
+ * taking the new hash from the same place.
+ */
+const WHISPER_MODEL: ModelSource = {
+  name: "ggml-small.bin",
+  url: "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-small.bin",
+  sha256: "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b",
+};
+
+/** Silero, the voice detection model whisper.cpp runs. */
+const VAD_MODEL: ModelSource = {
+  name: "ggml-silero-v6.2.0.bin",
+  url: "https://huggingface.co/ggml-org/whisper-vad/resolve/9ffd54a1e1ee413ddf265af9913beaf518d1639b/ggml-silero-v6.2.0.bin",
+  sha256: "2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987",
+};
+
+/**
+ * Whether Whisper runs on the GPU. Not on an Intel Mac: a transcription sat for
+ * half an hour there without finishing a segment, and such a Mac's GPU has little
+ * to offer it anyway.
+ */
+export function whisperUsesGpu(
+  platform: NodeJS.Platform = process.platform,
+  arch: string = process.arch,
+): boolean {
+  return !(platform === "darwin" && arch === "x64");
 }
 
 /**
- * What a failed run said went wrong. Python ends with the exception, whose
- * message can run over several lines, so it's everything from the exception
- * line on; anything else is reported by its last line.
+ * Loads the binding, once. whisper.cpp prints its every step to stderr unless
+ * it's given somewhere else to log, so only its errors reach the logs.
  */
-function errorOf(stderr: string) {
-  const lines = stderr.trim().split("\n");
-  const exception = lines.findLastIndex((line) =>
-    /^[\w.]+(Error|Exception)\b/.test(line),
-  );
-  return lines.slice(exception === -1 ? -1 : exception).join("\n");
-}
-
-/** Where models are kept once downloaded. */
-function modelsDir() {
-  return path.join(getBaseEnv().DATA_DIR, "models");
+let loaded: Promise<void> | undefined;
+function loadWhisper() {
+  loaded ??= (async () => {
+    await loadWhisperModule();
+    addNativeLogListener((level, text) => {
+      if (level === "error") log.warn(text.trim());
+    });
+    await toggleNativeLog(true);
+  })();
+  return loaded;
 }
 
 /**
- * Runs whisper.py with `args` under uv, passing each line it prints to
- * `onLine`. Aborting `abortSignal` kills the run and rejects with the
- * signal's reason. A failed run rejects with the error it printed.
+ * Where there's speech in `pcm`. Pauses up to two seconds stay in, with
+ * speech padded by 400ms either side, as faster-whisper's voice detection
+ * did, so no word is clipped.
  */
-async function runWhisper(
-  args: readonly string[],
-  {
-    abortSignal,
-    onLine = () => {},
-  }: { abortSignal?: AbortSignal; onLine?: (line: string) => void } = {},
-): Promise<void> {
-  const child = spawn(
-    getBaseEnv().UV_PATH,
-    ["run", "--quiet", "--script", SCRIPT_PATH, ...args],
-    {
-      stdio: ["ignore", "pipe", "pipe"],
-      // Download progress bars would bury the error a failed run prints.
-      env: { ...process.env, HF_HUB_DISABLE_PROGRESS_BARS: "1" },
-      ...(abortSignal ? { signal: abortSignal } : {}),
-    },
-  );
-
-  // A run that can't start, or is killed, reports why here; it still closes.
-  let failure: unknown;
-  child.on("error", (error) => (failure ??= error));
-  const closed = new Promise<number | null>((resolve) =>
-    child.on("close", resolve),
-  );
-  let stderr = "";
-  child.stderr.setEncoding("utf8").on("data", (chunk) => (stderr += chunk));
-
+async function detectSpeech(pcm: Buffer, vadPath: string): Promise<Span[]> {
+  const vad = await initWhisperVad({ filePath: vadPath, useGpu: false });
   try {
-    for await (const line of createInterface({ input: child.stdout })) {
-      onLine(line);
-    }
-    const code = await closed;
-
-    if (abortSignal?.aborted) throw abortSignal.reason;
-    if (failure) throw failure;
-    if (code !== 0) {
-      throw new WhisperError(
-        errorOf(stderr) || `whisper.py exited with code ${code}`,
-      );
-    }
+    const segments = await vad.detectSpeechData(arrayBufferOf(pcm), {
+      minSilenceDurationMs: 2000,
+      speechPadMs: 400,
+    });
+    // whisper.cpp times voice detection in hundredths of a second.
+    return segments.map(({ t0, t1 }) => ({ startMs: t0 * 10, endMs: t1 * 10 }));
   } finally {
-    // Whatever stopped reading the transcript, the run doesn't outlive it.
-    if (child.exitCode === null) child.kill();
+    await vad.release();
   }
 }
 
+/** The bytes of `buffer`, as the binding takes them. */
+function arrayBufferOf(buffer: Buffer): ArrayBuffer {
+  return buffer.buffer.slice(
+    buffer.byteOffset,
+    buffer.byteOffset + buffer.byteLength,
+  ) as ArrayBuffer;
+}
+
 /**
- * Startup health check: fails if uv can't run the script or install what it
- * needs. The first one installs faster-whisper, so no job waits on that.
+ * Startup health check: fails if the binding or ffmpeg can't load on this
+ * machine. Models aren't fetched here; the first transcription downloads its
+ * own.
  */
 export async function pingTranscribeAI(): Promise<void> {
-  await runWhisper(["--check"]);
+  await Promise.all([loadWhisper(), pingFfmpeg()]);
+}
+
+type Whisper = Awaited<ReturnType<typeof initWhisper>>;
+
+/**
+ * The segments `whisper` hears in `pcm`, in the language it's spoken in.
+ *
+ * Aborting rejects straight away, with the signal's reason, because the
+ * binding never settles a run's promise once it's stopped. Stopping is only
+ * for a run that's gone wrong: the run goes on regardless, and for far longer
+ * than it would have (a 10-second clip held its context for nearly three
+ * minutes, when finishing would have taken nine seconds). Releasing a context
+ * under it left the next context stuck, so a context whose run was aborted
+ * mustn't be released. It can be run again: the next run waits for the old one.
+ */
+async function runWhisper(
+  whisper: Whisper,
+  pcm: Buffer,
+  abortSignal: AbortSignal,
+  onNewSegments?: () => void,
+) {
+  const { stop, promise } = whisper.transcribeData(
+    arrayBufferOf(pcm),
+    // whisper.cpp assumes English unless told to detect the language.
+    { language: "auto", ...(onNewSegments ? { onNewSegments } : {}) },
+  );
+  let onAbort = () => {};
+  const aborted = new Promise<never>((_, reject) => {
+    onAbort = () => {
+      void stop();
+      reject(abortSignal.reason);
+    };
+  });
+  abortSignal.addEventListener("abort", onAbort, { once: true });
+  try {
+    const { segments } = await Promise.race([promise, aborted]);
+    return segments;
+  } finally {
+    abortSignal.removeEventListener("abort", onAbort);
+  }
 }
 
 // How long a transcription takes depends on the audio's length and this
@@ -109,56 +156,146 @@ const BETWEEN_SEGMENTS_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 
 /**
  * The audio file at `audioPath`, transcribed: each segment Whisper heard, in
- * order. Whisper reads the format from the file's contents.
+ * order, timed against the original audio. The language is detected.
+ * `cancelled` stops whatever can be stopped and skips whatever hasn't started.
+ * Whisper itself is left to finish: see runWhisper for why that's quicker.
  */
 export async function transcribeAI(
-  model: string,
   audioPath: string,
+  cancelled: AbortSignal,
 ): Promise<TranscriptSegment[]> {
-  const segments: TranscriptSegment[] = [];
-
-  await withTimeout(
+  cancelled.throwIfAborted();
+  return withTimeout(
     {
       timeoutMs: TRANSCRIBE_TIMEOUT_MS,
       firstProgressTimeoutMs: FIRST_SEGMENT_TIMEOUT_MS,
       progressTimeoutMs: BETWEEN_SEGMENTS_TIMEOUT_MS,
     },
-    ({ abortSignal, markProgress }) =>
-      runWhisper(["--model", model, "--models-dir", modelsDir(), audioPath], {
-        abortSignal,
-        onLine: (line) => {
-          markProgress();
-          segments.push(JSON.parse(line) as TranscriptSegment);
-        },
-      }),
-  );
+    async ({ abortSignal, markProgress }) => {
+      const notWanted = AbortSignal.any([abortSignal, cancelled]);
+      const [pcm, vadPath, modelPath] = await Promise.all([
+        decodeAudio(audioPath, notWanted),
+        modelFile(VAD_MODEL, notWanted),
+        modelFile(WHISPER_MODEL, notWanted),
+        loadWhisper(),
+      ]);
 
-  return segments;
+      notWanted.throwIfAborted();
+      const spans = await detectSpeech(pcm, vadPath);
+      notWanted.throwIfAborted();
+      if (spans.length === 0) return [];
+      const speech = speechOnly(pcm, spans);
+
+      const whisper = await initWhisper({
+        filePath: modelPath,
+        useGpu: whisperUsesGpu(),
+      });
+      try {
+        notWanted.throwIfAborted();
+        const segments = await runWhisper(
+          whisper,
+          speech.pcm,
+          abortSignal,
+          markProgress,
+        );
+        cancelled.throwIfAborted();
+
+        // The binding times segments in milliseconds.
+        return segments.map(({ t0, t1, text }) => ({
+          start: speech.toOriginalMs(t0) / 1000,
+          end: speech.toOriginalMs(t1) / 1000,
+          text,
+        }));
+      } finally {
+        // An aborted run may still be going; see runWhisper.
+        if (!abortSignal.aborted) await whisper.release();
+      }
+    },
+  );
 }
 
 /**
- * The Whisper models faster-whisper downloads by name, smallest and fastest
- * first. Larger ones transcribe better and take longer.
+ * How long Whisper stays in memory after a dictated message. Loading it takes
+ * long enough to feel, and someone dictating tends to go on to the next
+ * message; a file's transcription doesn't care, so it loads its own.
  */
-const TRANSCRIBE_MODELS: readonly TranscribeModel[] = [
-  { id: "tiny", name: "Whisper Tiny" },
-  { id: "base", name: "Whisper Base" },
-  { id: "small", name: "Whisper Small" },
-  { id: "medium", name: "Whisper Medium" },
-  { id: "large-v3-turbo", name: "Whisper Large v3 Turbo" },
-  { id: "large-v3", name: "Whisper Large v3" },
-];
+const DICTATION_KEEP_LOADED_MS = 5 * 60 * 1000;
 
-export async function listTranscribeModels(): Promise<TranscribeModel[]> {
-  return [...TRANSCRIBE_MODELS];
+let dictationWhisper: Promise<Whisper> | undefined;
+let dictationRelease: NodeJS.Timeout | undefined;
+let lastDictation: Promise<unknown> = Promise.resolve();
+
+function releaseDictationWhisper() {
+  const whisper = dictationWhisper;
+  dictationWhisper = undefined;
+  void whisper?.then((loaded) => loaded.release()).catch(() => {});
 }
 
-/** Whether a model id can be used for transcription. */
-export async function isValidTranscribeModel(
-  modelId: string,
-): Promise<boolean> {
-  return TRANSCRIBE_MODELS.some((model) => model.id === modelId);
+/**
+ * The recording at `audioPath`, as text; empty if nobody spoke. `cancelled`
+ * skips whatever hasn't started, since the next message waits on this one.
+ * Whisper itself is left to finish: see runWhisper for why that's quicker.
+ */
+async function dictate(
+  audioPath: string,
+  cancelled: AbortSignal,
+): Promise<string> {
+  cancelled.throwIfAborted();
+  clearTimeout(dictationRelease);
+  let aborted = () => false;
+  try {
+    const text = await withTimeout(
+      { timeoutMs: FIRST_SEGMENT_TIMEOUT_MS },
+      async ({ abortSignal }) => {
+        const notWanted = AbortSignal.any([abortSignal, cancelled]);
+        aborted = () => notWanted.aborted;
+        const [pcm, vadPath, modelPath] = await Promise.all([
+          decodeAudio(audioPath, notWanted),
+          modelFile(VAD_MODEL, notWanted),
+          modelFile(WHISPER_MODEL, notWanted),
+          loadWhisper(),
+        ]);
+
+        const spans = await detectSpeech(pcm, vadPath);
+        notWanted.throwIfAborted();
+        if (spans.length === 0) return "";
+
+        dictationWhisper ??= initWhisper({ filePath: modelPath, useGpu: true });
+        const segments = await runWhisper(
+          await dictationWhisper,
+          speechOnly(pcm, spans).pcm,
+          abortSignal,
+        );
+        return segments
+          .map(({ text }) => text)
+          .join("")
+          .trim();
+      },
+    );
+    dictationRelease = setTimeout(
+      releaseDictationWhisper,
+      DICTATION_KEEP_LOADED_MS,
+    );
+    dictationRelease.unref();
+    return text;
+  } catch (error) {
+    // A run that failed by itself is over, so the next message can start from
+    // a fresh context. An aborted one may not be (see runWhisper): its context
+    // stays until a later message finishes and sets the timer above.
+    if (!aborted()) releaseDictationWhisper();
+    throw error;
+  }
 }
 
-/** Fast enough on a CPU for long audio, and accurate enough to summarize. */
-export const DEFAULT_TRANSCRIBE_MODEL = "small";
+/**
+ * A dictated recording, as text. One at a time, since they share a context;
+ * this doesn't wait on files being transcribed, which have their own.
+ */
+export function dictateAI(
+  audioPath: string,
+  cancelled: AbortSignal,
+): Promise<string> {
+  const run = lastDictation.then(() => dictate(audioPath, cancelled));
+  lastDictation = run.catch(() => {});
+  return run;
+}

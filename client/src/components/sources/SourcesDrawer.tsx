@@ -30,7 +30,7 @@ export function SourcesDrawer() {
   const ready = useServerReady();
   const toast = useToast();
   const draftKey = useDraftKey();
-  const { attachExisting } = useSources(draftKey);
+  const { attachExisting, dropDeletedSource } = useSources(draftKey);
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -196,6 +196,7 @@ export function SourcesDrawer() {
           confirmLabel="Delete source"
           onConfirm={() => {
             deleteJob.mutate({ audioUploadId: deleteTarget.audioUploadId });
+            dropDeletedSource(deleteTarget.audioUploadId);
             if (
               openSource?.kind === "transcript" &&
               openSource.audioUploadId === deleteTarget.audioUploadId

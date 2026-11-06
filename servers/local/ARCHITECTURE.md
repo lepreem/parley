@@ -29,51 +29,60 @@ row first, then the file. Whatever a crash leaves between the two, and audio a
 YouTube fetch writes for a job deleted while it ran, is a file no row uses:
 startup removes those before anything else runs.
 
+A job's audio stays as long as the job does. The client plays it from the
+path `GET /jobs/transcribe/:audioUploadId/audio` answers with,
+`/jobs/transcribe/:audioUploadId/audio/file`, or from its own copy in the
+browser, and plays a YouTube job's video from YouTube.
+
 The client reads an image from `GET /upload/image/:imageUploadId`. The model is
 handed it inline, base64-encoded in the prompt (`chatImageInput`).
 
 ## Chat
 
 Chat runs on the user's own Claude Code (`core/ai/ai_chat_client.ts`): each
-turn is one `claude --print` run, with the app's system prompt and no tools,
-MCP servers, slash commands or settings, so none of the user's own setup
-reaches the conversation. Claude Code keeps history only in its own sessions,
+turn is one `claude --print` run from the home folder, on the user's own setup:
+their settings, permissions, CLAUDE.md, MCP servers and hooks decide what it can
+do, as in their terminal. Nothing can answer a permission prompt under
+`--print`, so a tool their settings don't allow is refused. The app adds only
+instructions for reading the conversation and what the person picked for that
+message: model, effort and web search. Its own small jobs, like titles, run as a
+plain model with no tools or settings, since they read text they shouldn't act
+on. Claude Code keeps history only in its own sessions,
 while the app's changes under edits and deletes, so each run is handed the
 whole conversation as one message: every turn in `<user>` or `<assistant>`
 tags, its images in place. The models are Claude Code's aliases (`opus`,
 `sonnet`, `haiku`), which follow the newest of each family. `CLAUDE_PATH`
 names the program when it isn't on PATH.
 
-Chat can also run on the user's own Codex (`core/ai/codex.ts`), on their
-ChatGPT plan: each turn is one `codex app-server` run, spoken to in JSON-RPC
-over stdin and stdout, with an ephemeral, read-only thread whose config
-turns off the shell, web search, apps, plugins, skills, sub-agents, hooks,
-memories, AGENTS.md files and each of the user's MCP servers, and drops the
-coding agent's own instructions for the app's. Requests the server makes of
-the app (approvals) are refused, and a turn in which a tool turns up anyway
-fails. It's handed the same one message. Its models are its own catalog's,
-listed at startup, with ids prefixed `codex/` to keep them apart from Claude
-Code's; titles go to Haiku, or Codex's default model without Claude Code.
-`CODEX_PATH` names the program when it isn't on PATH.
-
 ## Transcription
 
-Audio is transcribed on this machine by faster-whisper, in
-`core/ai/whisper.py`, which uv runs with the dependencies the script declares
-(`uv run --script`). The script prints each segment as it's transcribed;
-`transcribeAI` joins them into paragraphs, breaking where the speaker pauses
-or at a sentence end once a paragraph passes 500 characters, and gives up on
-a run that prints nothing for ten minutes. Models download into
-`DATA_DIR/models` the first time they're used, from Hugging Face. The build
-copies the script next to the bundle.
+Audio is transcribed on this machine by whisper.cpp, through the
+`@fugood/whisper.node` binding, whose prebuilt build for this platform npm
+installs (Metal on Apple Silicon, the CPU elsewhere). ffmpeg, from
+`ffmpeg-static`, decodes the file to 16kHz PCM (`core/ai/decodeAudio.ts`);
+Silero voice detection finds the speech, and only that is transcribed, with
+times mapped back to the original (`core/ai/speechOnly.ts`). The language is
+detected. The transcript is joined into paragraphs, breaking where the
+speaker pauses or at a sentence end once a paragraph passes 500 characters,
+and `transcribeAI` gives up on a run that finishes no segment for ten
+minutes. Models download into `DATA_DIR/models` the first time they're used,
+from Hugging Face at a fixed commit, and a download whose sha256 isn't the one
+pinned in `ai_transcribe_client.ts` is thrown away (`core/ai/modelFiles.ts`).
+
+Dictating a message skips all of the above but the model: `POST
+/speech/transcribe` takes a short recording as its body and answers with the
+text, with no job, no row and no file left behind. Recordings go one at a time
+through a Whisper context that stays loaded for five minutes after the last
+one, so the next message doesn't wait for it to load. If the request goes away,
+a recording not yet being transcribed is skipped, and one that is gets to
+finish, because stopping whisper.cpp ties up its context for far longer (see
+`runWhisper`).
 
 ## External dependencies
 
-The programs the API runs: Claude Code or Codex (logged in), uv and yt-dlp.
-It runs a **fail-fast preflight** on boot (`startup.ts` → `verifyServices`):
-if any of them can't run, it aborts instead of starting half-alive. Chat
-needs only one of Claude Code and Codex; a missing one is logged, and its
-models aren't listed until a restart finds it.
+The programs the API runs: Claude Code (logged in), ffmpeg and yt-dlp, and it loads the whisper.cpp binding. It runs a
+**fail-fast preflight** on boot (`startup.ts` → `verifyServices`): if any of
+them can't run, it aborts instead of starting half-alive.
 
 ## Message queues
 
@@ -157,20 +166,24 @@ One process, `api`, on the user's machine, listening on `127.0.0.1:PORT`
 only. It serves the built client (`client/dist`, `CLIENT_DIR`) on its own
 origin, so the page, the API and its event stream share one origin and one
 port. Under `npm run dev` the client isn't built: Vite serves it on its own
-port and calls the API on this one, as the hosted client does.
+port and calls the API on this one. The desktop app (`desktop/`) starts this
+same process and shows the page in its own window.
 
 With no sign-in, the browser is the way in, so the API answers only pages it
-trusts (`api/src/allowedHosts.ts`): this machine's, and the origins listed in
-`ALLOWED_ORIGINS`, meant for the hosted client.
+trusts (`api/src/allowedHosts.ts`): this machine's.
 
-- a request addressed to anything but `localhost`, `127.0.0.1`, `[::1]` or a
-  name in `ALLOWED_HOSTS` is refused, which stops DNS rebinding;
+- a request addressed to anything but `localhost`, `127.0.0.1`, `[::1]`, a
+  name in `ALLOWED_HOSTS` or the desktop app's phone access name is refused,
+  which stops DNS rebinding;
+- a request under the phone access name must also carry the account that turned
+  it on, in the `Tailscale-User-Login` header `tailscale serve` sets, since a
+  tailnet can hold other people's devices. The app sends the name and account
+  over its IPC channel (`process.on("message")`), so it can turn this on and off
+  without restarting the server. A name in `ALLOWED_HOSTS` has no such check;
 - CORS lets only a trusted page read a response; any other site's JSON or
   DELETE is refused at the preflight;
 - a form post, which a browser sends cross-site without asking, is refused
-  unless it comes from a trusted page;
-- when Chrome asks before a public page reaches this machine, a trusted
-  page's preflight says it may, and the user allows it once.
+  unless it comes from a trusted page.
 
 Transcription runs inside it, one message per queue at a time, so there are no
 worker replicas to scale.

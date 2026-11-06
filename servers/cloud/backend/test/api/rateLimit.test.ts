@@ -32,9 +32,11 @@ vi.mock("../../src/auth/auth", async (importOriginal) => {
   };
 });
 
-vi.mock("../../src/ai/ai_chat_client", async (importActual) => {
+vi.mock("../../src/ai/ai_chat_client/ai_chat_client", async (importActual) => {
   const actual =
-    await importActual<typeof import("../../src/ai/ai_chat_client")>();
+    await importActual<
+      typeof import("../../src/ai/ai_chat_client/ai_chat_client")
+    >();
   return {
     ...actual, // preserves DEFAULT_MODELS, used at upload.schema import time
     getChatModelData: mockgetChatModelData,
@@ -42,7 +44,7 @@ vi.mock("../../src/ai/ai_chat_client", async (importActual) => {
 });
 
 import { createApp } from "../../src/app";
-import { resetRateLimits } from "../../src/middleware/rateLimit.middleware";
+import { resetRateLimits } from "../../src/memory/rateLimitCounts";
 import { authedHeaders, sessionCookieHeader } from "../helpers/session";
 
 const audioUploadId = "550e8400-e29b-41d4-a716-446655440000";

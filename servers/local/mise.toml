@@ -3,6 +3,3 @@
 # The API fetches YouTube videos with it. Unpinned: YouTube changes often
 # enough that an old yt-dlp is a broken one.
 yt-dlp = "latest"
-# Runs transcription: installs and runs the Python script that uses
-# faster-whisper.
-uv = "latest"

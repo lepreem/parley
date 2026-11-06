@@ -16,13 +16,15 @@ export type SourcesContextValue = {
   addYoutube: (draftKey: string, url: string) => void;
   attachExisting: (draftKey: string, job: ExistingSource) => void;
   removeSource: (draftKey: string, localId: string) => void;
+  dropDeletedSource: (audioUploadId: string) => void;
   retrySource: (draftKey: string, localId: string) => void;
   /** Hands the draft over and empties it — the send path takes ownership. */
   takeDraft: (draftKey: string) => StagedSource[];
   /** Puts a taken draft back when the send it was taken for failed. */
   restoreDraft: (draftKey: string, sources: StagedSource[]) => void;
-  transcriptModelId: string | null;
-  setTranscriptModelId: (modelId: string) => void;
+  /** Whether a YouTube video added from now on takes its captions when it has them. */
+  useCaptionsIfAvailable: boolean;
+  setUseCaptionsIfAvailable: (use: boolean) => void;
 };
 
 export const SourcesContext = createContext<SourcesContextValue | null>(null);

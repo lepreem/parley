@@ -8,7 +8,9 @@
     "./http/cache.middleware": "./src/http/cache.middleware.ts",
     "./http/cursor": "./src/http/cursor.ts",
     "./http/takesBody": "./src/http/takesBody.ts",
+    "./http/audioClip": "./src/http/audioClip.ts",
     "./ids": "./src/ids.ts",
+    "./reasoningEfforts": "./src/reasoningEfforts.ts",
     "./runtime/logger": "./src/runtime/logger.ts",
     "./runtime/parseEnv": "./src/runtime/parseEnv.ts",
     "./runtime/preflight": "./src/runtime/preflight.ts",
@@ -17,7 +19,9 @@
     "./runtime/withTimeout": "./src/runtime/withTimeout.ts",
     "./sse/hub": "./src/sse/hub.ts",
     "./sse/eventQueue": "./src/sse/eventQueue.ts",
-    "./transcription/transcript": "./src/transcription/transcript.ts"
+    "./transcription/jobCancellation": "./src/transcription/jobCancellation.ts",
+    "./transcription/transcript": "./src/transcription/transcript.ts",
+    "./webSources": "./src/webSources.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

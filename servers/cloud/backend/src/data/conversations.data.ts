@@ -59,8 +59,8 @@ async function findOwnedConversation(userId: string, conversationId: string) {
  * mid-turn never gets to release — and an ordinary deploy kills processes
  * mid-turn. Without an expiry that conversation returns 409 for good.
  *
- * Comfortably longer than any single completion can run: replies are capped at
- * MAX_RESPONSE_TOKENS (4,000) and the model call is the only slow step.
+ * Comfortably longer than any single completion can run: the model call is the
+ * only slow step, and chat.complete ends it after 8 minutes.
  */
 export const CLAIM_LEASE_MS = 10 * 60 * 1000;
 

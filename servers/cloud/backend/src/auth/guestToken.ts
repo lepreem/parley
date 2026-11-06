@@ -12,7 +12,7 @@ const GUEST_ISSUER = "parley-guest";
 
 /**
  * How long a guest session lasts, from when it began; nothing extends it.
- * The sweeper deletes guests older than this, whose chats no one can open.
+ * The guest sweep deletes guests older than this, whose chats no one can open.
  */
 export const GUEST_SESSION_SECONDS = 30 * 24 * 60 * 60;
 

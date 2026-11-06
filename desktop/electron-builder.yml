@@ -1,0 +1,71 @@
+appId: com.parley.desktop
+productName: Parley
+copyright: Parley
+directories:
+  output: release
+  buildResources: resources
+# The app itself is the main process and the setup page. Everything native
+# lives outside its archive, next to it, since programs can't start from inside
+# one.
+files:
+  - dist/**
+  - static/**
+  - package.json
+extraResources:
+  - from: build/server
+    to: server
+  # electron-builder leaves out anything under a node_modules folder, however
+  # it's asked, unless that's the folder it's given. Without these the server
+  # finds nothing, or, from inside this repo, this repo's own packages.
+  - from: build/server/node_modules
+    to: server/node_modules
+  - from: build/client
+    to: client
+  - from: build/bin
+    to: bin
+  - from: THIRD_PARTY_NOTICES.md
+    to: THIRD_PARTY_NOTICES.md
+npmRebuild: false
+protocols:
+  - name: Parley
+    schemes: [parley]
+publish:
+  provider: github
+  owner: lepreem
+  repo: parley
+mac:
+  category: public.app-category.productivity
+  target: [dmg]
+  artifactName: Parley-mac-${arch}.${ext}
+  # What the Mac shows when it asks for the microphone.
+  extendInfo:
+    NSMicrophoneUsageDescription: Parley uses the microphone to dictate your messages.
+  # Signed with no identity, which is free and what Apple Silicon needs to run
+  # a program at all. It doesn't get past Gatekeeper; that's the "Open Anyway"
+  # step on the download page.
+  identity: "-"
+  hardenedRuntime: false
+  # Signing rewrites a program, and these two are checked against their pinned
+  # sha256. Both arrive signed already.
+  signIgnore:
+    - "/ffmpeg$"
+    - "/yt-dlp$"
+dmg:
+  artifactName: Parley-mac-${arch}.${ext}
+win:
+  target: [nsis]
+  artifactName: Parley-windows-${arch}.${ext}
+nsis:
+  oneClick: true
+  perMachine: false
+linux:
+  category: Network
+  target: [deb, AppImage]
+  # Each format names this differently, amd64 or x86_64, as its users expect.
+  artifactName: Parley-linux-${arch}.${ext}
+  maintainer: Parley
+  executableName: parley
+  syncDesktopName: true
+  icon: resources/icon.png
+deb:
+  packageName: parley

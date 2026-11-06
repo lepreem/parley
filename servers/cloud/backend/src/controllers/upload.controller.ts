@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { QueuedYoutube, UploadedAudio } from "@parley/contract";
 import { data } from "../data";
-import { audioTranscription } from "../audioTranscription";
-import { uploads } from "../uploads";
+import { audioTranscription } from "../transcription/audioTranscription";
+import { uploads } from "../uploads/uploads";
 import { mq } from "../message-queue/messageQueue";
 import { authed } from "../middleware/auth.middleware";
 import { validate } from "../middleware/validate.middleware";
@@ -10,8 +10,10 @@ import {
   audioConfirmSchema,
   youtubeUploadSchema,
 } from "../schema/upload.schema";
-import { ALREADY_CONFIRMED, uploadRejection } from "../utils/uploadRejection";
+import { ALREADY_CONFIRMED, uploadRejection } from "../uploads/uploadRejection";
 import type { UploadId } from "@parley/server-kit/ids";
+import { youtubeWatchUrl } from "@parley/contract/youtube";
+import { eventHub } from "../sse/hub";
 
 /**
  * POST /upload/audio — a URL the browser PUTs speech audio to, straight into
@@ -57,7 +59,6 @@ export const handleAudioConfirm = authed.createHandlers(
       uploadId: audioUploadId,
       fileName,
       audioSource: source,
-      transcriptModelId,
     } = c.req.valid("json");
 
     const upload = await uploads.check(userId, {
@@ -76,7 +77,6 @@ export const handleAudioConfirm = authed.createHandlers(
       fileName,
       mimeType: upload.contentType,
       sizeBytes: upload.sizeBytes,
-      transcriptModelId,
     });
     if (!queued) {
       return c.json({ message: ALREADY_CONFIRMED }, 409);
@@ -92,33 +92,52 @@ export const handleAudioConfirm = authed.createHandlers(
   },
 );
 
-/** POST /upload/youtube — a YouTube URL fetched out of band by youtube-fetcher. */
+/**
+ * POST /upload/youtube — a YouTube video, fetched out of band by
+ * youtube-fetcher. A video someone has already transcribed isn't fetched
+ * again: the job starts out completed, with a copy of that transcript.
+ */
 export const handleYoutubeUpload = authed.createHandlers(
   validate("json", youtubeUploadSchema),
   async (c) => {
     const { userId } = c.var;
     const {
       youtubeUrl: url,
-      transcriptModelId,
+      youtubeVideoId,
       useCaptionsIfAvailable,
     } = c.req.valid("json");
 
     const audioUploadId: UploadId = randomUUID();
+    const job = {
+      audioUploadId,
+      userId,
+      source: "youtube" as const,
+      youtubeVideoId,
+      fileName: "YouTube audio",
+      mimeType: null,
+      sizeBytes: 0,
+    };
+    const queued = {
+      audioUploadId,
+      source: "youtube",
+      url,
+    } satisfies QueuedYoutube;
+
+    const transcript = await data.transcripts.findYoutubeTranscript(
+      youtubeVideoId,
+      { useCaptionsIfAvailable },
+    );
+    if (transcript) {
+      await data.transcripts.createReusedYoutubeJob(job, transcript);
+      eventHub.send(userId, "jobUpdated", { audioUploadId });
+      return c.json(queued);
+    }
 
     // Created queued with placeholder metadata. When asked to, the fetcher tries
     // the video's captions first and sends them back as the transcript, falling
     // back to the audio when there are none; otherwise it goes straight to the
     // audio, writes it under `audioUploadId` and queues it to be transcribed.
-    await data.jobs.createYoutubeAudioJob({
-      audioUploadId,
-      userId,
-      source: "youtube",
-      youtubeSourceUrl: url,
-      fileName: "YouTube audio",
-      mimeType: null,
-      sizeBytes: 0,
-      transcriptModelId,
-    });
+    await data.jobs.createYoutubeAudioJob(job);
 
     // A failed publish would leave the job queued with no fetcher coming for
     // it; failing it puts that in front of the user instead.
@@ -127,13 +146,11 @@ export const handleYoutubeUpload = authed.createHandlers(
         useCaptionsIfAvailable
           ? mq.queues.YT_FETCH_CAPTIONS
           : mq.queues.YT_FETCH_AUDIO,
-        { audioUploadId, url, userId },
+        // Only the video: a playlist or start time on the link the user
+        // pasted is nothing the fetcher should act on.
+        { audioUploadId, url: youtubeWatchUrl(youtubeVideoId), userId },
       ),
     );
-    return c.json({
-      audioUploadId,
-      source: "youtube",
-      url,
-    } satisfies QueuedYoutube);
+    return c.json(queued);
   },
 );

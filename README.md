@@ -5,34 +5,36 @@ two parts, sharing one client (`client/`) and a wire contract
 (`packages/contract/`): the hosted app, documented in
 [`servers/cloud/README.md`](servers/cloud/README.md), and a server you run on
 your own machine (`servers/local/`), which this README is about. On your
-machine, chat goes through your own Claude Code or Codex and audio is
-transcribed locally with Whisper, so nothing needs an API key.
+machine, chat goes through your own Claude Code and audio is transcribed
+locally with Whisper, so nothing needs an API key.
+
+To use Parley on your computer, download the
+[desktop app](https://github.com/lepreem/parley/releases/latest) for macOS,
+Windows or Linux; [`desktop/`](desktop/README.md) is its code. The rest of this
+README is for running the server from source.
 
 ## Who runs what
 
 An import says whose code it is:
 
-| Import | Lives in | Run by |
-| --- | --- | --- |
-| `@parley/contract` | `packages/contract/` | the client and both servers |
-| `@parley/server-kit/...` | `packages/server-kit/` | both servers, never the client |
-| a relative path | the folder you're in | only that server, or only the client |
+| Import                   | Lives in               | Run by                               |
+| ------------------------ | ---------------------- | ------------------------------------ |
+| `@parley/contract`       | `packages/contract/`   | the client and both servers          |
+| `@parley/server-kit/...` | `packages/server-kit/` | both servers, never the client       |
+| a relative path          | the folder you're in   | only that server, or only the client |
 
 The two servers never import from each other.
 
 ## What you need
 
 - **Node and npm**, to install and start it. The rest of the toolchain
-  (Node 22, uv and yt-dlp, pinned in `mise.toml` and `servers/local/mise.toml`)
+  (Node 22 and yt-dlp, pinned in `mise.toml` and `servers/local/mise.toml`)
   comes through [mise](https://mise.jdx.dev), which `npm install` brings
   along: the root's npm scripts install those on first run and run the app
   with them.
-- **Claude Code or Codex, logged in, or both.** For Claude Code, run `claude`
-  once and sign in; for [Codex](https://developers.openai.com/codex), run
-  `codex login` and sign in with ChatGPT. Chat uses your Claude or ChatGPT
-  plan, so it counts against that plan's limits; check Anthropic's or
-  OpenAI's terms for your use. The model picker lists the models of each one
-  that's logged in when the app starts, so restart it after signing in.
+- **Claude Code, logged in.** Run `claude` once and sign in. Chat uses your
+  Claude plan, so it counts against your plan's limits; check Anthropic's
+  terms for your use.
 
 ## Run it
 
@@ -43,11 +45,14 @@ npm run start:local # builds the client and the local server, then serves both
 
 Then open <http://127.0.0.1:3002>.
 
-The app refuses to start if it can't run uv or yt-dlp, or neither Claude
-Code nor Codex, and says which. Start it from the repo root rather than running `servers/local/`
-directly: that's what puts uv and yt-dlp on its PATH. The first transcription
-downloads its Whisper model (`small`, about 460 MB) and the Python packages
-Whisper needs; later ones start straight away.
+The app refuses to start if it can't run Claude Code, ffmpeg, Whisper or
+yt-dlp, and says which. Whisper (whisper.cpp) and ffmpeg come with
+`npm install`, built for your platform. Start it from the repo root rather
+than running `servers/local/` directly: that's what puts yt-dlp on its PATH.
+The first transcription downloads its Whisper model (`small`, about 470 MB);
+later ones start straight away. The mic button in the message box dictates
+with the same model: what you say comes back as text to edit before sending,
+and the recording isn't kept.
 
 ## Where things live
 
@@ -61,10 +66,16 @@ can't reach it.
 
 ## Use it from your phone
 
-With [Tailscale](https://tailscale.com) on the Mac and on the phone, signed
-into the same account:
+In the desktop app, choose **Use from your phone** in the sidebar and turn it
+on. You'll need [Tailscale](https://tailscale.com) on the computer and on the
+phone, signed in to the same account; the window walks you through it and shows
+a QR code to scan. It works from any network for as long as the computer is
+awake and the app is open, only your own Tailscale account gets in, and it comes
+back by itself the next time you open the app, until you turn it off.
 
-1. On the Mac, put the app behind Tailscale:
+Running from source, do by hand what the app does:
+
+1. Put the app behind Tailscale:
 
    ```sh
    tailscale serve --bg 3002
@@ -81,9 +92,9 @@ into the same account:
 
 3. Open the address on your phone.
 
-Only devices signed into your Tailscale account can reach it, at home or
-away; the app itself still listens on 127.0.0.1 only. `tailscale serve reset`
-takes it off again.
+This way, every device on your tailnet can reach it, at home or away; the app
+itself still listens on 127.0.0.1 only. `tailscale serve reset` takes it off
+again.
 
 ## Developing
 

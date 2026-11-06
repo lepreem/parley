@@ -20,23 +20,25 @@ export function useSources(draftKey: string) {
     addYoutube,
     attachExisting,
     removeSource,
+    dropDeletedSource,
     retrySource,
     takeDraft,
     restoreDraft,
-    transcriptModelId,
-    setTranscriptModelId,
+    useCaptionsIfAvailable,
+    setUseCaptionsIfAvailable,
   } = context;
   const sources = drafts[draftKey] ?? NO_SOURCES;
 
   return useMemo(
     () => ({
       sources,
-      transcriptModelId,
-      setTranscriptModelId,
+      useCaptionsIfAvailable,
+      setUseCaptionsIfAvailable,
       addFiles: (files: File[]) => addFiles(draftKey, files),
       addYoutube: (url: string) => addYoutube(draftKey, url),
       attachExisting: (job: ExistingSource) => attachExisting(draftKey, job),
       removeSource: (localId: string) => removeSource(draftKey, localId),
+      dropDeletedSource,
       retrySource: (localId: string) => retrySource(draftKey, localId),
       takeSources: () => takeDraft(draftKey),
       /**
@@ -50,12 +52,13 @@ export function useSources(draftKey: string) {
     [
       draftKey,
       sources,
-      transcriptModelId,
-      setTranscriptModelId,
+      useCaptionsIfAvailable,
+      setUseCaptionsIfAvailable,
       addFiles,
       addYoutube,
       attachExisting,
       removeSource,
+      dropDeletedSource,
       retrySource,
       takeDraft,
       restoreDraft,

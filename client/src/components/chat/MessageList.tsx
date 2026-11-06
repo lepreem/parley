@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatMessage, TurnStats } from "../../api/messages";
 import { Icon } from "../ui/Icon";
 import { Meter } from "../ui/Meter";
 import { AssistantTurn } from "./AssistantTurn";
+import { ToolApprovals } from "./ToolApprovals";
 import { UserTurn } from "./UserTurn";
 import type { PendingTurn } from "./types";
+import type { PermissionMode } from "../../api/toolApprovals";
 
 const STICK_THRESHOLD_PX = 80;
 
@@ -35,6 +37,8 @@ function LoadingTurns() {
 export function MessageList({
   messages,
   pending,
+  conversationId,
+  onPermissionModeChange,
   loading,
   onEdit,
   canEdit,
@@ -42,6 +46,9 @@ export function MessageList({
 }: {
   messages: ChatMessage[];
   pending: PendingTurn | null;
+  conversationId: string | undefined;
+  /** For an answer that also changes how later messages are allowed to act. */
+  onPermissionModeChange: (mode: PermissionMode) => void;
   loading: boolean;
   /** Replaces a user message, and every turn after it, with a new turn. */
   onEdit: (message: ChatMessage, content: string) => void;
@@ -67,6 +74,11 @@ export function MessageList({
     const scroller = scrollRef.current;
     if (scroller) scroller.scrollTop = scroller.scrollHeight;
   }, [messages, pending?.assistantContent, pending?.content, stuckToBottom]);
+
+  const followToBottom = useCallback(() => {
+    const scroller = scrollRef.current;
+    if (scroller && stuckToBottom) scroller.scrollTop = scroller.scrollHeight;
+  }, [stuckToBottom]);
 
   // While an edit is answered, the turns it replaces are already gone on the
   // server; show the conversation as it will read once the edit lands.
@@ -109,6 +121,7 @@ export function MessageList({
                     content={message.content}
                     modelId={message.chosenModelId}
                     stopped={message.stopped}
+                    sources={message.sources}
                     stats={turnStats[message.id]}
                   />
                 ),
@@ -126,6 +139,13 @@ export function MessageList({
                     streaming
                     elsewhere={pending.elsewhere}
                   />
+                  {conversationId && (
+                    <ToolApprovals
+                      conversationId={conversationId}
+                      onShown={followToBottom}
+                      onPermissionModeChange={onPermissionModeChange}
+                    />
+                  )}
                 </>
               )}
             </div>

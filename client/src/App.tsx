@@ -4,8 +4,14 @@ import { RequireAuth } from "./components/auth/RequireAuth";
 import { LandingPage } from "./components/auth/LandingPage";
 import { LoadingScreen } from "./components/ui/LoadingScreen";
 import { Section } from "./components/app/Section";
-import { cloudServer, localServer, servedByLocalServer } from "./config";
+import {
+  canReachLocalServer,
+  cloudServer,
+  localServer,
+  servedByLocalServer,
+} from "./config";
 import { ChatView } from "./components/chat/ChatView";
+import { DownloadPage } from "./components/auth/DownloadPage";
 
 /**
  * Landing route: send authenticated users straight to the app. A page the
@@ -29,9 +35,17 @@ function App() {
           <Route path="/chat/:conversationId?" element={<ChatView />} />
         </Route>
       </Route>
-      <Route element={<Section server={localServer} />}>
-        <Route path="/local/:conversationId?" element={<ChatView />} />
-      </Route>
+      <Route path="/download" element={<DownloadPage />} />
+      {canReachLocalServer ? (
+        <Route element={<Section server={localServer} />}>
+          <Route path="/local/:conversationId?" element={<ChatView />} />
+        </Route>
+      ) : (
+        <Route
+          path="/local/:conversationId?"
+          element={<Navigate to="/download" replace />}
+        />
+      )}
       {/* Where the upload, history and job pages used to live. */}
       <Route path="/app" element={<Navigate to="/chat" replace />} />
       <Route path="/history" element={<Navigate to="/chat" replace />} />

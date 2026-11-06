@@ -69,7 +69,11 @@ export type ChatMessage = {
   transcriptAttachments: MessageTranscript[];
   /** An assistant reply someone stopped before it finished. */
   stopped: boolean;
+  /** The web pages a search found for this reply; empty when none ran. */
+  sources: MessageSource[];
 };
+
+export type MessageSource = { url: string; title: string };
 
 /**
  * A turn the server is answering right now. Neither message is stored until
@@ -107,6 +111,13 @@ export type SendMessageBody = {
   attachments: MessageAttachmentInput[];
   /** The conversation's head as the client last saw it. */
   lastMessageId: string | null;
+  /**
+   * How hard the model thinks: one of its `reasoning.efforts`. Left out, it
+   * thinks as hard as it does by default.
+   */
+  reasoningEffort?: ReasoningEffort;
+  /** Lets the model use the web, if it decides it needs to. */
+  webSearch?: boolean;
 };
 
 /** One timed step of a turn, in milliseconds from the turn's start. */
@@ -157,11 +168,59 @@ export type ReplyStreamEvents = {
    * the turn went, for anyone curious; a server that doesn't time its turns
    * leaves it out.
    */
-  done: { lastMessageId: string; stopped: boolean; stats?: TurnStats };
+  done: {
+    lastMessageId: string;
+    stopped: boolean;
+    sources: MessageSource[];
+    stats?: TurnStats;
+  };
   /** Stopped before any of the reply came, so nothing was saved. */
   cancelled: Record<string, never>;
   error: ErrorBody;
 };
+
+/* ---------------------------------------------------------- tool approvals */
+
+/**
+ * How freely the local server's Claude Code acts on a turn, beyond the person's
+ * own settings: Claude Code's permission modes of those names. Left out, their
+ * settings decide.
+ */
+export type PermissionMode = "acceptEdits" | "bypassPermissions";
+
+/** What the local server takes for a turn, which the cloud doesn't. */
+export type LocalSendMessageBody = SendMessageBody & {
+  permissionMode?: PermissionMode;
+};
+
+/**
+ * Something Claude Code wants to do that the person's settings say to ask about
+ * (local server only). `detail` is exactly what it would run or send.
+ * `always` is Claude Code's own "don't ask again", when it offers one: the
+ * rules it would add to their settings, or the mode it would switch to.
+ *
+ * GET /conversations/:conversationId/tool-approvals lists a conversation's as
+ * ToolApproval[].
+ */
+export type ToolApproval = {
+  id: string;
+  toolName: string;
+  detail: string;
+  always: {
+    label: string;
+    rules: string[];
+    mode: PermissionMode | null;
+  } | null;
+};
+
+/**
+ * Allow once, allow and don't ask again (`always`), allow everything for the
+ * rest of the reply, or refuse.
+ */
+export type ToolApprovalChoice = "allow" | "always" | "allowAll" | "deny";
+
+/** POST /conversations/:conversationId/tool-approvals/:toolApprovalId */
+export type AnswerToolApprovalBody = { answer: ToolApprovalChoice };
 
 /* ------------------------------------------------------------------ models */
 
@@ -171,13 +230,44 @@ export type ChatModel = {
   name: string;
   /** The longest prompt it takes, in tokens, when known. */
   contextTokens: number | null;
+  /** The most it can write in one go, thinking included, when known. */
+  maxOutputTokens: number | null;
   /** Whether a turn may carry images. */
   acceptsImages: boolean;
+  /** The day the provider listed it, as YYYY-MM-DD, when known. */
+  released: string | null;
+  /**
+   * Other ids that name it: OpenRouter's "~anthropic/claude-sonnet-latest"
+   * follows the family's newest model, so config can name a model without
+   * naming a version.
+   */
+  aliases: string[];
+  /**
+   * When it's archived for a newer model from its provider that costs no
+   * more and does as much, that model's id.
+   */
+  replacedBy: string | null;
+  /** The day the provider may retire it, as YYYY-MM-DD, if it's announced. */
+  retires: string | null;
   /**
    * What it charges, or null when that isn't a price per token: a router
    * whose price depends on the model it picks, or a subscription.
    */
   pricing: ModelPricing | null;
+  /** How hard it can be asked to think, or null when that isn't a choice. */
+  reasoning: ModelReasoning | null;
+  /** Whether a turn may let it use the web. */
+  searchesWeb: boolean;
+};
+
+export type ReasoningEffort =
+  "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+
+export type ModelReasoning = {
+  /** The levels it offers, least thinking first. */
+  efforts: ReasoningEffort[];
+  /** The level it uses when none is chosen, when known. */
+  defaultEffort: ReasoningEffort | null;
 };
 
 /** A chat model's price, in US dollars per million tokens. */
@@ -186,10 +276,7 @@ export type ModelPricing = {
   outputPerMillionTokens: number;
 };
 
-/** A transcription model, whichever provider serves it. */
-export type TranscribeModel = { id: string; name: string };
-
-/** GET /models/chat and GET /models/transcription */
+/** GET /models/chat */
 export type ModelsResponse<Model> = { models: Model[] };
 
 /* -------------------------------------------------------------------- jobs */
@@ -206,7 +293,18 @@ export type Job = {
   /** Only once the job has completed. */
   transcript: string | null;
   error: string | null;
+  /** The video a YouTube job was made from, which the client plays; null otherwise. */
+  youtubeVideoId: string | null;
 };
+
+/**
+ * GET /jobs/transcribe/:audioUploadId/audio: where to fetch the job's audio
+ * from, or null when the server no longer has it. The cloud keeps it for a
+ * while after the job finishes and then removes it (a YouTube job's sooner),
+ * leaving the client's own copy, if it made one. The URL is a signed link from
+ * the cloud server, or a path relative to the local server.
+ */
+export type JobAudio = { url: string | null };
 
 /** A job as the history list shows it, without its transcript. */
 export type JobSummary = {
@@ -239,11 +337,9 @@ export type UploadedAudio = {
   source: "audio" | "video";
 };
 
-/** POST /upload/youtube */
+/** POST /upload/youtube. The server picks the transcription model itself. */
 export type QueueYoutubeBody = {
   youtubeUrl: string;
-  /** The server's default when absent. */
-  transcriptModelId?: string;
   /** Use the video's own captions instead of transcribing, when it has them. */
   useCaptionsIfAvailable?: boolean;
 };
@@ -267,4 +363,9 @@ export type ServerEvents = {
   jobUpdated: { audioUploadId: string };
   /** A reply finished, was stopped or failed; refetch the conversation. */
   replyFinished: { conversationId: string };
+  /** What a conversation's reply is waiting for the person to answer, now. */
+  toolApprovalsChanged: { conversationId: string; approvals: ToolApproval[] };
 };
+
+/** POST /speech/transcribe: what was said; empty if nothing was. */
+export type DictatedSpeech = { text: string };

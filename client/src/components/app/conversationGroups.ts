@@ -46,6 +46,8 @@ export function groupConversations(
 
   return ORDER.flatMap((label) => {
     const conversationsInGroup = buckets.get(label);
-    return conversationsInGroup ? [{ label, conversations: conversationsInGroup }] : [];
+    return conversationsInGroup
+      ? [{ label, conversations: conversationsInGroup }]
+      : [];
   });
 }

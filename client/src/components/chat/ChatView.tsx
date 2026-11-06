@@ -1,10 +1,14 @@
 import { useMemo, useRef, useState, type DragEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { useWebSearchPreference } from "../composer/useWebSearchPreference";
+import { usePermissionModePreference } from "../composer/usePermissionModePreference";
 import {
   CHARS_PER_TOKEN,
+  findChatModel,
   meetsRequirements,
   resolveDefaultModel,
   type MessageRequirements,
+  type ReasoningEffort,
 } from "../../api/models";
 import { useServerReady } from "../../hooks/server/useServerReady";
 import { useChatModelsQuery } from "../../hooks/queries/useModelsQuery";
@@ -73,6 +77,9 @@ export function ChatView() {
   const messagesQuery = useMessagesQuery(conversationId);
   const chatModels = useChatModelsQuery(ready);
   const [modelPick, setModelPick] = useState<string | null>(null);
+  const [effortPick, setEffortPick] = useState<ReasoningEffort | null>(null);
+  const [webSearchOn, setWebSearchOn] = useWebSearchPreference();
+  const [permissionPick, setPermissionPick] = usePermissionModePreference();
   const {
     pendingTurns,
     sendingKeys,
@@ -122,17 +129,34 @@ export function ChatView() {
   }, [history, sources, text]);
 
   // Requirements narrow the list, so a pick made earlier can fall out of it.
-  const eligibleIds = useMemo(
+  const eligible = useMemo(
     () =>
-      chatModels.models
-        .filter((model) => meetsRequirements(model, requirements))
-        .map((model) => model.id),
+      chatModels.models.filter((model) =>
+        meetsRequirements(model, requirements),
+      ),
     [chatModels.models, requirements],
   );
+  const eligibleIds = eligible.map((model) => model.id);
+  // The default may name a model by alias, to follow its newest.
+  const defaultId =
+    findChatModel(eligible, server.defaultChatModelId)?.id ??
+    server.defaultChatModelId;
   const modelId =
     modelPick && eligibleIds.includes(modelPick)
       ? modelPick
-      : resolveDefaultModel(eligibleIds, server.defaultChatModelId);
+      : resolveDefaultModel(eligibleIds, defaultId);
+  const chosenModel = eligible.find((model) => model.id === modelId);
+  // Kept across models, but only sent to one that offers it. Guests can't
+  // choose; the server refuses it.
+  const effort =
+    !guest && effortPick && chosenModel?.reasoning?.efforts.includes(effortPick)
+      ? effortPick
+      : null;
+  // Likewise: guests can't search, and not every model can.
+  const canSearchWeb = !guest && !!chosenModel?.searchesWeb;
+  const webSearch = canSearchWeb && webSearchOn;
+  // Only Claude Code on this computer has permissions to loosen.
+  const permissionMode = server.toolApprovals ? permissionPick : null;
 
   const replyInProgress = messagesQuery.data?.replyInProgress ?? null;
   const pending = conversationId
@@ -156,6 +180,9 @@ export function ChatView() {
       conversationId,
       content,
       modelId,
+      reasoningEffort: effort,
+      webSearch,
+      permissionMode,
       sources: staged,
       lastMessageId: conversationId
         ? (messagesQuery.data?.lastMessageId ?? null)
@@ -186,6 +213,9 @@ export function ChatView() {
       message,
       content,
       modelId,
+      reasoningEffort: effort,
+      webSearch,
+      permissionMode,
       sources: sourcesOfMessage(message),
       lastMessageId: messagesQuery.data?.lastMessageId ?? null,
       onRestore: (restoredContent, restoredSources, restoreKey) => {
@@ -236,6 +266,8 @@ export function ChatView() {
         <MessageList
           messages={messagesQuery.data?.messages ?? []}
           pending={pending}
+          conversationId={conversationId}
+          onPermissionModeChange={setPermissionPick}
           loading={!!conversationId && messagesQuery.isLoading}
           onEdit={handleEdit}
           canEdit={canEdit}
@@ -250,6 +282,14 @@ export function ChatView() {
         models={chatModels.models}
         modelId={modelId}
         onModelChange={setModelPick}
+        effort={effort}
+        onEffortChange={setEffortPick}
+        canSearchWeb={canSearchWeb}
+        webSearch={webSearch}
+        onWebSearchChange={setWebSearchOn}
+        canChoosePermissions={server.toolApprovals}
+        permissionMode={permissionMode}
+        onPermissionModeChange={setPermissionPick}
         modelsLoading={chatModels.loading}
         modelsError={chatModels.error}
         requirements={requirements}

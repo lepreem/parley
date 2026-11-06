@@ -37,24 +37,58 @@ vi.mock("../../src/db", async () => {
   return { ...schema, db: drizzle(client, { schema }) };
 });
 
-import { AudioTranscriptionJobs, db, users } from "../../src/db";
+import {
+  AudioTranscriptionJobs,
+  TranscriptContents,
+  db,
+  users,
+} from "../../src/db";
 import { jobs } from "../../src/data/jobs.data";
+import { transcripts } from "../../src/data/transcripts.data";
 
 const userId = "jobs-owner";
+const otherUserId = "jobs-other-owner";
+const videoId = "dQw4w9WgXcQ";
 
-async function createJob() {
-  const audioUploadId = randomUUID();
-  await jobs.createAudioJob({
-    audioUploadId,
-    userId,
-    source: "youtube",
+function youtubeJob(owner = userId) {
+  return {
+    audioUploadId: randomUUID(),
+    userId: owner,
+    source: "youtube" as const,
+    youtubeVideoId: videoId,
     fileName: "YouTube audio",
     mimeType: null,
     sizeBytes: 0,
-    transcriptModelId: "nova-3-general",
-  });
+  };
+}
+
+async function createJob() {
+  const job = youtubeJob();
+  await jobs.createAudioJob(job);
+  return job.audioUploadId;
+}
+
+/**
+ * A YouTube job for the video, taken through to completed with `text`: its
+ * audio transcribed, unless `fromCaptions`.
+ */
+async function transcribeVideo(
+  text: string,
+  { fromCaptions = false, language = "en" as string | null } = {},
+) {
+  const audioUploadId = await createJob();
+  const claimed = await jobs.claimAudioJob(audioUploadId);
+  await transcripts.saveCompletedTranscript(
+    audioUploadId,
+    { segments: [{ start: 0, end: 2, text }], language, fromCaptions },
+    claimed!.claimToken,
+  );
   return audioUploadId;
 }
+
+/** What a request with captions off, and with them on, would reuse. */
+const noCaptions = { useCaptionsIfAvailable: false };
+const orCaptions = { useCaptionsIfAvailable: true };
 
 async function readJob(audioUploadId: string) {
   const [row] = await db
@@ -86,7 +120,129 @@ describe.skipIf(!testState.databaseUrl)("audio jobs in PostgreSQL", () => {
 
   beforeEach(async () => {
     await db.execute(sql`truncate ${users} cascade`);
-    await db.insert(users).values({ id: userId });
+    await db.insert(users).values([{ id: userId }, { id: otherUserId }]);
+  });
+
+  describe("reusing a YouTube transcript", () => {
+    it("finds the transcript a completed job made of the video", async () => {
+      await transcribeVideo("Never gonna give you up");
+
+      expect(
+        await transcripts.findYoutubeTranscript(videoId, noCaptions),
+      ).toEqual({
+        content: expect.stringContaining("Never gonna give you up"),
+        segments: [{ start: 0, end: 2, text: "Never gonna give you up" }],
+        language: "en",
+        fromCaptions: false,
+        charCount: expect.any(Number),
+      });
+    });
+
+    it("finds nothing for a video no job has finished", async () => {
+      const audioUploadId = await createJob();
+      await jobs.claimAudioJob(audioUploadId);
+
+      expect(
+        await transcripts.findYoutubeTranscript(videoId, orCaptions),
+      ).toBeNull();
+      expect(
+        await transcripts.findYoutubeTranscript("aaaaaaaaaaa", orCaptions),
+      ).toBeNull();
+    });
+
+    it("finds captions only for a request that takes them", async () => {
+      await transcribeVideo("Never gonna give you up", { fromCaptions: true });
+
+      expect(
+        await transcripts.findYoutubeTranscript(videoId, noCaptions),
+      ).toBeNull();
+      expect(
+        await transcripts.findYoutubeTranscript(videoId, orCaptions),
+      ).toMatchObject({ fromCaptions: true });
+    });
+
+    it("finds captions without a language", async () => {
+      await transcribeVideo("Never gonna give you up", {
+        fromCaptions: true,
+        language: null,
+      });
+
+      expect(
+        await transcripts.findYoutubeTranscript(videoId, orCaptions),
+      ).toMatchObject({ fromCaptions: true, language: null });
+    });
+
+    it("finds a transcribed one for a request that takes captions", async () => {
+      await transcribeVideo("Never gonna give you up");
+
+      expect(
+        await transcripts.findYoutubeTranscript(videoId, orCaptions),
+      ).toMatchObject({ fromCaptions: false });
+    });
+
+    it("gives another user a completed job of their own with a copy", async () => {
+      await transcribeVideo("Never gonna give you up", { fromCaptions: true });
+      const found = await transcripts.findYoutubeTranscript(
+        videoId,
+        orCaptions,
+      );
+      const job = youtubeJob(otherUserId);
+
+      await transcripts.createReusedYoutubeJob(job, found!);
+
+      expect(await readJob(job.audioUploadId)).toMatchObject({
+        status: "completed",
+        claimToken: null,
+      });
+      const theirs = await transcripts.findTranscripts(otherUserId, [
+        job.audioUploadId,
+      ]);
+      expect(theirs.get(job.audioUploadId)).toBe(found!.content);
+    });
+
+    it("keeps what the copy is: its language, and that it's captions", async () => {
+      await transcribeVideo("Guten Morgen", {
+        fromCaptions: true,
+        language: "de",
+      });
+      const job = youtubeJob(otherUserId);
+
+      await transcripts.createReusedYoutubeJob(
+        job,
+        (await transcripts.findYoutubeTranscript(videoId, orCaptions))!,
+      );
+
+      const [copy] = await db
+        .select({
+          language: TranscriptContents.language,
+          fromCaptions: TranscriptContents.fromCaptions,
+        })
+        .from(TranscriptContents)
+        .where(eq(TranscriptContents.audioUploadId, job.audioUploadId));
+      expect(copy).toEqual({ language: "de", fromCaptions: true });
+    });
+
+    it("keeps the copy when the original's owner deletes theirs", async () => {
+      const original = await transcribeVideo("Never gonna give you up");
+      const job = youtubeJob(otherUserId);
+      await transcripts.createReusedYoutubeJob(
+        job,
+        (await transcripts.findYoutubeTranscript(videoId, noCaptions))!,
+      );
+
+      await jobs.deleteAudioJob(userId, original);
+
+      const theirs = await transcripts.findTranscripts(otherUserId, [
+        job.audioUploadId,
+      ]);
+      expect(theirs.get(job.audioUploadId)).toContain(
+        "Never gonna give you up",
+      );
+      // The copy is a transcript of the video too, so it's found in turn.
+      expect(
+        await transcripts.findYoutubeTranscript(videoId, noCaptions),
+      ).not.toBeNull();
+    });
   });
 
   describe("failAudioJobById", () => {

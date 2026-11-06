@@ -3,12 +3,15 @@
 
 import { randomUUID } from "node:crypto";
 import type { Context } from "hono";
-import { streamSSE } from "hono/streaming";
 import type {
   ChatMessage,
+  MessageSource,
   MessagesResponse,
+  PermissionMode,
+  ReasoningEffort,
   ReplyStreamEvents,
 } from "@parley/contract";
+import { addSource } from "@parley/server-kit/webSources";
 import { SSEEventQueue } from "@parley/server-kit/sse/eventQueue";
 import type { ReplyInProgressEntry } from "@parley/server-kit/memory/repliesInProgress";
 import {
@@ -85,6 +88,7 @@ function toMessageJson(
     content: row.content,
     chosenModelId: row.chosenModelId,
     stopped: row.stopped,
+    sources: row.sources,
     conversationId: row.conversationId,
     createdAt: row.createdAt.toISOString(),
     attachments: images,
@@ -256,6 +260,9 @@ type MessageRequest = {
   conversationId: string;
   content: string;
   chosenModelId: string;
+  reasoningEffort: ReasoningEffort | undefined;
+  webSearch: boolean;
+  permissionMode: PermissionMode | undefined;
   attachmentIds: string[];
   imageUploadIds: string[];
   audioUploadIds: string[];
@@ -270,6 +277,9 @@ function messageRequestFrom(c: Context): MessageRequest {
     conversationId: c.get(CTX_KEYS.conversationId),
     content: c.get(CTX_KEYS.messageContent),
     chosenModelId: c.get(CTX_KEYS.chosenModelId),
+    reasoningEffort: c.get(CTX_KEYS.reasoningEffort),
+    webSearch: c.get(CTX_KEYS.webSearch) ?? false,
+    permissionMode: c.get(CTX_KEYS.permissionMode),
     attachmentIds: attachments.map((attachment) =>
       attachment.type === "image"
         ? attachment.imageUploadId
@@ -293,20 +303,6 @@ class MessageRequestError extends Error {
     super(body.message);
   }
 }
-
-/**
- * POST /conversations/:conversationId/messages — build the model context, stream
- * the reply over SSE, and persist the turn without the client waiting on it.
- *
- * Events: `delta` ({ delta }) per model chunk, then `done` ({ lastMessageId,
- * stopped }) after the completed turn is stored, `cancelled` if it was stopped
- * before any reply came, or `error` ({ message }) if the model call fails. The client consumes this with fetch + response.body.getReader()
- * (EventSource can't POST).
- *
- * The run that produces the reply is decoupled from the response stream, so a
- * client that disconnects mid-stream still has its turn run to completion and
- * saved; GET .../messages is the source of truth.
- */
 
 function mergeTranscriptsIntoContent(
   messageInput: MessageRequest,
@@ -461,118 +457,188 @@ async function deleteMessageTail(
 }
 
 /**
- * Streams the answer and stores the turn, and owns the claim throughout: the
- * claim and reservations are released when the turn is saved, by
- * persistAndUnclaimChatTurn in the same transaction, and otherwise in the
- * catch, whatever failed. `prepareTurn` settles everything the turn needs and
- * throws if it can't run, so nothing it destroys (an edit's rewind) is
- * destroyed for a turn that was never going to happen.
+ * Answers a turn as server-sent events: `delta` ({ delta }) per model chunk,
+ * then `done` ({ lastMessageId, stopped }) once the turn is stored,
+ * `cancelled` if it was stopped before any reply came, or `error`
+ * ({ message }) if the model call fails. A turn rejected before the model is
+ * asked gets a plain JSON error instead. The client reads the stream with
+ * fetch + response.body.getReader() (EventSource can't POST).
+ *
+ * The run that produces the reply is decoupled from the response stream, so a
+ * client that disconnects mid-stream still has its turn run to completion and
+ * saved; GET .../messages is the source of truth.
+ *
+ * The turn owns its claim throughout: the claim and reservations are released
+ * when the turn is saved, by persistAndUnclaimChatTurn in the same
+ * transaction, and otherwise here or in writeReply, whatever failed.
+ * `prepareTurn` settles everything the turn needs and throws if it can't run,
+ * so nothing it destroys (an edit's rewind) is destroyed for a turn that was
+ * never going to happen.
  */
-function streamAndPersistMessageTurn(
+async function streamAndPersistMessageTurn(
   c: Context,
   messageInput: MessageRequest,
   claimPromises: readonly [Promise<string | null>, Promise<boolean>],
   claimToken: string,
   prepareTurn: () => Promise<PreparedTurn>,
 ) {
-  const responseReady = Promise.withResolvers<Response>();
-
-  // The HTTP response can be ready before the task that owns the claims finishes.
-  void (async () => {
-    const sseEvents = new SSEEventQueue<ReplyStreamEvents>();
-    let streamResponse: Response | undefined;
-    let entryToRemove: ReplyInProgressEntry | undefined;
-
-    try {
-      const { turns, history, newMessageContextCharCount } =
-        await prepareTurn();
-      // An entry for this reply while it's being written, so a page reloaded
-      // midway can show it and the stop button can reach it. It holds the
-      // user's message too, which isn't saved until the turn is.
-      const entry = memory.repliesInProgress.add(
-        messageInput.conversationId,
-        messageInput.content,
-      );
-      entryToRemove = entry;
-
-      streamResponse = streamSSE(c, (stream) =>
-        sseEvents.pipeTo(stream, c.req.raw.signal),
-      );
-      responseReady.resolve(streamResponse);
-
-      const conversationTitlePromise =
-        messageInput.expectedLastMessageId === null
-          ? titleForFirstTurn(messageInput.content, messageInput.conversationId)
-          : Promise.resolve(undefined);
-      let assistantContent: string;
-      let stopped = false;
-      try {
-        assistantContent = await chatAI(messageInput.chosenModelId, turns, {
-          onDelta: async (delta) => {
-            entry.append(delta);
-            sseEvents.push("delta", { delta });
-          },
-          signal: entry.signal,
-        });
-      } catch (error) {
-        // A stopped reply is saved with what came before the stop; one
-        // stopped before anything came isn't saved at all.
-        if (!entry.stopped) throw error;
-        if (entry.text.length === 0) {
-          await releaseClaims(messageInput, claimPromises, claimToken);
-          sseEvents.push("cancelled", {});
-          return streamResponse;
-        }
-        assistantContent = entry.text;
-        stopped = true;
-      }
-      const contextWindowMessageCount = countMessagesInContextWindow([
-        assistantContent.length,
-        newMessageContextCharCount,
-        ...history.map((message) => message.contextCharCount),
-      ]);
-      const lastMessageId = await data.messages.persistAndUnclaimChatTurn({
-        conversationId: messageInput.conversationId,
-        content: messageInput.content,
-        attachmentIds: messageInput.attachmentIds,
-        chosenModelId: messageInput.chosenModelId,
-        assistantContent,
-        stopped,
-        conversationTitle: await conversationTitlePromise,
-        contextWindowMessageCount,
-        claimToken,
-      });
-
-      sseEvents.push("done", { lastMessageId, stopped });
-      return streamResponse;
-    } catch (error) {
-      // Released before answering, so a client that retries at once doesn't
-      // meet its own claim.
-      await releaseClaims(messageInput, claimPromises, claimToken);
-
-      if (!streamResponse) {
-        if (error instanceof MessageRequestError) {
-          return c.json(error.body, error.status);
-        }
-        throw error;
-      }
-
-      sseEvents.push("error", { message: "Model response failed" });
-      return streamResponse;
-    } finally {
-      sseEvents.end();
-      if (entryToRemove) {
-        entryToRemove.remove();
-        // For a page that was reloaded mid-reply: its stream is gone, and
-        // this is how it hears the turn is saved.
-        eventHub.send(EVERYONE, "replyFinished", {
-          conversationId: messageInput.conversationId,
-        });
-      }
+  let prepared: PreparedTurn;
+  try {
+    prepared = await prepareTurn();
+  } catch (error) {
+    // Released before answering, so a client that retries at once doesn't
+    // meet its own claim.
+    await releaseClaims(messageInput, claimPromises, claimToken);
+    if (error instanceof MessageRequestError) {
+      return c.json(error.body, error.status);
     }
-  })().then(responseReady.resolve, responseReady.reject);
+    throw error;
+  }
 
-  return responseReady.promise;
+  // An entry for this reply while it's being written, so a page reloaded
+  // midway can show it and the stop button can reach it. It holds the
+  // user's message too, which isn't saved until the turn is.
+  const entry = memory.repliesInProgress.add(
+    messageInput.conversationId,
+    messageInput.content,
+  );
+  const sseEvents = new SSEEventQueue<ReplyStreamEvents>();
+
+  // Not awaited: the response goes back now, and the reply is written and
+  // saved whether or not the client stays to read it.
+  void writeReply({
+    messageInput,
+    claimPromises,
+    claimToken,
+    prepared,
+    entry,
+    sseEvents,
+  }).catch((error: unknown) => log.error("Writing a reply failed", error));
+  return sseEvents.respond(c);
+}
+
+/**
+ * Runs the model and saves the turn, pushing each piece of the reply to
+ * `sseEvents`, then `done`, `cancelled` or `error`. However it ends, it ends
+ * the stream, removes the reply's entry and sends `replyFinished`.
+ */
+async function writeReply({
+  messageInput,
+  claimPromises,
+  claimToken,
+  prepared: { turns, history, newMessageContextCharCount },
+  entry,
+  sseEvents,
+}: {
+  messageInput: MessageRequest;
+  claimPromises: readonly [Promise<string | null>, Promise<boolean>];
+  claimToken: string;
+  prepared: PreparedTurn;
+  entry: ReplyInProgressEntry;
+  sseEvents: SSEEventQueue<ReplyStreamEvents>;
+}) {
+  // A reply has no time limit, so the claims it holds are kept fresh for as
+  // long as it runs; only a process that's gone lets them lapse.
+  const renewal = setInterval(
+    () =>
+      void renewClaims(messageInput.conversationId, claimToken).catch(
+        (error: unknown) =>
+          log.warn("Renewing a reply's claims failed", {
+            conversationId: messageInput.conversationId,
+            error: messageOf(error),
+          }),
+      ),
+    CLAIM_RENEW_MS,
+  );
+  try {
+    const conversationTitlePromise =
+      messageInput.expectedLastMessageId === null
+        ? titleForFirstTurn(messageInput.content, messageInput.conversationId)
+        : Promise.resolve(undefined);
+    const sources: MessageSource[] = [];
+    let assistantContent: string;
+    let stopped = false;
+    const approvals = memory.toolApprovals.open(messageInput.conversationId);
+    const grants = memory.toolApprovals.sessionGrants(
+      messageInput.conversationId,
+    );
+    try {
+      assistantContent = await chatAI(messageInput.chosenModelId, turns, {
+        onDelta: async (delta) => {
+          entry.append(delta);
+          sseEvents.push("delta", { delta });
+        },
+        effort: messageInput.reasoningEffort,
+        webSearch: messageInput.webSearch,
+        onSource: (url, title) => addSource(sources, url, title),
+        signal: entry.signal,
+        askPermission: approvals.ask,
+        // The person's pick, or what they let an earlier run switch to.
+        permissionMode:
+          messageInput.permissionMode ?? grants?.mode ?? undefined,
+        settings: grants && {
+          permissions: {
+            allow: grants.allow,
+            additionalDirectories: grants.directories,
+          },
+        },
+      });
+    } catch (error) {
+      // A stopped reply is saved with what came before the stop; one
+      // stopped before anything came isn't saved at all.
+      if (!entry.stopped) throw error;
+      if (entry.text.length === 0) {
+        await releaseClaims(messageInput, claimPromises, claimToken);
+        sseEvents.push("cancelled", {});
+        return;
+      }
+      assistantContent = entry.text;
+      stopped = true;
+    } finally {
+      approvals.close();
+    }
+    const contextWindowMessageCount = countMessagesInContextWindow([
+      assistantContent.length,
+      newMessageContextCharCount,
+      ...history.map((message) => message.contextCharCount),
+    ]);
+    const lastMessageId = await data.messages.persistAndUnclaimChatTurn({
+      conversationId: messageInput.conversationId,
+      content: messageInput.content,
+      attachmentIds: messageInput.attachmentIds,
+      chosenModelId: messageInput.chosenModelId,
+      assistantContent,
+      stopped,
+      sources,
+      conversationTitle: await conversationTitlePromise,
+      contextWindowMessageCount,
+      claimToken,
+    });
+
+    sseEvents.push("done", { lastMessageId, stopped, sources });
+  } catch {
+    await releaseClaims(messageInput, claimPromises, claimToken);
+    sseEvents.push("error", { message: "Model response failed" });
+  } finally {
+    clearInterval(renewal);
+    sseEvents.end();
+    entry.remove();
+    // For a page that was reloaded mid-reply: its stream is gone, and this is
+    // how it hears the turn is saved.
+    eventHub.send(EVERYONE, "replyFinished", {
+      conversationId: messageInput.conversationId,
+    });
+  }
+}
+
+/** Often enough that a claim never comes near CLAIM_LEASE_MS old. */
+const CLAIM_RENEW_MS = 60 * 1000; // 1 minute
+
+async function renewClaims(conversationId: string, claimToken: string) {
+  await Promise.all([
+    data.conversations.renewConversationClaim(conversationId, claimToken),
+    data.attachments.renewAttachmentClaims(claimToken),
+  ]);
 }
 
 function createClaimData(messageInput: MessageRequest) {

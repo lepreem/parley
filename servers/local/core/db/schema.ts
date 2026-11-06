@@ -1,3 +1,4 @@
+import type { MessageSource } from "@parley/contract";
 import { randomUUID } from "node:crypto";
 import { sql, type SQL } from "drizzle-orm";
 import {
@@ -76,9 +77,9 @@ export const AudioTranscriptionJobs = sqliteTable(
         onDelete: "cascade",
       }),
     source: text("source", { enum: jobSources }).notNull(),
-    // Origin URL for 'youtube' jobs; null for direct uploads. Stored for history
-    // display and to enable transcript caching by video id later.
-    YT_sourceUrl: text("YT_source_url"),
+    // The video a 'youtube' job transcribes; null for direct uploads, and for
+    // YouTube jobs from before it was kept.
+    youtubeVideoId: text("youtube_video_id"),
     // Whether a 'youtube' job's fetch tries the video's captions before its
     // audio; null for direct uploads. Kept so the fetch can run again after a
     // restart.
@@ -96,8 +97,6 @@ export const AudioTranscriptionJobs = sqliteTable(
       .default(now)
       .$onUpdate(() => new Date())
       .notNull(),
-    // Model used to transcribe the audio. Null falls back to the default
-    transcriptModelId: text("transcription_model_id"),
   },
   (table) => [
     check("audio_transcription_jobs_status", oneOf(table.status, jobStatuses)),
@@ -158,6 +157,11 @@ export const ChatMessages = sqliteTable(
     // An assistant reply someone stopped partway; its content is what came
     // before they did.
     stopped: integer("stopped", { mode: "boolean" }).default(false).notNull(),
+    // The web pages a search found for an assistant message.
+    sources: text("sources", { mode: "json" })
+      .$type<MessageSource[]>()
+      .default([])
+      .notNull(),
 
     createdAt: timestamp("created_at").default(now).notNull(),
     updatedAt: timestamp("updated_at")

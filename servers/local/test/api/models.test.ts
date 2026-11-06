@@ -1,9 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Only hoist the mock function factory — no async work here
-const { mockListChatModels, mockListTranscribeModels } = vi.hoisted(() => ({
+const { mockListChatModels } = vi.hoisted(() => ({
   mockListChatModels: vi.fn(),
-  mockListTranscribeModels: vi.fn(),
 }));
 
 vi.mock("../../core/ai/ai_chat_client", async (importActual) => {
@@ -16,24 +15,6 @@ vi.mock("../../core/ai/ai_chat_client", async (importActual) => {
   };
 });
 
-vi.mock("../../core/ai/ai_transcribe_client", async (importActual) => {
-  const actual =
-    await importActual<typeof import("../../core/ai/ai_transcribe_client")>();
-  return {
-    ...actual,
-    listTranscribeModels: mockListTranscribeModels,
-  };
-});
-
-vi.mock("../../core/ai/ai_transcribe_client", async (importActual) => {
-  const actual =
-    await importActual<typeof import("../../core/ai/ai_transcribe_client")>();
-  return {
-    ...actual,
-    listTranscribeModels: mockListTranscribeModels,
-  };
-});
-
 // Now this import gets the mocked module, with real DEFAULT_MODELS intact
 
 import { createApp } from "../../api/app";
@@ -43,6 +24,10 @@ const sampleModel = {
   name: "Claude Sonnet",
   contextTokens: 200_000,
   acceptsImages: true,
+  released: null,
+  aliases: [],
+  replacedBy: null,
+  retires: null,
 };
 
 describe("GET /models/chat", () => {
@@ -102,20 +87,11 @@ describe("GET /models/chat", () => {
   });
 });
 
-const sampleTranscribeModels = [{ id: "small", name: "Whisper Small" }];
-
 describe("GET /models/transcription", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mockListTranscribeModels.mockResolvedValue(sampleTranscribeModels);
-  });
-
-  it("returns the transcription models", async () => {
+  it("is gone: the server picks the transcription model itself", async () => {
     const res = await (
       await createApp()
     ).request("http://localhost/models/transcription");
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ models: sampleTranscribeModels });
-    expect(mockListTranscribeModels).toHaveBeenCalledTimes(1);
+    expect(res.status).toBe(404);
   });
 });

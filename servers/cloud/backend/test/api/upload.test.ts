@@ -9,7 +9,7 @@ const {
   mockSendEvent,
   mockCreateUploadUrl,
   mockInspectUploadedObject,
-  mockIsValidTranscribeModel,
+  mockSelectRows,
   ledger,
 } = vi.hoisted(() => ({
   mockInsert: vi.fn(),
@@ -18,7 +18,8 @@ const {
   mockSendEvent: vi.fn(),
   mockCreateUploadUrl: vi.fn(),
   mockInspectUploadedObject: vi.fn(),
-  mockIsValidTranscribeModel: vi.fn(),
+  // What any select resolves to: the rows a lookup finds.
+  mockSelectRows: vi.fn((): unknown[] => []),
   ledger: {
     recordPendingUpload: vi.fn(),
     recordConfirmedObjects: vi.fn(),
@@ -31,25 +32,15 @@ const {
 const { mockListChatModels } = vi.hoisted(() => ({
   mockListChatModels: vi.fn(),
 }));
-vi.mock("../../src/ai/ai_chat_client", async (importActual) => {
+vi.mock("../../src/ai/ai_chat_client/ai_chat_client", async (importActual) => {
   // importActual is the correct way to get real values inside vi.mock
   const actual =
-    await importActual<typeof import("../../src/ai/ai_chat_client")>();
+    await importActual<
+      typeof import("../../src/ai/ai_chat_client/ai_chat_client")
+    >();
   return {
     ...actual,
     chat: { ...actual.chat, listModels: mockListChatModels },
-  };
-});
-
-vi.mock("../../src/ai/ai_transcribe_client", async (importActual) => {
-  const actual =
-    await importActual<typeof import("../../src/ai/ai_transcribe_client")>();
-  return {
-    ...actual, // preserves DEFAULT_TRANSCRIBE_MODEL
-    transcription: {
-      ...actual.transcription,
-      isValidModel: mockIsValidTranscribeModel,
-    },
   };
 });
 
@@ -57,6 +48,15 @@ vi.mock("../../src/db", async () => ({
   db: {
     insert: mockInsert,
     update: mockUpdate,
+    select: () => {
+      const query = {
+        from: () => query,
+        innerJoin: () => query,
+        where: () => query,
+        limit: async () => mockSelectRows(),
+      };
+      return query;
+    },
     // Job writes run in (nested) transactions; run them against the same
     // insert mock so those writes are recorded like plain ones.
     transaction: (run: (tx: unknown) => unknown) =>
@@ -229,7 +229,6 @@ describe("POST /upload/audio/confirm", () => {
     mockUpdateSet.mockReturnValue({ where: vi.fn().mockResolvedValue([]) });
     mockUpdate.mockReturnValue({ set: mockUpdateSet });
     mockSendEvent.mockResolvedValue(undefined);
-    mockIsValidTranscribeModel.mockResolvedValue(true);
     ledger.findLedgerEntry.mockResolvedValue({
       status: "pending",
       createdAt: new Date(),
@@ -423,6 +422,21 @@ describe("POST /upload/audio/confirm", () => {
     expect(mockSendEvent).not.toHaveBeenCalled();
   });
 
+  it("gives a client no say in the transcription model", async () => {
+    const res = await postJson(
+      "/upload/audio/confirm",
+      confirmBody({ transcriptModelId: "nova-3-pharma" }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(JSON.stringify(mockValues.mock.calls)).not.toContain(
+      "nova-3-pharma",
+    );
+    expect(mockSendEvent).toHaveBeenCalledWith("transcribe_audio", {
+      audioUploadId: UPLOAD_ID,
+    });
+  });
+
   it("confirms the upload with the job's rows, then queues transcription", async () => {
     const res = await postJson("/upload/audio/confirm", confirmBody());
 
@@ -509,8 +523,9 @@ describe("POST /upload/audio/confirm", () => {
 });
 
 describe("POST /upload/youtube", () => {
-  const YT_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
-  // Captured so we can assert the inserted row (e.g. YT_sourceUrl) directly.
+  const VIDEO_ID = "dQw4w9WgXcQ";
+  const YT_URL = `https://www.youtube.com/watch?v=${VIDEO_ID}`;
+  // Captured so we can assert the inserted row (e.g. youtubeVideoId) directly.
   let mockValues: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
@@ -520,7 +535,7 @@ describe("POST /upload/youtube", () => {
     mockUpdateSet.mockReturnValue({ where: vi.fn().mockResolvedValue([]) });
     mockUpdate.mockReturnValue({ set: mockUpdateSet });
     mockSendEvent.mockResolvedValue(undefined);
-    mockIsValidTranscribeModel.mockResolvedValue(true);
+    mockSelectRows.mockReturnValue([]);
   });
 
   it("returns 401 without a session cookie", async () => {
@@ -577,11 +592,11 @@ describe("POST /upload/youtube", () => {
     expect(typeof body.audioUploadId).toBe("string");
     // The attachment row, then the job row.
     expect(mockInsert).toHaveBeenCalledTimes(2);
-    // The row persists the origin URL (for history + future transcript caching).
+    // The row keeps the video, so a later request for it reuses this one.
     expect(mockValues).toHaveBeenCalledWith(
       expect.objectContaining({
         source: "youtube",
-        YT_sourceUrl: YT_URL,
+        youtubeVideoId: VIDEO_ID,
       }),
     );
     // The fetch event carries the url + userId the fetcher needs (bucket write
@@ -649,5 +664,83 @@ describe("POST /upload/youtube", () => {
       url: YT_URL,
       userId: "user_01",
     });
+  });
+
+  it("returns 400 for a YouTube link that isn't to one video", async () => {
+    const res = await postJson("/upload/youtube", {
+      youtubeUrl: "https://www.youtube.com/@somechannel",
+    });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ message: "Not a valid YouTube URL" });
+    expect(mockInsert).not.toHaveBeenCalled();
+  });
+
+  it("gives a client no say in the transcription model", async () => {
+    const res = await postJson("/upload/youtube", {
+      youtubeUrl: YT_URL,
+      transcriptModelId: "nova-3-pharma",
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { audioUploadId: string };
+    expect(JSON.stringify(mockValues.mock.calls)).not.toContain(
+      "nova-3-pharma",
+    );
+    expect(mockSendEvent).toHaveBeenCalledWith("yt_fetch_audio", {
+      audioUploadId: body.audioUploadId,
+      url: YT_URL,
+      userId: "user_01",
+    });
+  });
+
+  it("hands the fetcher only the video, not the rest of the link", async () => {
+    const res = await postJson("/upload/youtube", {
+      youtubeUrl: `https://youtu.be/${VIDEO_ID}?list=PL123&t=90`,
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { audioUploadId: string };
+    expect(mockSendEvent).toHaveBeenCalledWith("yt_fetch_audio", {
+      audioUploadId: body.audioUploadId,
+      url: YT_URL,
+      userId: "user_01",
+    });
+  });
+
+  it("reuses a transcript the video already has instead of fetching it", async () => {
+    const transcript = {
+      content: "[00:00] Never gonna give you up",
+      segments: [{ start: 0, end: 2, text: "Never gonna give you up" }],
+      language: "en",
+      // The video's captions, which this request takes.
+      fromCaptions: true,
+      charCount: 31,
+    };
+    mockSelectRows.mockReturnValue([transcript]);
+
+    const res = await postJson("/upload/youtube", {
+      youtubeUrl: `https://m.youtube.com/watch?v=${VIDEO_ID}&t=12`,
+      useCaptionsIfAvailable: true,
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { audioUploadId: string };
+    // The job starts out completed, with its own copy of the transcript.
+    expect(mockValues).toHaveBeenCalledWith(
+      expect.objectContaining({
+        audioUploadId: body.audioUploadId,
+        source: "youtube",
+        youtubeVideoId: VIDEO_ID,
+        status: "completed",
+      }),
+    );
+    expect(mockValues).toHaveBeenCalledWith({
+      audioUploadId: body.audioUploadId,
+      ...transcript,
+    });
+    // Nothing is fetched, so no audio is waited on or recorded.
+    expect(mockSendEvent).not.toHaveBeenCalled();
+    expect(ledger.recordConfirmedObjects).not.toHaveBeenCalled();
   });
 });

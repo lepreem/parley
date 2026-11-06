@@ -7,6 +7,7 @@ import { files } from "../../../core/files";
 import { mq } from "../../../core/message-queue/messageQueue";
 import { CTX_KEYS } from "../../../core/keys";
 import type { UploadId } from "@parley/server-kit/ids";
+import { youtubeWatchUrl } from "@parley/contract/youtube";
 
 /**
  * POST /upload/audio — speech audio, stored under an id minted here and queued
@@ -17,7 +18,6 @@ export async function handleAudioUpload(c: Context) {
   const file: File = c.get(CTX_KEYS.file);
   const fileName: string = c.get(CTX_KEYS.fileName);
   const source = c.get(CTX_KEYS.audioSource);
-  const transcriptModelId = c.get(CTX_KEYS.transcriptModelId);
   const audioUploadId: UploadId = randomUUID();
 
   await files.write(
@@ -30,7 +30,6 @@ export async function handleAudioUpload(c: Context) {
     fileName,
     mimeType: file.type,
     sizeBytes: file.size,
-    transcriptModelId,
   });
 
   return c.json({
@@ -42,10 +41,10 @@ export async function handleAudioUpload(c: Context) {
   } satisfies UploadedAudio);
 }
 
-/** POST /upload/youtube — a YouTube URL, fetched off the queue. */
+/** POST /upload/youtube — a YouTube video, fetched off the queue. */
 export async function handleYoutubeUpload(c: Context) {
   const url = c.get(CTX_KEYS.youtubeUrl);
-  const transcriptModelId = c.get(CTX_KEYS.transcriptModelId);
+  const youtubeVideoId = c.get(CTX_KEYS.youtubeVideoId);
   const useCaptionsIfAvailable = c.get(CTX_KEYS.useCaptionsIfAvailable);
 
   const audioUploadId: UploadId = randomUUID();
@@ -56,17 +55,18 @@ export async function handleYoutubeUpload(c: Context) {
   await data.jobs.createAudioJob({
     audioUploadId,
     source: "youtube",
-    youtubeSourceUrl: url,
+    youtubeVideoId,
     useCaptionsIfAvailable,
     fileName: "YouTube audio",
     mimeType: null,
     sizeBytes: 0,
-    transcriptModelId,
   });
 
   mq.publish(mq.queues.YT_FETCH, {
     audioUploadId,
-    url,
+    // Only the video: a playlist or start time on the link the user pasted
+    // is nothing the fetch should act on.
+    url: youtubeWatchUrl(youtubeVideoId),
     useCaptionsIfAvailable,
   });
   return c.json({

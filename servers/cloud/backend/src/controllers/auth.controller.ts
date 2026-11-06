@@ -173,7 +173,7 @@ export async function handleCallback(c: Context) {
  * A guest signing in keeps what they made: the session cookie they arrive
  * with still names the guest, so their chats move to the account. Failing to
  * move them doesn't fail the sign-in, which has already spent WorkOS's code;
- * the guest is left as it was, for the sweeper.
+ * the guest is left as it was, for the guest sweep.
  */
 async function adoptSignedInGuest(c: Context, userId: string) {
   const token = getCookie(c, COOKIE_KEYS.session);

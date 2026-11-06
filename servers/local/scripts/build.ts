@@ -12,7 +12,7 @@
  * the exception: they ship as TypeScript, so they're bundled in like our own
  * source.
  */
-import { copyFile, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { build } from "esbuild";
 
 const { dependencies } = JSON.parse(await readFile("package.json", "utf8")) as {
@@ -47,8 +47,5 @@ const results = await Promise.all(
 
 const failed = results.filter((result) => result.errors.length > 0);
 if (failed.length > 0) process.exit(1);
-
-// Transcription runs this script from beside the bundle.
-await copyFile("core/ai/whisper.py", "dist/whisper.py");
 
 console.log(`built ${Object.keys(ENTRYPOINTS).join(", ")} into dist/`);

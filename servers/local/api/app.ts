@@ -11,7 +11,8 @@ import { jobsRouter } from "./src/routes/jobs.router";
 import { uploadRouter } from "./src/routes/upload.router";
 import { modelsRouter } from "./src/routes/models.router";
 import { conversationsRouter } from "./src/routes/conversations.router";
-import { isAllowedHostname, isAllowedOrigin } from "./src/allowedHosts";
+import { speechRouter } from "./src/routes/speech.router";
+import { isAllowedOrigin, isAllowedRequest } from "./src/allowedHosts";
 import { EVERYONE, eventHub } from "./src/sse/hub";
 
 import { verifyApiServices } from "./startup";
@@ -23,28 +24,16 @@ export async function createApp() {
   // 127.0.0.1. The request still carries that name as its Host, so anything
   // not addressed to this machine is refused.
   app.use("*", async (c, next) => {
-    if (!isAllowedHostname(new URL(c.req.url).hostname)) {
+    const hostname = new URL(c.req.url).hostname;
+    if (!isAllowedRequest(hostname, c.req.header("tailscale-user-login"))) {
       return c.json({ message: "Forbidden" }, 403);
     }
     await next();
   });
-  // Chrome asks before a public page reaches this machine, with a preflight
-  // that must say so explicitly; the user then allows it once. Ahead of
-  // cors(), which answers the preflight itself.
-  app.use("*", async (c, next) => {
-    await next();
-    if (
-      c.req.method === "OPTIONS" &&
-      c.req.header("Access-Control-Request-Private-Network") === "true" &&
-      isAllowedOrigin(c.req.header("Origin"))
-    ) {
-      c.res.headers.set("Access-Control-Allow-Private-Network", "true");
-    }
-  });
   // A page from another origin may call the API only if it's one the app
-  // trusts: this machine's (Vite in development) or the hosted client's, in
-  // ALLOWED_ORIGINS. Any other site's JSON or DELETE is refused at the
-  // preflight. There are no cookies, so nothing is sent with credentials.
+  // trusts: this machine's, which is Vite in development. Any other site's
+  // JSON or DELETE is refused at the preflight. There are no cookies, so
+  // nothing is sent with credentials.
   app.use(
     "*",
     cors({ origin: (origin) => (isAllowedOrigin(origin) ? origin : null) }),
@@ -70,6 +59,7 @@ export async function createApp() {
   app.route("/jobs", jobsRouter);
   app.route("/models", modelsRouter);
   app.route("/conversations", conversationsRouter);
+  app.route("/speech", speechRouter);
 
   // The built client, on the API's own origin. Under `npm run dev` it isn't
   // built and Vite serves it instead, proxying the API's paths here.

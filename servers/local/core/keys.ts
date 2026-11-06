@@ -2,8 +2,10 @@ const file = "file";
 const fileName = "fileName";
 const audioSource = "audioSource";
 const chosenModelId = "chosenModelId";
-const transcriptModelId = "transcriptModelId";
+const reasoningEffort = "reasoningEffort";
+const webSearch = "webSearch";
 const youtubeUrl = "youtubeUrl";
+const youtubeVideoId = "youtubeVideoId";
 const useCaptionsIfAvailable = "useCaptionsIfAvailable";
 
 export const CTX_KEYS = {
@@ -11,6 +13,9 @@ export const CTX_KEYS = {
   audioUploadId: "audioUploadId",
   conversationId: "conversationId",
   messageId: "messageId",
+  toolApprovalId: "toolApprovalId",
+  toolApprovalAnswer: "answer",
+  permissionMode: "permissionMode",
 
   limit: "limit",
   cursor: "cursor",
@@ -26,14 +31,15 @@ export const CTX_KEYS = {
   file,
   fileName,
   chosenModelId,
-  transcriptModelId,
+  reasoningEffort,
+  webSearch,
   audioSource,
   youtubeUrl,
+  youtubeVideoId,
   useCaptionsIfAvailable,
 } as const;
 
 export const FORM_KEYS = {
   file,
-  transcriptModelId,
   audioSource,
 } as const;

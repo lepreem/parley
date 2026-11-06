@@ -20,7 +20,6 @@ const FORM_KEYS = {
   fileName: "fileName",
   file: "file",
   audioSource: "audioSource",
-  transcriptModelId: "transcriptModelId",
 } as const;
 
 /** A multipart request carrying `file` and the other fields given. */
@@ -41,12 +40,14 @@ async function uploadToStorage(
   server: Server,
   mintPath: string,
   file: File,
+  signal?: AbortSignal,
 ): Promise<string> {
   const { uploadId, signedUploadUrl } = await apiJson<UploadTarget>(
     server,
     mintPath,
-    jsonRequest("POST", {}),
+    { ...jsonRequest("POST", {}), ...(signal ? { signal } : {}) },
   );
+  signal?.throwIfAborted();
 
   // Not apiFetch: storage is another origin and answers CORS with a wildcard,
   // which browsers refuse for credentialed requests. The URL's token is the
@@ -55,6 +56,7 @@ async function uploadToStorage(
     method: "PUT",
     headers: { "Content-Type": file.type || "application/octet-stream" },
     body: file,
+    ...(signal ? { signal } : {}),
   });
   if (!response.ok) {
     throw new ApiError(
@@ -107,27 +109,37 @@ export async function deleteImage(
  * Speech audio — already extracted from video and compressed by the caller.
  * `source` records what it came from; the transcribe job is queued server-side
  * once the upload is confirmed.
+ *
+ * `signal` stops the upload but never the request that creates the job: that
+ * job could then start with nothing here knowing about it. Once that request is
+ * sent it finishes, and the caller checks the signal and deletes what came back.
  */
 export async function uploadAudio(
   server: Server,
   upload: {
     file: File;
     source: "audio" | "video";
-    transcriptModelId: string;
   },
+  signal?: AbortSignal,
 ): Promise<UploadedAudio> {
+  signal?.throwIfAborted();
   if (server.uploads === "direct") {
     return apiJson<UploadedAudio>(
       server,
       "/upload/audio",
       directUpload(upload.file, {
         [FORM_KEYS.audioSource]: upload.source,
-        [FORM_KEYS.transcriptModelId]: upload.transcriptModelId,
       }),
     );
   }
 
-  const uploadId = await uploadToStorage(server, "/upload/audio", upload.file);
+  const uploadId = await uploadToStorage(
+    server,
+    "/upload/audio",
+    upload.file,
+    signal,
+  );
+  signal?.throwIfAborted();
 
   return apiJson<UploadedAudio>(
     server,
@@ -136,7 +148,6 @@ export async function uploadAudio(
       [FORM_KEYS.uploadId]: uploadId,
       [FORM_KEYS.fileName]: upload.file.name,
       [FORM_KEYS.audioSource]: upload.source,
-      [FORM_KEYS.transcriptModelId]: upload.transcriptModelId,
     }),
   );
 }
@@ -145,14 +156,14 @@ export async function uploadAudio(
 export async function requestYoutubeTranscript(
   server: Server,
   youtubeUrl: string,
-  transcriptModelId: string,
+  useCaptionsIfAvailable: boolean,
 ): Promise<QueuedYoutube> {
   return apiJson<QueuedYoutube>(
     server,
     "/upload/youtube",
     jsonRequest("POST", {
       youtubeUrl,
-      [FORM_KEYS.transcriptModelId]: transcriptModelId,
+      useCaptionsIfAvailable,
     } satisfies QueueYoutubeBody),
   );
 }

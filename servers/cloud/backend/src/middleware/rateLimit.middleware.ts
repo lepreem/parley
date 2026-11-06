@@ -1,7 +1,8 @@
 import { isIP } from "node:net";
 import type { Context } from "hono";
-import { MemoryStore, rateLimiter } from "hono-rate-limiter";
+import { rateLimiter } from "hono-rate-limiter";
 import { getConnInfo } from "@hono/node-server/conninfo";
+import { memory } from "../memory";
 import {
   RATE_LIMIT_POLICIES,
   type RateLimitKey,
@@ -56,13 +57,8 @@ const keyOf: Record<RateLimitKey, (c: Context) => string> = {
   userId: getUserId,
 };
 
-const stores: MemoryStore[] = [];
-
 /**
  * A policy from policies.ts as middleware, counting in this process's memory.
- * The API runs as one instance, so the counts are exact and no request waits
- * on a round trip to a shared store. With several instances each would count
- * on its own; see TODO.md before scaling out.
  *
  * RATE_LIMIT_MULTIPLIER raises every budget for the load test, which would
  * otherwise measure mostly 429s; production refuses to start with it set.
@@ -74,15 +70,13 @@ function createLimiter(
   const { windowMs, key } = RATE_LIMIT_POLICIES[name];
   const limit =
     RATE_LIMIT_POLICIES[name].limit * (getEnv().RATE_LIMIT_MULTIPLIER ?? 1);
-  const store = new MemoryStore();
-  stores.push(store);
 
   return rateLimiter({
     windowMs,
     limit,
     standardHeaders: "draft-6",
     keyGenerator: keyOf[key],
-    store,
+    store: memory.rateLimitCounts.createStore(),
     message: rateLimitMessage,
     // Behind requireAuth, which says who's a guest.
     ...(onlyGuests ? { skip: (c: Context) => c.get("isGuest") !== true } : {}),
@@ -107,8 +101,5 @@ export const modelRateLimiter = createLimiter("model");
 export const imageReadRateLimiter = createLimiter("imageRead");
 export const uploadRateLimiter = createLimiter("upload");
 export const uploadConfirmRateLimiter = createLimiter("uploadConfirm");
-
-/** Test-only: clears every count, so cases don't spend each other's budgets. */
-export function resetRateLimits() {
-  for (const store of stores) store.resetAll();
-}
+export const dictationRateLimiter = createLimiter("dictation");
+export const dictationDailyRateLimiter = createLimiter("dictationDaily");

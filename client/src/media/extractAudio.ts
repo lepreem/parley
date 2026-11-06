@@ -1,11 +1,15 @@
 import { fetchFile } from "@ffmpeg/util";
 import { withFFmpeg } from "./ffmpeg";
+import { extractedAudioFileName } from "./fileNames";
 
 /**
  * Demux/decodes video in-browser and returns a mono 16 kHz WAV for speech pipelines.
  * The original video bytes are not uploaded.
  */
-export async function extractAudioFromVideo(videoFile: File): Promise<File> {
+export async function extractAudioFromVideo(
+  videoFile: File,
+  signal?: AbortSignal,
+): Promise<File> {
   return withFFmpeg(async (ff) => {
     const extMatch = videoFile.name.match(/(\.[^.]+)$/);
     const ext = extMatch ? extMatch[1] : ".mp4";
@@ -54,9 +58,8 @@ export async function extractAudioFromVideo(videoFile: File): Promise<File> {
     }
 
     const blob = new Blob([new Uint8Array(data)], { type: "audio/wav" });
-    const base =
-      videoFile.name.replace(/\.[^.]+$/, "").replace(/[^\w.-]+/g, "_") ||
-      "recording";
-    return new File([blob], `${base}-audio.wav`, { type: "audio/wav" });
-  });
+    return new File([blob], extractedAudioFileName(videoFile.name), {
+      type: "audio/wav",
+    });
+  }, signal);
 }

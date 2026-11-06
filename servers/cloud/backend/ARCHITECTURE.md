@@ -16,6 +16,32 @@ process; the two talk only through RabbitMQ.
 The source is all in `src/`, entry point `src/index.ts`. `scripts/` holds the
 one-shots (migrate, baseline, push-storage) and `test/` the tests.
 
+## Folder layout
+
+A folder under `src/` is named for one of two things:
+
+- **A technology**, which it keeps behind one interface: `db/` and `data/`
+  (Postgres through Drizzle), `storage/` (the Supabase bucket),
+  `message-queue/` (RabbitMQ), `ai/` (OpenRouter and Deepgram), `sse/`,
+  `memory/` (state held in this process) and `recurring/` (work on a timer).
+  The file names inside say what the app uses it for: `memory/historyText.ts`,
+  `recurring/guestSweep.ts`.
+- **What the app does**, combining those: `chat/`, `transcription/`,
+  `uploads/`, plus `controllers/`, `routes/`, `middleware/` and `schema/` for
+  HTTP.
+
+Lint (`eslint.config.js`) holds the technology folders to this:
+
+- Only the folder that owns a library imports it (`local/library-owner`):
+  Drizzle and Postgres in `db/` and `data/`, Supabase in `storage/`, and so on.
+  `hono/streaming` stays in `@parley/server-kit/sse`.
+- A module-level container that starts empty, or a `MemoryStore`, goes in
+  `memory/`, so that folder lists everything a second instance wouldn't share.
+- `setInterval` goes in `recurring/`, so that folder lists everything that runs
+  over and over.
+- `memory/`, `recurring/`, `storage/`, `ai/` and `message-queue/` are imported
+  through their entry file only (`local/public-module-entry`).
+
 ## Attachment vocabulary
 
 - **Attachment** is the stored database object. Use **upload** for uploading operations.
@@ -41,6 +67,7 @@ does with a message, with `yt_` on the ones only YouTube uploads go through:
 | ------------------- | --------------------------------------- | ----------------------------------- |
 | `yt_fetch_captions` | api → youtube-fetcher                   | `{ audioUploadId, url, userId }`    |
 | `yt_fetch_audio`    | api / youtube-fetcher → youtube-fetcher | `{ audioUploadId, url, userId }`    |
+| `yt_cancel_fetch`   | api → youtube-fetcher                   | `{ audioUploadId }`                 |
 | `yt_save_captions`  | youtube-fetcher → api                   | `{ audioUploadId, segments }`       |
 | `transcribe_audio`  | api / youtube-fetcher → api             | `{ audioUploadId }`                 |
 | `yt_fail_job`       | youtube-fetcher → api                   | `{ audioUploadId, userId, error? }` |
@@ -52,7 +79,7 @@ ones over the concurrency limit until there's room.
 Each consumer sets how many messages it works on at once,
 `mq.consume(queue, handler, { attempts, prefetch })`, 1 unless it says
 otherwise. `transcribe_audio` takes `getTranscriptionConcurrency()`
-(`src/transcribeJob.ts`): 40, under the 50 transcriptions Deepgram runs at
+(`src/transcription/transcribeJob.ts`): 40, under the 50 transcriptions Deepgram runs at
 once for a project. Every API instance together has to stay under that, so
 once there are several, each one's share comes from the load balancer.
 `yt_save_captions` stays at 1: it is only database writes, and one at a time
@@ -105,6 +132,12 @@ itself. For that one, the fetcher stores audio under the job's
 `audioUploadId` and publishes `transcribe_audio`. Either fetch that fails
 publishes `yt_fail_job`.
 
+Deleting an unfinished job cancels it. The transcribing worker checks an abort
+signal before each step and passes it to Deepgram. For a YouTube job the API
+also publishes `yt_cancel_fetch`: the fetcher remembers the id, checks before
+each step, and stops yt-dlp through its progress hook. The caption and storage
+calls offer no way to stop midway, so those run to the end of the call.
+
 Completed transcripts are immutable. The API has no rerun route, and a source
 linked to a message or reserved for a response cannot be deleted. Trying another
 transcription requires a new upload and job, so old conversation history cannot
@@ -116,6 +149,18 @@ model through `chat_message_attachments`, which preserves their link
 order. There is no second job pipeline: the prompt contains the linked
 transcripts plus whatever the user types, and the reply streams over the same
 SSE endpoint every other chat turn uses.
+
+**Audio is kept for a week, a YouTube job's not at all.** Once a job has
+its transcript nothing on the server reads its audio, so the hourly storage
+sweep (`src/recurring/storageSweep.ts`) marks it deleted in the ledger
+(`markFinishedAudioDeleted`) and then removes it like any other unused object:
+a YouTube job's as soon as it's transcribed, since the video plays from
+YouTube; any other finished job's, failed ones included, a week after its
+upload, which is also how long a dead-lettered job's audio stays to replay.
+The job and its transcript stay. Until then the client plays the audio from
+`GET /jobs/transcribe/:audioUploadId/audio`, a signed link, or null once the
+ledger no longer has it confirmed. After that it plays the copy it keeps in
+the browser, or the original file the user picks again.
 
 Job state transitions are **claimed atomically**. A fresh delivery can claim
 only a queued job; a broker redelivery can reclaim a processing job. Every claim
@@ -140,7 +185,7 @@ There are two kinds of stream, and both are read with fetch, not EventSource
 | A chat reply's stream                      | `src/chat/replyStream.ts`                                 |
 | Replies being written, for stop and reload | `src/memory/repliesInProgress.ts`                         |
 | The queue between a reply and its stream   | `@parley/server-kit/sse/eventQueue`                       |
-| `GET /events`, one stream per user         | `src/sse/hub.ts`, `src/sse/events.controller.ts`          |
+| `GET /events`, one stream per user         | `src/sse/hub.ts`, `src/controllers/events.controller.ts`  |
 | The hub behind it                          | `@parley/server-kit/sse/hub`                              |
 | Event names and payloads                   | `ReplyStreamEvents`, `ServerEvents` in `@parley/contract` |
 | The client side                            | `client/src/sse/`                                         |
@@ -164,8 +209,8 @@ What a guest can't do, because it costs money nobody is accountable for:
   stored object's key starts with its owner's id, so letting guests upload
   means moving their objects in storage when they sign in; see
   `users.adoptGuest`.
-- **Use a model that costs more than `openai/gpt-4o-mini`**, for input or
-  output (`chat.listGuestModels`).
+- **Use a model that costs more than $0.10 in / $0.50 out** per million
+  tokens, GPT-6 Luna's price (`chat.listGuestModels`).
 - **Spend from the main OpenRouter key.** Guest turns, titles included, go
   through `OPENROUTER_GUEST_API_KEY`, whose credit limit in OpenRouter is the
   hard cap on guest spending. Without it, and `GUEST_SESSION_SECRET`, there is
@@ -175,7 +220,8 @@ What a guest can't do, because it costs money nobody is accountable for:
   one click away.
 
 A guest session lasts thirty days from when it starts, and nothing extends it.
-The sweeper deletes guests a day past that, with what they made.
+The hourly guest sweep (`src/recurring/guestSweep.ts`) deletes guests a day
+past that, with what they made.
 
 ## Deployment & scaling
 
@@ -190,11 +236,11 @@ randomize it.
 
 Running more than one instance needs more than a replica count. Everything
 in `src/memory/` (`memory.<what>` in the code) lives in the process that
-wrote it: the model lists, the history text below, and the replies being
-written, so a stop request or a reloaded page has to reach the instance
-writing the reply. Rate limits and
-event streams are per process too (see the root TODO.md). The instances
-have to split the transcription concurrency between them (see
+wrote it: the model lists, the history text below, the rate limit counts, the
+session refreshes, and the replies being written, so a stop request or a
+reloaded page has to reach the instance writing the reply. Lint keeps new
+state in that folder. Event streams are per process too, in `src/sse/` (see
+the root TODO.md). The instances have to split the transcription concurrency between them (see
 [Message queues](#message-queues)), and each holds its own database
 connections out of the session pooler's fixed budget, so adding one means
 shrinking the pool in `src/db/pool.ts`.

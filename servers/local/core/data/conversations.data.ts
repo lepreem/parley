@@ -50,8 +50,8 @@ async function findConversation(conversationId: string) {
  * mid-turn never gets to release. Without an expiry that conversation returns
  * 409 for good.
  *
- * Longer than any turn can run: the model call is the only slow step, and
- * chatAI gives up on it after 8 minutes.
+ * A reply has no time limit, so the turn renews its claim while it runs
+ * (renewConversationClaim); this only has to outlast the gap between renewals.
  */
 export const CLAIM_LEASE_MS = 10 * 60 * 1000;
 
@@ -116,6 +116,27 @@ async function unclaimConversationTurn(
         eq(Conversations.activeTurnClaimToken, claimToken),
       ),
     );
+}
+
+/** Marks a claim as still held, now. False if it's no longer this token's. */
+async function renewConversationClaim(
+  conversationId: string,
+  claimToken: string,
+) {
+  const [row] = await db
+    .update(Conversations)
+    .set({
+      activeTurnClaimedAt: new Date(),
+      updatedAt: sql`${Conversations.updatedAt}`,
+    })
+    .where(
+      and(
+        eq(Conversations.id, conversationId),
+        eq(Conversations.activeTurnClaimToken, claimToken),
+      ),
+    )
+    .returning({ id: Conversations.id });
+  return Boolean(row);
 }
 
 async function completeConversationTurn(
@@ -188,6 +209,7 @@ export const conversations = {
   findConversation,
   claimConversationTurn,
   unclaimConversationTurn,
+  renewConversationClaim,
   completeConversationTurn,
   createConversation,
   renameConversation,

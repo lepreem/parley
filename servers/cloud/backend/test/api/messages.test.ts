@@ -123,7 +123,7 @@ vi.mock("../../src/data/transcripts.data", async (importActual) => {
 });
 
 // Controllers release deleted objects through the upload module.
-vi.mock("../../src/uploads", () => ({
+vi.mock("../../src/uploads/uploads", () => ({
   uploads: { deleteObjects: mockDeleteObjects },
 }));
 
@@ -142,9 +142,11 @@ vi.mock("../../src/storage/sign", () => ({
 
 // buildUserTurn is the real one: what the model is handed for an image turn is
 // exactly what these tests are checking.
-vi.mock("../../src/ai/ai_chat_client", async (importActual) => {
+vi.mock("../../src/ai/ai_chat_client/ai_chat_client", async (importActual) => {
   const actual =
-    await importActual<typeof import("../../src/ai/ai_chat_client")>();
+    await importActual<
+      typeof import("../../src/ai/ai_chat_client/ai_chat_client")
+    >();
   return {
     ...actual,
     chat: {
@@ -158,23 +160,24 @@ vi.mock("../../src/ai/ai_chat_client", async (importActual) => {
 });
 
 // The real timing, watched: these tests check which steps get timed together.
-vi.mock("../../src/preparationMetrics", async (importActual) => {
+vi.mock("../../src/metrics/preparationMetrics", async (importActual) => {
   const actual =
-    await importActual<typeof import("../../src/preparationMetrics")>();
+    await importActual<typeof import("../../src/metrics/preparationMetrics")>();
   return { ...actual, measurePreparation: vi.fn(actual.measurePreparation) };
 });
 
 import { createApp } from "../../src/app";
 import { eventHub } from "../../src/sse/hub";
 import { resetHistoryTextCache } from "../../src/memory/historyText";
-import { resetRateLimits } from "../../src/middleware/rateLimit.middleware";
-import { measurePreparation } from "../../src/preparationMetrics";
+import { resetRateLimits } from "../../src/memory/rateLimitCounts";
+import { measurePreparation } from "../../src/metrics/preparationMetrics";
 import {
+  completionTokenCeiling,
   MAX_CONTEXT_CHARS,
   MAX_HISTORY_MESSAGES,
-  MAX_RESPONSE_TOKENS,
 } from "../../src/chat/contextWindow";
 import { MAX_TRANSCRIPTS } from "../../src/schema/messages.schema";
+import { NoRoomToReply } from "../../src/ai";
 import {
   authedHeaders,
   guestCookieHeader,
@@ -335,6 +338,10 @@ beforeEach(() => {
     name: "Test model",
     contextTokens: null,
     acceptsImages: true,
+    released: null,
+    aliases: [],
+    replacedBy: null,
+    retires: null,
   });
   mockGenerateTitle.mockResolvedValue("Friendly greeting");
   mockIsGuestModel.mockResolvedValue(true);
@@ -409,6 +416,50 @@ describe("a guest's turn", () => {
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({
       message: "Invalid model: sign in to use this model",
+    });
+    expect(mockChatAI).not.toHaveBeenCalled();
+    expect(mockUnclaimConversationTurn).toHaveBeenCalled();
+  });
+
+  it("is refused web search", async () => {
+    mockFindChatModel.mockResolvedValue({
+      id: modelId,
+      contextTokens: null,
+      acceptsImages: true,
+      searchesWeb: true,
+    });
+
+    const res = await postAsGuest({
+      messageContent: "Hi there",
+      chosenModelId: modelId,
+      webSearch: true,
+    });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      message: "Web search: sign in to use it",
+    });
+    expect(mockChatAI).not.toHaveBeenCalled();
+    expect(mockUnclaimConversationTurn).toHaveBeenCalled();
+  });
+
+  it("is refused a choice of effort", async () => {
+    mockFindChatModel.mockResolvedValue({
+      id: modelId,
+      contextTokens: null,
+      acceptsImages: true,
+      reasoning: { efforts: ["low", "high"], defaultEffort: "low" },
+    });
+
+    const res = await postAsGuest({
+      messageContent: "Hi there",
+      chosenModelId: modelId,
+      reasoningEffort: "high",
+    });
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({
+      message: "Invalid effort: sign in to choose one",
     });
     expect(mockChatAI).not.toHaveBeenCalled();
     expect(mockUnclaimConversationTurn).toHaveBeenCalled();
@@ -664,6 +715,180 @@ describe("POST /conversations/:conversationId/messages", () => {
 
     finishGeneration("Summary");
     expect(await response.text()).toContain("event: done");
+  });
+
+  describe("with web search", () => {
+    const canSearch = (searchesWeb: boolean) =>
+      mockFindChatModel.mockResolvedValue({
+        id: modelId,
+        contextTokens: null,
+        acceptsImages: true,
+        searchesWeb,
+      });
+
+    it("lets the model search, and saves and reports what it found", async () => {
+      canSearch(true);
+      mockChatAI.mockImplementationOnce(
+        async (
+          _model: string,
+          _turns: unknown,
+          opts: { onSource: (url: unknown, title: unknown) => void },
+        ) => {
+          opts.onSource("https://a.example/page", "A page");
+          opts.onSource("https://a.example/page", "The same page");
+          opts.onSource("javascript:alert(1)", "Not a page");
+          return "Answer";
+        },
+      );
+
+      const res = await postMessage({
+        messageContent: "Hi",
+        chosenModelId: modelId,
+        webSearch: true,
+      });
+      const body = await res.text();
+
+      const sources = [{ url: "https://a.example/page", title: "A page" }];
+      expect(mockChatAI).toHaveBeenCalledWith(
+        modelId,
+        expect.anything(),
+        expect.objectContaining({ webSearch: true }),
+      );
+      expect(mockPersistAndUnclaimChatTurn).toHaveBeenCalledWith(
+        expect.objectContaining({ sources }),
+      );
+      expect(body).toContain(`"sources":${JSON.stringify(sources)}`);
+    });
+
+    it("doesn't offer search unless asked", async () => {
+      canSearch(true);
+      mockChatAI.mockResolvedValueOnce("Answer");
+
+      const res = await postMessage({
+        messageContent: "Hi",
+        chosenModelId: modelId,
+      });
+      await res.text();
+
+      const [, , opts] = mockChatAI.mock.calls[0];
+      expect(opts.webSearch).toBeUndefined();
+      expect(mockPersistAndUnclaimChatTurn).toHaveBeenCalledWith(
+        expect.objectContaining({ sources: [] }),
+      );
+    });
+
+    it("refuses it for a model that can't search", async () => {
+      canSearch(false);
+
+      const res = await postMessage({
+        messageContent: "Hi",
+        chosenModelId: modelId,
+        webSearch: true,
+      });
+
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({
+        message: "Invalid model: can't search the web",
+      });
+      expect(mockChatAI).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("with a reasoning effort", () => {
+    const offersEfforts = () =>
+      mockFindChatModel.mockResolvedValue({
+        id: modelId,
+        contextTokens: null,
+        acceptsImages: true,
+        maxOutputTokens: null,
+        reasoning: { efforts: ["low", "high"], defaultEffort: "low" },
+      });
+
+    it("asks the model for it, with room for that much thinking", async () => {
+      offersEfforts();
+      mockChatAI.mockResolvedValueOnce("Answer");
+
+      const res = await postMessage({
+        messageContent: "Hi",
+        chosenModelId: modelId,
+        reasoningEffort: "high",
+      });
+      await res.text();
+
+      expect(res.status).toBe(200);
+      expect(mockChatAI).toHaveBeenCalledWith(
+        modelId,
+        expect.anything(),
+        expect.objectContaining({
+          reasoningEffort: "high",
+          maxOutputTokens: 20_000,
+        }),
+      );
+    });
+
+    it("leaves it to the model when none is chosen", async () => {
+      offersEfforts();
+      mockChatAI.mockResolvedValueOnce("Answer");
+
+      const res = await postMessage({
+        messageContent: "Hi",
+        chosenModelId: modelId,
+      });
+      await res.text();
+
+      expect(mockChatAI).toHaveBeenCalledWith(
+        modelId,
+        expect.anything(),
+        expect.objectContaining({
+          reasoningEffort: undefined,
+          maxOutputTokens: 8_000,
+        }),
+      );
+    });
+
+    it("refuses one the model doesn't offer", async () => {
+      offersEfforts();
+
+      const res = await postMessage({
+        messageContent: "Hi",
+        chosenModelId: modelId,
+        reasoningEffort: "max",
+      });
+
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({
+        message: "Invalid effort: this model doesn't offer it",
+      });
+      expect(mockChatAI).not.toHaveBeenCalled();
+    });
+
+    it("refuses one that isn't a level at all", async () => {
+      offersEfforts();
+
+      const res = await postMessage({
+        messageContent: "Hi",
+        chosenModelId: modelId,
+        reasoningEffort: "ludicrous",
+      });
+
+      expect(res.status).toBe(400);
+      expect(mockChatAI).not.toHaveBeenCalled();
+    });
+  });
+
+  it("says so when the model thought until it had no room to reply", async () => {
+    mockChatAI.mockRejectedValueOnce(new NoRoomToReply());
+
+    const response = await postMessage({
+      messageContent: "A hard question",
+      chosenModelId: modelId,
+    });
+
+    const body = await response.text();
+    expect(body).toContain("event: error");
+    expect(body).toContain("used up its token limit");
+    expect(mockPersistAndUnclaimChatTurn).not.toHaveBeenCalled();
+    expect(mockUnclaimConversationTurn).toHaveBeenCalled();
   });
 
   it("releases reservations when persistence fails after generation", async () => {
@@ -1397,8 +1622,12 @@ describe("POST /conversations/:conversationId/messages", () => {
         {
           role: "user",
           content: [
-            { type: "text", text: "What is this?" },
-            { type: "image_url", imageUrl: { url: resolvedImage.url } },
+            { type: "input_text", text: "What is this?" },
+            {
+              type: "input_image",
+              detail: "auto",
+              imageUrl: resolvedImage.url,
+            },
           ],
         },
         // The new turn has no images of its own, so it stays a plain string.
@@ -1422,6 +1651,10 @@ describe("POST /conversations/:conversationId/messages", () => {
       name: "Text only",
       contextTokens: null,
       acceptsImages: false,
+      released: null,
+      aliases: [],
+      replacedBy: null,
+      retires: null,
     });
 
     const response = await postMessage({
@@ -1460,7 +1693,9 @@ describe("POST /conversations/:conversationId/messages", () => {
     const [, turns, opts] = mockChatAI.mock.calls[0];
     const labels = turns.map((t: { content: string }) => t.content.slice(0, 6));
     expect(labels).toEqual(["middle", "newest", "Hi the"]);
-    expect(opts.maxOutputTokens).toBe(MAX_RESPONSE_TOKENS);
+    expect(opts.maxOutputTokens).toBe(
+      completionTokenCeiling(undefined, undefined),
+    );
     expect(mockPersistAndUnclaimChatTurn).toHaveBeenCalledWith(
       expect.objectContaining({ contextWindowMessageCount: 4 }),
     );
@@ -1708,8 +1943,12 @@ describe("POST /conversations/:conversationId/messages", () => {
         {
           role: "user",
           content: [
-            { type: "text", text: "Hi there" },
-            { type: "image_url", imageUrl: { url: resolvedImage.url } },
+            { type: "input_text", text: "Hi there" },
+            {
+              type: "input_image",
+              detail: "auto",
+              imageUrl: resolvedImage.url,
+            },
           ],
         },
       ],
@@ -1765,6 +2004,10 @@ describe("POST /conversations/:conversationId/messages", () => {
       name: "Text only",
       contextTokens: null,
       acceptsImages: false,
+      released: null,
+      aliases: [],
+      replacedBy: null,
+      retires: null,
     });
 
     const res = await postMessage({
@@ -1926,8 +2169,15 @@ describe("PATCH /conversations/:conversationId/messages/:messageId", () => {
         {
           role: "user",
           content: [
-            { type: "text", text: "Edited transcript\n\nUpdated question" },
-            { type: "image_url", imageUrl: { url: resolvedImage.url } },
+            {
+              type: "input_text",
+              text: "Edited transcript\n\nUpdated question",
+            },
+            {
+              type: "input_image",
+              detail: "auto",
+              imageUrl: resolvedImage.url,
+            },
           ],
         },
       ],
@@ -2073,6 +2323,10 @@ describe("PATCH /conversations/:conversationId/messages/:messageId", () => {
       name: "Text only",
       contextTokens: null,
       acceptsImages: false,
+      released: null,
+      aliases: [],
+      replacedBy: null,
+      retires: null,
     });
 
     const response = await patchMessage(edit);

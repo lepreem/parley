@@ -3,12 +3,12 @@ import { eventHub } from "./sse/hub";
 
 import { mq } from "./message-queue/messageQueue";
 import { data } from "./data";
-import { sweeper } from "./sweeper";
+import { recurring } from "./recurring";
 import { onShutdown } from "@parley/server-kit/runtime/shutdown";
 import {
   getTranscriptionConcurrency,
   handleTranscribeJob,
-} from "./transcribeJob";
+} from "./transcription/transcribeJob";
 
 import { serve } from "@hono/node-server";
 import { createApp } from "./app";
@@ -67,9 +67,8 @@ await mq.consume(
   { attempts: 2 },
 );
 
-// Every instance schedules it; the sweep's own lock keeps them from
-// overlapping.
-const stopSweeper = sweeper.schedule();
+// The storage and guest sweeps, every hour (src/recurring/).
+const stopRecurring = recurring.start();
 
 /**
  * Stop taking work, then let go of the connections.
@@ -88,7 +87,7 @@ const stopSweeper = sweeper.schedule();
  */
 onShutdown(
   async () => {
-    await Promise.all([mq.stopConsuming(), stopSweeper()]);
+    await Promise.all([mq.stopConsuming(), stopRecurring()]);
     // An open event stream would hold the server open until it ended.
     await eventHub.close();
     await new Promise<void>((resolve) => server.close(() => resolve()));

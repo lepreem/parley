@@ -23,8 +23,6 @@ export const queryKeys = {
   /** A guest is offered fewer models, so their catalog is kept apart. */
   chatModels: (server: ServerId, guest: boolean) =>
     [server, "models", "chat", guest ? "guest" : "member"] as const,
-  transcriptionModels: (server: ServerId) =>
-    [server, "models", "transcription"] as const,
   jobLists: (server: ServerId) => [server, "jobs"] as const,
   everyJob: (server: ServerId) => [server, "job"] as const,
   job: (server: ServerId, audioUploadId: string) =>
@@ -32,6 +30,8 @@ export const queryKeys = {
   conversations: (server: ServerId) => [server, "conversations"] as const,
   messages: (server: ServerId, conversationId: string) =>
     [server, "conversations", conversationId, "messages"] as const,
+  toolApprovals: (server: ServerId, conversationId: string) =>
+    [server, "conversations", conversationId, "toolApprovals"] as const,
   health: (server: ServerId) => [server, "health"] as const,
   guestChat: (server: ServerId) => [server, "guestChat"] as const,
 };
@@ -77,6 +77,6 @@ export const persistOptions = {
   maxAge: 24 * 60 * 60 * 1000,
   // Bump when a cached shape changes, or what a catalog lists does, to drop
   // entries written by an older build.
-  buster: "v4",
+  buster: "v5",
   dehydrateOptions: { shouldDehydrateQuery: shouldPersist },
 };

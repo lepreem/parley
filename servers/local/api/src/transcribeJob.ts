@@ -1,7 +1,4 @@
-import {
-  DEFAULT_TRANSCRIBE_MODEL,
-  transcribeAI,
-} from "../../core/ai/ai_transcribe_client";
+import { transcribeAI } from "../../core/ai/ai_transcribe_client";
 import { files } from "../../core/files";
 import { data } from "../../core/data";
 import { logger } from "@parley/server-kit/runtime/logger";
@@ -12,6 +9,7 @@ import {
 } from "../../core/message-queue/messageQueue";
 import type { TranscriptSegment } from "@parley/server-kit/transcription/transcript";
 import type { UploadId } from "@parley/server-kit/ids";
+import { jobCancellation } from "@parley/server-kit/transcription/jobCancellation";
 
 const log = logger.child({ component: "transcribe" });
 
@@ -39,10 +37,10 @@ type ClaimedJob = NonNullable<
 >;
 
 /** The job's audio, transcribed. */
-async function transcribeAudio(job: ClaimedJob) {
+async function transcribeAudio(job: ClaimedJob, cancelled: AbortSignal) {
   return transcribeAI(
-    job.transcriptModelId ?? DEFAULT_TRANSCRIBE_MODEL,
     files.path({ kind: "audio", uploadId: job.audioUploadId }),
+    cancelled,
   );
 }
 
@@ -105,13 +103,15 @@ export async function handleTranscribeJob(
   { attempt, lastAttempt }: DeliveryMetadata,
 ) {
   let claimToken: string | null = null;
+  const { signal: cancelled, finish } = jobCancellation.start(audioUploadId);
 
   try {
     const job = await data.jobs.claimAudioJob(audioUploadId);
     if (!job) return;
     claimToken = job.claimToken;
 
-    const segments = captions ?? (await transcribeAudio(job));
+    const segments = captions ?? (await transcribeAudio(job, cancelled));
+    cancelled.throwIfAborted();
     if (!segments.some((segment) => segment.text.trim())) {
       throw new NoSpeechError();
     }
@@ -131,11 +131,18 @@ export async function handleTranscribeJob(
       return;
     }
   } catch (error) {
+    // The user deleted the job, so there's nothing to retry or report.
+    if (cancelled.aborted) {
+      log.debug("Transcription cancelled", { audioUploadId });
+      return;
+    }
     log.error("Transcription job failed", error, { audioUploadId, attempt });
     // Nothing claimed: the consumer tries again or gives it up.
     if (!claimToken) throw error;
     await settleFailedJob(audioUploadId, claimToken, lastAttempt, error);
     return;
+  } finally {
+    finish();
   }
 
   // Tells the browser the job is done, so the user's screen updates.

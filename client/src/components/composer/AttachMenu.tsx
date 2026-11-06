@@ -1,6 +1,4 @@
 import { useRef, useState, type ChangeEvent } from "react";
-import { useServerReady } from "../../hooks/server/useServerReady";
-import { useTranscriptionModelsQuery } from "../../hooks/queries/useModelsQuery";
 import { IMAGE_ACCEPT, MEDIA_ACCEPT } from "../../media/fileKind";
 import { Icon } from "../ui/Icon";
 import { useDismissable } from "../ui/useDismissable";
@@ -8,18 +6,16 @@ import { useDismissable } from "../ui/useDismissable";
 type AttachMenuProps = {
   onAddFiles: (files: File[]) => void;
   onBrowseSources: () => void;
-  transcriptModelId: string | null;
-  onTranscriptModelChange: (modelId: string) => void;
+  useCaptionsIfAvailable: boolean;
+  onUseCaptionsChange: (use: boolean) => void;
 };
 
 export function AttachMenu({
   onAddFiles,
   onBrowseSources,
-  transcriptModelId,
-  onTranscriptModelChange,
+  useCaptionsIfAvailable,
+  onUseCaptionsChange,
 }: AttachMenuProps) {
-  const ready = useServerReady();
-  const { models: transcriptionModels } = useTranscriptionModelsQuery(ready);
   const [open, setOpen] = useState(false);
   const menuRef = useDismissable<HTMLDivElement>(open, () => setOpen(false));
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -96,28 +92,20 @@ export function AttachMenu({
           </button>
 
           <div className="border-t border-line px-3 py-2.5">
-            <label
-              htmlFor="transcription-model"
-              className="eyebrow block pb-1.5 text-faint"
-            >
-              Transcribe with
+            <label className="flex items-start gap-2 text-xs text-ink">
+              <input
+                type="checkbox"
+                checked={useCaptionsIfAvailable}
+                onChange={(event) => onUseCaptionsChange(event.target.checked)}
+                className="mt-0.5"
+              />
+              <span>
+                Use YouTube captions when a video has them
+                <span className="block text-[11px] leading-snug text-faint">
+                  Instant, but rougher than transcribing.
+                </span>
+              </span>
             </label>
-            <select
-              id="transcription-model"
-              value={transcriptModelId ?? ""}
-              onChange={(event) => onTranscriptModelChange(event.target.value)}
-              className="w-full rounded-md border border-line bg-canvas px-2 py-1.5 font-mono text-[11px] text-ink outline-none"
-            >
-              {transcriptionModels.length === 0 ? (
-                <option value="">Loading…</option>
-              ) : (
-                transcriptionModels.map((model) => (
-                  <option key={model.id} value={model.id}>
-                    {model.name}
-                  </option>
-                ))
-              )}
-            </select>
             <p className="pt-1.5 text-[11px] leading-snug text-faint">
               Applies to sources you add from now on.
             </p>

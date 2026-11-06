@@ -26,9 +26,9 @@ async function findAudioJob(userId: string, audioUploadId: string) {
       audioUploadId: AudioTranscriptionJobs.audioUploadId,
       fileName: Attachments.fileName,
       source: AudioTranscriptionJobs.source,
-      youtubeSourceUrl: AudioTranscriptionJobs.YT_sourceUrl,
       status: AudioTranscriptionJobs.status,
       error: AudioTranscriptionJobs.error,
+      youtubeVideoId: AudioTranscriptionJobs.youtubeVideoId,
     })
     .from(AudioTranscriptionJobs)
     .innerJoin(
@@ -152,8 +152,9 @@ async function createAudioJob(
     fileName: string;
     mimeType: string | null;
     sizeBytes: number;
-    transcriptModelId: string;
-    youtubeSourceUrl?: string;
+    youtubeVideoId?: string;
+    /** Only for a job whose transcript is written with it. */
+    status?: "completed";
   },
   executor: Executor = db,
 ) {
@@ -164,8 +165,8 @@ async function createAudioJob(
     fileName,
     mimeType,
     sizeBytes,
-    transcriptModelId,
-    youtubeSourceUrl,
+    youtubeVideoId,
+    status,
   } = job;
 
   await executor.transaction(async (tx) => {
@@ -183,10 +184,8 @@ async function createAudioJob(
     await tx.insert(AudioTranscriptionJobs).values({
       audioUploadId,
       source,
-      transcriptModelId,
-      ...(youtubeSourceUrl !== undefined
-        ? { YT_sourceUrl: youtubeSourceUrl }
-        : {}),
+      ...(youtubeVideoId !== undefined ? { youtubeVideoId } : {}),
+      ...(status !== undefined ? { status } : {}),
     });
   });
 }
@@ -234,8 +233,9 @@ async function deleteAudioJob(userId: string, audioUploadId: string) {
       );
     if (!deletedAudioUploadId) return null;
 
-    // A youtube fetch runs in another process that nothing here can stop, so
-    // until the job reaches a terminal status its objects may still land.
+    // A youtube fetch runs in another process, which can be told to stop but
+    // may be past its last check, so until the job reaches a terminal status
+    // its objects may still land.
     const fetchMayStillWrite =
       job?.source === "youtube" &&
       job.status !== "completed" &&

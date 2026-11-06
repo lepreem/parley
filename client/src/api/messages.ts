@@ -1,11 +1,12 @@
 import type {
   ChatMessage,
   MessageAttachmentInput,
+  MessageSource,
   MessagesResponse,
   MessageTranscript,
   ReplyInProgress,
+  LocalSendMessageBody,
   ReplyStreamEvents,
-  SendMessageBody,
   TurnStats,
 } from "@parley/contract";
 import { readServerSentEvents, type ServerSentEvent } from "../sse/reader";
@@ -15,6 +16,7 @@ import { serverUrl, type Server } from "./server";
 export type {
   ChatMessage,
   MessageAttachmentInput,
+  MessageSource,
   MessagesResponse,
   MessageTranscript,
   ReplyInProgress,
@@ -29,7 +31,7 @@ export type {
  */
 export const MAX_CONTEXT_MESSAGES = 50;
 
-export type SendMessageInput = SendMessageBody & {
+export type SendMessageInput = LocalSendMessageBody & {
   conversationId: string;
   /**
    * Set to edit that message instead of adding one: the server drops it and
@@ -66,7 +68,12 @@ type StreamCallbacks = {
   onOpen: () => void;
   onDelta: (delta: string) => void;
   /** `stats` when the server sent them, for the reply's stats panel. */
-  onDone: (lastMessageId: string, stopped: boolean, stats?: TurnStats) => void;
+  onDone: (
+    lastMessageId: string,
+    stopped: boolean,
+    sources: MessageSource[],
+    stats?: TurnStats,
+  ) => void;
   /** Stopped before any of the reply came: nothing was saved. */
   onCancelled: () => void;
 };
@@ -88,6 +95,7 @@ function dispatchReplyEvent(
     callbacks.onDone(
       data.lastMessageId,
       data.stopped === true,
+      Array.isArray(data.sources) ? data.sources : [],
       Array.isArray(data.stats?.steps) && typeof data.stats.context === "object"
         ? data.stats
         : undefined,
@@ -124,9 +132,14 @@ export async function streamMessage(
     jsonRequest(input.replacesMessageId ? "PATCH" : "POST", {
       messageContent: input.messageContent,
       chosenModelId: input.chosenModelId,
+      ...(input.reasoningEffort
+        ? { reasoningEffort: input.reasoningEffort }
+        : {}),
+      ...(input.webSearch ? { webSearch: true } : {}),
+      ...(input.permissionMode ? { permissionMode: input.permissionMode } : {}),
       attachments: input.attachments,
       lastMessageId: input.lastMessageId,
-    } satisfies SendMessageBody),
+    } satisfies LocalSendMessageBody),
   );
 
   if (!response.body) throw new Error("The response stream was empty");
@@ -136,9 +149,9 @@ export async function streamMessage(
   await readServerSentEvents(response.body, (event) =>
     dispatchReplyEvent(event, {
       ...callbacks,
-      onDone: (lastMessageId, stopped, stats) => {
+      onDone: (lastMessageId, stopped, sources, stats) => {
         completed = true;
-        callbacks.onDone(lastMessageId, stopped, stats);
+        callbacks.onDone(lastMessageId, stopped, sources, stats);
       },
       onCancelled: () => {
         completed = true;

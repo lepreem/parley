@@ -5,7 +5,11 @@ import {
   type ClipboardEvent,
   type KeyboardEvent,
 } from "react";
-import type { ChatModel, MessageRequirements } from "../../api/models";
+import type {
+  ChatModel,
+  MessageRequirements,
+  ReasoningEffort,
+} from "../../api/models";
 import { useShell } from "../app/shellContext";
 import { useIsGuest } from "../../hooks/auth/useIsGuest";
 import { findYoutubeUrl } from "../../media/youtube";
@@ -13,12 +17,20 @@ import { useSources } from "../../sources/useSources";
 import { Icon } from "../ui/Icon";
 import { Meter } from "../ui/Meter";
 import { AttachMenu } from "./AttachMenu";
+import { EffortPicker } from "./EffortPicker";
+import { PermissionPicker } from "./PermissionPicker";
+import type { PermissionMode } from "../../api/toolApprovals";
+import { insertSpoken } from "./insertSpoken";
 import { ModelPicker } from "./ModelPicker";
 import { SourceChip } from "./SourceChip";
+import { canDictate, useDictation } from "./useDictation";
 import { YoutubeOffer } from "./YoutubeOffer";
 
 const MAX_MESSAGE_LENGTH = 50_000;
 const MAX_TEXTAREA_HEIGHT_PX = 240;
+
+const clockTime = (seconds: number) =>
+  `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 
 type ComposerProps = {
   draftKey: string;
@@ -27,6 +39,15 @@ type ComposerProps = {
   models: ChatModel[];
   modelId: string | null;
   onModelChange: (modelId: string) => void;
+  effort: ReasoningEffort | null;
+  onEffortChange: (effort: ReasoningEffort | null) => void;
+  canSearchWeb: boolean;
+  webSearch: boolean;
+  onWebSearchChange: (on: boolean) => void;
+  /** Whether this server's model asks before it acts: Claude Code does. */
+  canChoosePermissions: boolean;
+  permissionMode: PermissionMode | null;
+  onPermissionModeChange: (mode: PermissionMode | null) => void;
   modelsLoading: boolean;
   modelsError: string | null;
   requirements: MessageRequirements;
@@ -47,6 +68,14 @@ export function Composer({
   models,
   modelId,
   onModelChange,
+  effort,
+  onEffortChange,
+  canSearchWeb,
+  webSearch,
+  onWebSearchChange,
+  canChoosePermissions,
+  permissionMode,
+  onPermissionModeChange,
   modelsLoading,
   modelsError,
   requirements,
@@ -66,10 +95,26 @@ export function Composer({
     addYoutube,
     removeSource,
     retrySource,
-    transcriptModelId,
-    setTranscriptModelId,
+    useCaptionsIfAvailable,
+    setUseCaptionsIfAvailable,
   } = useSources(draftKey);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const caretAfterDictation = useRef<number | null>(null);
+  const { dictation, start, stop, reset, retry } = useDictation((spoken) => {
+    const textarea = textareaRef.current;
+    const inserted = insertSpoken(
+      text,
+      textarea?.selectionStart ?? text.length,
+      textarea?.selectionEnd ?? text.length,
+      spoken,
+    );
+    caretAfterDictation.current = inserted.caret;
+    onTextChange(inserted.text.slice(0, MAX_MESSAGE_LENGTH));
+  }, draftKey);
+  // What's being said belongs in this draft, so it can't go out without it.
+  const dictating =
+    dictation.status === "recording" || dictation.status === "transcribing";
+  const canSendNow = canSend && !dictating;
   // Held with the draft it belongs to, so declining an offer in one chat
   // doesn't silence the same link in another — and nothing has to be reset.
   const [dismissed, setDismissed] = useState({
@@ -83,6 +128,14 @@ export function Composer({
     if (!textarea) return;
     textarea.style.height = "auto";
     textarea.style.height = `${Math.min(textarea.scrollHeight, MAX_TEXTAREA_HEIGHT_PX)}px`;
+    if (caretAfterDictation.current !== null) {
+      textarea.focus();
+      textarea.setSelectionRange(
+        caretAfterDictation.current,
+        caretAfterDictation.current,
+      );
+      caretAfterDictation.current = null;
+    }
   }, [text]);
 
   const candidateUrl = findYoutubeUrl(text);
@@ -97,7 +150,7 @@ export function Composer({
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      if (canSend) onSend();
+      if (canSendNow) onSend();
     }
   };
 
@@ -162,8 +215,8 @@ export function Composer({
               <AttachMenu
                 onAddFiles={addFiles}
                 onBrowseSources={() => setSourcesOpen(true)}
-                transcriptModelId={transcriptModelId}
-                onTranscriptModelChange={setTranscriptModelId}
+                useCaptionsIfAvailable={useCaptionsIfAvailable}
+                onUseCaptionsChange={setUseCaptionsIfAvailable}
               />
             )}
             <ModelPicker
@@ -174,7 +227,86 @@ export function Composer({
               loading={modelsLoading}
               error={modelsError}
             />
+            {!guest && (
+              <EffortPicker
+                reasoning={
+                  models.find((model) => model.id === modelId)?.reasoning ??
+                  null
+                }
+                value={effort}
+                onChange={onEffortChange}
+              />
+            )}
+            {canSearchWeb && (
+              <button
+                type="button"
+                onClick={() => onWebSearchChange(!webSearch)}
+                aria-label="Let the model use the web"
+                aria-pressed={webSearch}
+                title={
+                  webSearch
+                    ? "Web is on: the model can search and read pages"
+                    : "Web is off"
+                }
+                className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+                  webSearch
+                    ? "bg-signal-tint text-signal-strong"
+                    : "text-muted hover:bg-sunk hover:text-ink"
+                }`}
+              >
+                <Icon name="globe" className="h-4 w-4" />
+              </button>
+            )}
+            {canChoosePermissions && (
+              <PermissionPicker
+                value={permissionMode}
+                onChange={onPermissionModeChange}
+              />
+            )}
             <span className="flex-1" />
+            {dictation.status === "recording" && (
+              <>
+                <span className="font-mono text-xs tabular-nums text-muted">
+                  {clockTime(dictation.seconds)}
+                </span>
+                <button
+                  type="button"
+                  onClick={reset}
+                  aria-label="Discard the recording"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-muted transition-colors hover:text-ink"
+                >
+                  <Icon name="close" className="h-4 w-4" />
+                </button>
+              </>
+            )}
+            {!guest && canDictate() && (
+              <button
+                type="button"
+                onClick={
+                  dictation.status === "recording" ? stop : () => void start()
+                }
+                disabled={dictation.status === "transcribing"}
+                aria-label={
+                  dictation.status === "recording"
+                    ? "Finish dictating"
+                    : dictation.status === "transcribing"
+                      ? "Transcribing"
+                      : "Dictate a message"
+                }
+                aria-pressed={dictation.status === "recording"}
+                className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
+                  dictation.status === "recording"
+                    ? "bg-signal text-white hover:bg-signal-strong"
+                    : "text-muted hover:text-ink"
+                }`}
+              >
+                {dictation.status === "transcribing" ? (
+                  <Meter state="live" tone="current" className="h-3.5" />
+                ) : (
+                  <Icon name="mic" className="h-4 w-4" />
+                )}
+              </button>
+            )}
             {sending ? (
               <button
                 type="button"
@@ -199,10 +331,10 @@ export function Composer({
               <button
                 type="button"
                 onClick={onSend}
-                disabled={!canSend}
+                disabled={!canSendNow}
                 aria-label="Send message"
                 className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
-                  canSend
+                  canSendNow
                     ? "bg-signal text-white hover:bg-signal-strong"
                     : "bg-line text-faint"
                 }`}
@@ -217,7 +349,33 @@ export function Composer({
           className="mt-2 min-h-4 px-1 text-[11px] text-faint"
           aria-live="polite"
         >
-          {blockedReason ?? "Enter sends · Shift+Enter for a new line"}
+          {dictation.status === "recording" ? (
+            "Listening. Tap the mic when you're done."
+          ) : dictation.status === "transcribing" ? (
+            "Transcribing…"
+          ) : dictation.status === "failed" ? (
+            <>
+              {dictation.message}{" "}
+              {dictation.canRetry && (
+                <button
+                  type="button"
+                  onClick={retry}
+                  className="underline hover:text-ink"
+                >
+                  Try again
+                </button>
+              )}{" "}
+              <button
+                type="button"
+                onClick={reset}
+                className="underline hover:text-ink"
+              >
+                Dismiss
+              </button>
+            </>
+          ) : (
+            (blockedReason ?? "Enter sends · Shift+Enter for a new line")
+          )}
         </p>
       </div>
     </div>
