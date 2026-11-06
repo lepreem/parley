@@ -7,7 +7,7 @@ import {
   jobsListQuerySchema,
 } from "../schema/jobs.schema";
 import { encodeCursor, decodeCursor } from "@parley/server-kit/http/cursor";
-import { uploads } from "../uploads";
+import { uploads } from "../uploads/uploads";
 import { sign } from "../storage";
 import { data } from "../data";
 import { tryCatch } from "@parley/server-kit/runtime/try-catch";

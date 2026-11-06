@@ -28,6 +28,15 @@ const stateOutsideMemory = [
   "NewExpression[callee.name='MemoryStore']",
 ].map((selector) => ({ selector, message: stateOutsideMemoryMessage }));
 
+/** Work on a timer goes under src/recurring/, so that folder lists it all. */
+const timersOutsideRecurring = [
+  {
+    selector: "CallExpression[callee.name='setInterval']",
+    message:
+      "Work that runs over and over goes under src/recurring/, scheduled with its every().",
+  },
+];
+
 /**
  * Deliberately narrow: this lints module boundaries only, and does not extend
  * the recommended rulesets. Adding those is a separate decision.
@@ -82,6 +91,7 @@ export default defineConfig([
             },
             { directory: srcDirectory("storage"), entry: "index" },
             { directory: srcDirectory("memory"), entry: "index" },
+            { directory: srcDirectory("recurring"), entry: "index" },
             { directory: srcDirectory("ai"), entry: "index" },
             // Each client's catalog rules are its own: what to offer is
             // decided in one place, next to the fetch.
@@ -156,12 +166,26 @@ export default defineConfig([
       ],
     },
   },
+  // One block per combination, since a later block's no-restricted-syntax
+  // replaces an earlier one's rather than adding to it.
   {
     files: ["src/**/*.ts"],
-    ignores: ["src/memory/**"],
+    ignores: ["src/memory/**", "src/recurring/**"],
     rules: {
-      "no-restricted-syntax": ["error", ...stateOutsideMemory],
+      "no-restricted-syntax": [
+        "error",
+        ...stateOutsideMemory,
+        ...timersOutsideRecurring,
+      ],
     },
+  },
+  {
+    files: ["src/memory/**/*.ts"],
+    rules: { "no-restricted-syntax": ["error", ...timersOutsideRecurring] },
+  },
+  {
+    files: ["src/recurring/**/*.ts"],
+    rules: { "no-restricted-syntax": ["error", ...stateOutsideMemory] },
   },
   {
     files: ["src/data/*.data.ts"],

@@ -4,7 +4,7 @@ import {
   stepsInOrder,
   withPreparationMetrics,
   type RecordedStep,
-} from "../../src/preparationMetrics";
+} from "../../src/metrics/preparationMetrics";
 
 describe("preparation metrics", () => {
   it("keeps nested operations scoped to their request while requests overlap", async () => {

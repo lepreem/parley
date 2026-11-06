@@ -123,7 +123,7 @@ vi.mock("../../src/data/transcripts.data", async (importActual) => {
 });
 
 // Controllers release deleted objects through the upload module.
-vi.mock("../../src/uploads", () => ({
+vi.mock("../../src/uploads/uploads", () => ({
   uploads: { deleteObjects: mockDeleteObjects },
 }));
 
@@ -160,9 +160,9 @@ vi.mock("../../src/ai/ai_chat_client/ai_chat_client", async (importActual) => {
 });
 
 // The real timing, watched: these tests check which steps get timed together.
-vi.mock("../../src/preparationMetrics", async (importActual) => {
+vi.mock("../../src/metrics/preparationMetrics", async (importActual) => {
   const actual =
-    await importActual<typeof import("../../src/preparationMetrics")>();
+    await importActual<typeof import("../../src/metrics/preparationMetrics")>();
   return { ...actual, measurePreparation: vi.fn(actual.measurePreparation) };
 });
 
@@ -170,7 +170,7 @@ import { createApp } from "../../src/app";
 import { eventHub } from "../../src/sse/hub";
 import { resetHistoryTextCache } from "../../src/memory/historyText";
 import { resetRateLimits } from "../../src/memory/rateLimitCounts";
-import { measurePreparation } from "../../src/preparationMetrics";
+import { measurePreparation } from "../../src/metrics/preparationMetrics";
 import {
   completionTokenCeiling,
   MAX_CONTEXT_CHARS,

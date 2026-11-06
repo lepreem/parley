@@ -1,9 +1,8 @@
-import { data } from "./data";
+import { data } from "../data";
 import { logger } from "@parley/server-kit/runtime/logger";
-import { UPLOAD_CONFIRM_WINDOW_MS, uploads } from "./uploads";
-import { GUEST_SESSION_SECONDS } from "./auth/guestToken";
+import { UPLOAD_CONFIRM_WINDOW_MS, uploads } from "../uploads/uploads";
 
-const log = logger.child({ component: "sweeper" });
+const log = logger.child({ component: "storageSweep" });
 
 /**
  * How old an unused object has to be before it's swept: the confirm window
@@ -18,7 +17,6 @@ const GRACE_MS = UPLOAD_CONFIRM_WINDOW_MS * 1.5;
  */
 const AUDIO_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const BATCH_SIZE = 500;
-const INTERVAL_MS = 60 * 60 * 1000;
 const LOCK_NAME = "storage-sweep";
 
 /**
@@ -29,9 +27,6 @@ const LOCK_NAME = "storage-sweep";
  *
  * Returns how many were removed, or undefined when another process holds the
  * lock. Anything beyond the batch is next run's.
- *
- * Exposed for tests that drive one batch; production runs it via
- * sweeper.schedule.
  */
 async function sweepUnusedObjects() {
   return data.advisoryLock.withAdvisoryLock(LOCK_NAME, async () => {
@@ -75,58 +70,8 @@ async function sweepUnusedObjects() {
   });
 }
 
-/**
- * A day past the longest a guest session lasts, so a guest still signed in
- * is never swept, whatever the clocks.
- */
-const GUEST_LIFETIME_MS = (GUEST_SESSION_SECONDS + 24 * 60 * 60) * 1000;
-
-/**
- * Deletes guests whose sessions have all ended, and what they made. They
- * own nothing in storage (guests chat in text only), so there's nothing to
- * remove there first. Returns how many were deleted.
- */
-async function sweepExpiredGuests() {
-  const deleted = await data.users.deleteGuestsCreatedBefore(
-    new Date(Date.now() - GUEST_LIFETIME_MS),
-  );
-  if (deleted > 0) log.info("Swept expired guests", { deleted });
-  return deleted;
-}
-
-/**
- * Sweeps now and then every interval. The returned function stops the
- * schedule and waits for a sweep in progress. A run still going when the next
- * is due is left to finish rather than joined by a second one.
- */
-function schedule(intervalMs = INTERVAL_MS) {
-  let inFlight: Promise<void> | undefined;
-
-  const run = () => {
-    if (inFlight) return;
-    inFlight = Promise.all([
-      sweepUnusedObjects().catch((error) => log.error("Sweep failed", error)),
-      sweepExpiredGuests().catch((error) =>
-        log.error("Guest sweep failed", error),
-      ),
-    ])
-      .then(() => undefined)
-      .finally(() => {
-        inFlight = undefined;
-      });
-  };
-
-  run();
-  const timer = setInterval(run, intervalMs);
-
-  return async () => {
-    clearInterval(timer);
-    await inFlight;
-  };
-}
-
-export const sweeper = {
-  schedule,
-  sweepUnusedObjects,
-  sweepExpiredGuests,
+/** Runs every hour, one batch a run. */
+export const storageSweep = {
+  intervalMs: 60 * 60 * 1000,
+  run: sweepUnusedObjects,
 };

@@ -76,7 +76,7 @@ vi.mock("../../src/message-queue/messageQueue", () => {
   };
 });
 
-vi.mock("../../src/uploads", () => ({
+vi.mock("../../src/uploads/uploads", () => ({
   uploads: { deleteObjects: mockDeleteObjects },
 }));
 

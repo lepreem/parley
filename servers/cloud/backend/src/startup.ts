@@ -4,7 +4,7 @@ import { pingDb } from "./db";
 import { bucket } from "./storage";
 import { chat, transcription } from "./ai";
 import { workos } from "./auth/auth";
-import { UPLOAD_CONFIRM_WINDOW_MS } from "./uploads";
+import { UPLOAD_CONFIRM_WINDOW_MS } from "./uploads/uploads";
 
 /**
  * Fail-fast preflight for the API: aborts startup if any third-party

@@ -7,7 +7,7 @@ import {
   msSince,
   stepsInOrder,
   type RecordedStep,
-} from "../preparationMetrics";
+} from "../metrics/preparationMetrics";
 import { NoRoomToReply } from "../ai";
 import { eventHub } from "../sse/hub";
 import { memory } from "../memory";

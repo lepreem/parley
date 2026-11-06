@@ -23,7 +23,7 @@ export const DATABASE_POOL = {
   /**
    * postgres.js `max`: queries beyond it wait for a free connection. A
    * message turn can fire five queries at once, beside transcriptions being
-   * saved and the sweeper, which holds one connection for its lock.
+   * saved and the storage sweep, which holds one connection for its lock.
    */
   size: 7,
   /**

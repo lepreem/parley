@@ -1,6 +1,6 @@
-import { bucket, type StoredObject, type UploadableObject } from "./storage";
-import type { Executor } from "./db";
-import { data } from "./data";
+import { bucket, type StoredObject, type UploadableObject } from "../storage";
+import type { Executor } from "../db";
+import { data } from "../data";
 
 /**
  * How long after its URL is handed out an upload can still be confirmed. At

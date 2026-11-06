@@ -62,8 +62,8 @@ import {
 import { attachments } from "../../src/data/attachments.data";
 import { jobs } from "../../src/data/jobs.data";
 import { images } from "../../src/data/images.data";
-import { sweeper } from "../../src/sweeper";
-import { uploads } from "../../src/uploads";
+import { storageSweep } from "../../src/recurring/storageSweep";
+import { uploads } from "../../src/uploads/uploads";
 import { storageLedger } from "../../src/data/storageLedger.data";
 import { advisoryLock } from "../../src/data/advisoryLock.data";
 
@@ -679,7 +679,7 @@ describe.skipIf(!testState.databaseUrl)("storage ledger in PostgreSQL", () => {
         return [];
       });
 
-      expect(await sweeper.sweepUnusedObjects()).toBe(2);
+      expect(await storageSweep.run()).toBe(2);
 
       expect(testState.deleteFromBucket).toHaveBeenCalledWith(userId, [
         { kind: "image", uploadId: stalePending.uploadId },
@@ -776,7 +776,7 @@ describe.skipIf(!testState.databaseUrl)("storage ledger in PostgreSQL", () => {
       const expired = await audioJob("audio", "completed", 8);
       const recent = await audioJob("audio", "completed", 1);
 
-      expect(await sweeper.sweepUnusedObjects()).toBe(1);
+      expect(await storageSweep.run()).toBe(1);
 
       expect(testState.deleteFromBucket).toHaveBeenCalledWith(userId, [
         { kind: "audio", uploadId: expired },

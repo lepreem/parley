@@ -6,7 +6,7 @@ import {
   conversationPatchBodySchema,
   conversationReqParamSchema,
 } from "../schema/conversations.schema";
-import { uploads } from "../uploads";
+import { uploads } from "../uploads/uploads";
 import { data, type ConversationRow } from "../data";
 
 function toConversationJson(row: ConversationRow): Conversation {

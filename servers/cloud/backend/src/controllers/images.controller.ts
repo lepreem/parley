@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { UploadedImage } from "@parley/contract";
 import { sign } from "../storage";
-import { uploads } from "../uploads";
+import { uploads } from "../uploads/uploads";
 import { data } from "../data";
 import { authed } from "../middleware/auth.middleware";
 import { validate } from "../middleware/validate.middleware";
@@ -9,7 +9,7 @@ import {
   imageConfirmSchema,
   imageReqParamSchema,
 } from "../schema/images.schema";
-import { ALREADY_CONFIRMED, uploadRejection } from "../utils/uploadRejection";
+import { ALREADY_CONFIRMED, uploadRejection } from "../uploads/uploadRejection";
 import type { UploadId } from "@parley/server-kit/ids";
 
 /**
