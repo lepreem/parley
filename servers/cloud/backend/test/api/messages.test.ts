@@ -1622,8 +1622,12 @@ describe("POST /conversations/:conversationId/messages", () => {
         {
           role: "user",
           content: [
-            { type: "text", text: "What is this?" },
-            { type: "image_url", imageUrl: { url: resolvedImage.url } },
+            { type: "input_text", text: "What is this?" },
+            {
+              type: "input_image",
+              detail: "auto",
+              imageUrl: resolvedImage.url,
+            },
           ],
         },
         // The new turn has no images of its own, so it stays a plain string.
@@ -1939,8 +1943,12 @@ describe("POST /conversations/:conversationId/messages", () => {
         {
           role: "user",
           content: [
-            { type: "text", text: "Hi there" },
-            { type: "image_url", imageUrl: { url: resolvedImage.url } },
+            { type: "input_text", text: "Hi there" },
+            {
+              type: "input_image",
+              detail: "auto",
+              imageUrl: resolvedImage.url,
+            },
           ],
         },
       ],
@@ -2161,8 +2169,15 @@ describe("PATCH /conversations/:conversationId/messages/:messageId", () => {
         {
           role: "user",
           content: [
-            { type: "text", text: "Edited transcript\n\nUpdated question" },
-            { type: "image_url", imageUrl: { url: resolvedImage.url } },
+            {
+              type: "input_text",
+              text: "Edited transcript\n\nUpdated question",
+            },
+            {
+              type: "input_image",
+              detail: "auto",
+              imageUrl: resolvedImage.url,
+            },
           ],
         },
       ],

@@ -6,7 +6,7 @@ function siteOf(url: string): string {
   return new URL(url).hostname.replace(/^www\./, "");
 }
 
-/** The web pages a search found for a reply, each a link to the page. */
+/** The web pages the model found or read for a reply, each a link to the page. */
 export function ReplySources({ sources }: { sources: MessageSource[] }) {
   return (
     <div className="mt-3">

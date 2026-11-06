@@ -232,12 +232,12 @@ export function Composer({
               <button
                 type="button"
                 onClick={() => onWebSearchChange(!webSearch)}
-                aria-label="Let the model search the web"
+                aria-label="Let the model use the web"
                 aria-pressed={webSearch}
                 title={
                   webSearch
-                    ? "Web search is on: the model can look things up"
-                    : "Web search is off"
+                    ? "Web is on: the model can search and read pages"
+                    : "Web is off"
                 }
                 className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
                   webSearch

@@ -2,11 +2,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { CACHE_KEYS } from "../../src/memory/modelLists";
 import { CLAIM_LEASE_MS } from "../../src/data/conversations.data";
 
-const { mockGetOrSetCache, mockModelsList, mockChatSend, sentWithKeys } =
+const { mockGetOrSetCache, mockModelsList, mockResponsesSend, sentWithKeys } =
   vi.hoisted(() => ({
     mockGetOrSetCache: vi.fn(),
     mockModelsList: vi.fn(),
-    mockChatSend: vi.fn(),
+    mockResponsesSend: vi.fn(),
     /** The API key of the client each chat request went through. */
     sentWithKeys: [] as string[],
   }));
@@ -20,14 +20,15 @@ vi.mock("../../src/memory/modelLists", async (importOriginal) => ({
 const runFetch = <T>(_name: unknown, fetch: () => Promise<T>) => fetch();
 
 vi.mock("@openrouter/sdk", () => ({
-  HTTPClient: class {},
   OpenRouter: class {
     constructor(private readonly options: { apiKey: string }) {}
     models = { list: mockModelsList };
-    chat = {
-      send: (...args: unknown[]) => {
-        sentWithKeys.push(this.options.apiKey);
-        return mockChatSend(...args);
+    beta = {
+      responses: {
+        send: (...args: unknown[]) => {
+          sentWithKeys.push(this.options.apiKey);
+          return mockResponsesSend(...args);
+        },
       },
     };
   },
@@ -40,6 +41,16 @@ import {
 } from "../../src/ai/ai_chat_client/ai_chat_client";
 
 const MODEL_ID = "openai/gpt-4o-mini";
+
+/** A whole response, as a call that doesn't stream gets it. */
+const responseOf = (text: string) => ({
+  output: [{ type: "message", content: [{ type: "output_text", text }] }],
+});
+
+const textDelta = (delta: string) => ({
+  type: "response.output_text.delta",
+  delta,
+});
 
 // How the app describes the OpenRouter model below: only what it uses.
 const sampleModel = {
@@ -221,10 +232,11 @@ describe("buildUserTurn", () => {
     ).toEqual({
       role: "user",
       content: [
-        { type: "text", text: "What is this?" },
+        { type: "input_text", text: "What is this?" },
         {
-          type: "image_url",
-          imageUrl: { url: "https://bucket.test/a.png" },
+          type: "input_image",
+          detail: "auto",
+          imageUrl: "https://bucket.test/a.png",
         },
       ],
     });
@@ -238,9 +250,7 @@ describe("chatAI", () => {
   });
 
   it("bills a guest's call to the guest key, and anyone else's to the main one", async () => {
-    mockChatSend.mockResolvedValue({
-      choices: [{ message: { content: "hi" } }],
-    });
+    mockResponsesSend.mockResolvedValue(responseOf("hi"));
 
     await chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
       guest: true,
@@ -255,8 +265,8 @@ describe("chatAI", () => {
     ]);
   });
 
-  it("offers the search tool, within its limits, only when asked", async () => {
-    mockChatSend.mockResolvedValue((async function* () {})());
+  it("offers the web tools, within their limits, only when asked", async () => {
+    mockResponsesSend.mockResolvedValue((async function* () {})());
 
     await chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
       onDelta: () => {},
@@ -268,9 +278,12 @@ describe("chatAI", () => {
     });
 
     const requestOf = (call: number) =>
-      (mockChatSend.mock.calls[call]?.[0] as { chatRequest: object })
-        .chatRequest;
-    expect(requestOf(0)).toMatchObject({ tools: undefined });
+      (mockResponsesSend.mock.calls[call]?.[0] as { responsesRequest: object })
+        .responsesRequest;
+    expect(requestOf(0)).toMatchObject({
+      tools: undefined,
+      instructions: undefined,
+    });
     expect(requestOf(1)).toMatchObject({
       tools: [
         {
@@ -282,14 +295,17 @@ describe("chatAI", () => {
             maxTotalResults: 9,
           },
         },
+        {
+          type: "openrouter:web_fetch",
+          parameters: { engine: "exa", maxUses: 5, maxContentTokens: 8_000 },
+        },
       ],
+      instructions: expect.stringContaining("say so plainly"),
     });
   });
 
   it("routes for low latency and pins the session for prompt-cache hits", async () => {
-    mockChatSend.mockResolvedValueOnce({
-      choices: [{ message: { content: "hi" } }],
-    });
+    mockResponsesSend.mockResolvedValueOnce(responseOf("hi"));
 
     const result = await chat.complete(
       MODEL_ID,
@@ -301,11 +317,11 @@ describe("chatAI", () => {
     );
 
     expect(result).toBe("hi");
-    expect(mockChatSend).toHaveBeenCalledWith(
+    expect(mockResponsesSend).toHaveBeenCalledWith(
       {
-        chatRequest: expect.objectContaining({
+        responsesRequest: expect.objectContaining({
           model: MODEL_ID,
-          maxCompletionTokens: 100,
+          maxOutputTokens: 100,
           provider: { sort: "latency" },
           sessionId: "conversation-1",
         }),
@@ -316,14 +332,14 @@ describe("chatAI", () => {
 
   it("reports the usage that ends a stream", async () => {
     const usage = {
-      promptTokens: 3_000,
-      completionTokens: 20,
-      promptTokensDetails: { cachedTokens: 2_900 },
+      inputTokens: 3_000,
+      outputTokens: 20,
+      inputTokensDetails: { cachedTokens: 2_900 },
     };
-    mockChatSend.mockResolvedValueOnce(
+    mockResponsesSend.mockResolvedValueOnce(
       (async function* () {
-        yield { choices: [{ delta: { content: "hi" } }] };
-        yield { choices: [], usage };
+        yield textDelta("hi");
+        yield { type: "response.completed", response: { usage } };
       })(),
     );
     const onUsage = vi.fn();
@@ -337,6 +353,96 @@ describe("chatAI", () => {
     expect(reply).toBe("hi");
     expect(onUsage).toHaveBeenCalledOnce();
     expect(onUsage).toHaveBeenCalledWith(usage);
+  });
+
+  it("names the pages behind a reply, and the ones it couldn't read", async () => {
+    mockResponsesSend.mockResolvedValueOnce(
+      (async function* () {
+        yield {
+          type: "response.output_item.done",
+          item: {
+            type: "openrouter:web_fetch",
+            status: "incomplete",
+            url: "https://blocked.test/thread",
+            error: "No content",
+          },
+        };
+        yield {
+          type: "response.output_item.done",
+          item: {
+            type: "openrouter:web_fetch",
+            status: "completed",
+            url: "https://read.test/page",
+            title: "A page it read",
+          },
+        };
+        yield {
+          type: "response.output_item.done",
+          item: { type: "openrouter:web_search", status: "completed" },
+        };
+        yield textDelta("hi");
+        yield {
+          type: "response.output_item.done",
+          item: {
+            type: "message",
+            content: [
+              {
+                type: "output_text",
+                text: "hi",
+                annotations: [
+                  {
+                    type: "file_citation",
+                    fileId: "f",
+                    filename: "f",
+                    index: 0,
+                  },
+                  {
+                    type: "url_citation",
+                    url: "https://found.test/page",
+                    title: "A page a search found",
+                  },
+                ],
+              },
+            ],
+          },
+        };
+      })(),
+    );
+    const onSource = vi.fn();
+    const onUnreadPage = vi.fn();
+
+    await chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
+      onDelta: () => {},
+      webSearch: true,
+      onSource,
+      onUnreadPage,
+    });
+
+    expect(onSource.mock.calls).toEqual([
+      ["https://read.test/page", "A page it read"],
+      ["https://found.test/page", "A page a search found"],
+    ]);
+    expect(onUnreadPage.mock.calls).toEqual([
+      ["https://blocked.test/thread", "No content"],
+    ]);
+  });
+
+  it.each([
+    ["response.failed", { response: { error: { message: "It broke" } } }],
+    ["error", { message: "It broke" }],
+  ])("fails the reply on a %s event", async (type, event) => {
+    mockResponsesSend.mockResolvedValueOnce(
+      (async function* () {
+        yield textDelta("part");
+        yield { type, ...event };
+      })(),
+    );
+
+    await expect(
+      chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
+        onDelta: () => {},
+      }),
+    ).rejects.toThrow("It broke");
   });
 });
 
@@ -374,7 +480,7 @@ function streamingSend(
     (async function* () {
       for (const chunk of chunks) {
         await abortableWait(signal, chunk.afterMs);
-        yield { choices: [{ delta: { content: chunk.content } }] };
+        yield textDelta(chunk.content);
       }
       if (!end) await abortableWait(signal);
     })();
@@ -412,7 +518,7 @@ describe("chatAI timeouts", () => {
     });
 
   it("gives up when the stream goes quiet after the first token", async () => {
-    mockChatSend.mockImplementationOnce(
+    mockResponsesSend.mockImplementationOnce(
       streamingSend([{ afterMs: 1_000, content: "hello" }]),
     );
     const outcome = track(streamChat());
@@ -424,7 +530,7 @@ describe("chatAI timeouts", () => {
   });
 
   it("waits longer for the first token than between chunks", async () => {
-    mockChatSend.mockImplementationOnce(streamingSend([]));
+    mockResponsesSend.mockImplementationOnce(streamingSend([]));
     const outcome = track(streamChat());
 
     await vi.advanceTimersByTimeAsync(FIRST_TOKEN_TIMEOUT_MS - 1);
@@ -434,7 +540,7 @@ describe("chatAI timeouts", () => {
   });
 
   it("waits longer between chunks when the model can stop to search", async () => {
-    mockChatSend.mockImplementationOnce(
+    mockResponsesSend.mockImplementationOnce(
       streamingSend([{ afterMs: 1_000, content: "hello" }]),
     );
     const outcome = track(
@@ -452,9 +558,12 @@ describe("chatAI timeouts", () => {
   });
 
   it("fails when the model reaches its ceiling before writing anything", async () => {
-    mockChatSend.mockImplementationOnce(async () =>
+    mockResponsesSend.mockImplementationOnce(async () =>
       (async function* () {
-        yield { choices: [{ delta: { content: "" }, finishReason: "length" }] };
+        yield {
+          type: "response.incomplete",
+          response: { incompleteDetails: { reason: "max_output_tokens" } },
+        };
       })(),
     );
 
@@ -462,11 +571,13 @@ describe("chatAI timeouts", () => {
   });
 
   it("keeps what the model wrote before reaching its ceiling", async () => {
-    mockChatSend.mockImplementationOnce(async () =>
+    mockResponsesSend.mockImplementationOnce(async () =>
       (async function* () {
-        yield { choices: [{ delta: { content: "cut " } }] };
+        yield textDelta("cut ");
+        yield textDelta("off");
         yield {
-          choices: [{ delta: { content: "off" }, finishReason: "length" }],
+          type: "response.incomplete",
+          response: { incompleteDetails: { reason: "max_output_tokens" } },
         };
       })(),
     );
@@ -475,12 +586,12 @@ describe("chatAI timeouts", () => {
   });
 
   it("keeps waiting for the first token after an empty chunk", async () => {
-    mockChatSend.mockImplementationOnce(
+    mockResponsesSend.mockImplementationOnce(
       async (_request: unknown, { signal }: SendOptions) =>
         (async function* () {
-          yield { choices: [{ delta: { role: "assistant", content: "" } }] };
+          yield textDelta("");
           await abortableWait(signal, 60_000);
-          yield { choices: [{ delta: { content: "answer" } }] };
+          yield textDelta("answer");
         })(),
     );
     const outcome = track(streamChat());
@@ -495,7 +606,9 @@ describe("chatAI timeouts", () => {
       content: `t${index}`,
     }));
     const deltas: string[] = [];
-    mockChatSend.mockImplementationOnce(streamingSend(chunks, { end: true }));
+    mockResponsesSend.mockImplementationOnce(
+      streamingSend(chunks, { end: true }),
+    );
     const outcome = track(
       chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
         onDelta: (delta) => {
@@ -510,12 +623,12 @@ describe("chatAI timeouts", () => {
   });
 
   it("ends a stream that never stops sending before the claim lease expires", async () => {
-    mockChatSend.mockImplementationOnce(
+    mockResponsesSend.mockImplementationOnce(
       async (_request: unknown, { signal }: SendOptions) =>
         (async function* () {
           for (;;) {
             await abortableWait(signal, 10_000);
-            yield { choices: [{ delta: { content: "." } }] };
+            yield textDelta(".");
           }
         })(),
     );
@@ -531,7 +644,7 @@ describe("chatAI timeouts", () => {
   });
 
   it("gives up on a title that never arrives", async () => {
-    mockChatSend.mockImplementationOnce(
+    mockResponsesSend.mockImplementationOnce(
       (_request: unknown, { signal }: SendOptions) => abortableWait(signal),
     );
     const outcome = track(chat.generateTitle("conversation", "hello"));
@@ -551,9 +664,9 @@ describe("generateTitle", () => {
   });
 
   it("uses the title model, without reasoning, and returns a trimmed title", async () => {
-    mockChatSend.mockResolvedValueOnce({
-      choices: [{ message: { content: "  Quarterly planning  " } }],
-    });
+    mockResponsesSend.mockResolvedValueOnce(
+      responseOf("  Quarterly planning  "),
+    );
 
     const title = await chat.generateTitle(
       "conversation",
@@ -561,11 +674,11 @@ describe("generateTitle", () => {
     );
 
     expect(title).toBe("Quarterly planning");
-    expect(mockChatSend).toHaveBeenCalledWith(
+    expect(mockResponsesSend).toHaveBeenCalledWith(
       {
-        chatRequest: expect.objectContaining({
+        responsesRequest: expect.objectContaining({
           model: "~openai/gpt-luna-latest",
-          messages: [
+          input: [
             {
               role: "user",
               content: expect.stringContaining(
@@ -573,7 +686,7 @@ describe("generateTitle", () => {
               ),
             },
           ],
-          maxCompletionTokens: 24,
+          maxOutputTokens: 24,
           reasoning: { effort: "none" },
         }),
       },

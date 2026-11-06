@@ -1,17 +1,18 @@
 import { getEnv } from "../../env";
-import { HTTPClient, OpenRouter } from "@openrouter/sdk";
+import { OpenRouter } from "@openrouter/sdk";
 
 import { CACHE_KEYS, memory } from "../../memory";
 import type {
-  ChatContentItems,
-  ChatRequest,
-  ChatRequestEffort,
-  ChatUsage,
-  OpenRouterWebSearchServerTool,
+  InputImage,
+  InputText,
+  OpenResponsesResult,
+  OutputItems,
+  ReasoningEffort,
+  ResponsesRequest,
+  Usage,
 } from "@openrouter/sdk/models";
 import { withTimeout } from "@parley/server-kit/runtime/withTimeout";
 import type { ChatModel } from "@parley/contract";
-import { tapCitations } from "./citationTap";
 import { guestModelsOf, offeredModels } from "./model_catalog";
 
 const client = new OpenRouter({
@@ -47,7 +48,7 @@ async function ping(): Promise<void> {
 
 export type ChatTurn = {
   role: "user" | "assistant";
-  content: string | ChatContentItems[];
+  content: string | (InputText | InputImage)[];
 };
 
 /**
@@ -64,10 +65,11 @@ export function buildUserTurn(
   return {
     role: "user",
     content: [
-      { type: "text", text: content },
-      ...imageUrls.map((url) => ({
-        type: "image_url" as const, // find more robust way, or find a way to unify "image_url"
-        imageUrl: { url },
+      { type: "input_text", text: content },
+      ...imageUrls.map((imageUrl) => ({
+        type: "input_image" as const,
+        detail: "auto" as const,
+        imageUrl,
       })),
     ],
   };
@@ -84,24 +86,46 @@ const CHAT_TOTAL_TIMEOUT_MS = 8 * 60 * 1000; // 8 minutes
 const CHAT_FIRST_TOKEN_TIMEOUT_MS = 6 * 60 * 1000; // 6 minutes
 const CHAT_BETWEEN_CHUNKS_TIMEOUT_MS = 30 * 1000; // 30 seconds
 // A model can stop partway through a reply to search and read what it finds.
-const CHAT_BETWEEN_CHUNKS_SEARCHING_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
+const CHAT_BETWEEN_CHUNKS_ON_THE_WEB_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
 const TITLE_TIMEOUT_MS = 15 * 1000; // 15 seconds
 
 /**
- * The most one turn's search can cost, whichever model runs it: Exa charges by
- * the result, about $0.0024 each when measured, and honours these limits for
- * every model, where a provider's own search mostly ignores them.
+ * The most one turn can spend on the web, whichever model runs it. Exa charges
+ * by the search, $0.007 for up to 10 results, and the page, $0.001, and honours
+ * these limits for every model, where a provider's own tools mostly ignore
+ * them. The larger cost is the tokens of the pages read: a full one is about
+ * $0.024 at $3 per million.
  */
-const WEB_SEARCH_TOOL: OpenRouterWebSearchServerTool = {
-  type: "openrouter:web_search",
-  parameters: {
-    engine: "exa",
-    maxUses: 3,
-    maxResults: 3,
-    maxTotalResults: 9,
-    maxCharacters: 4_000,
+const WEB_TOOLS: NonNullable<ResponsesRequest["tools"]> = [
+  {
+    type: "openrouter:web_search",
+    parameters: {
+      engine: "exa",
+      maxUses: 3,
+      maxResults: 3,
+      maxTotalResults: 9,
+      maxCharacters: 4_000,
+    },
   },
-};
+  {
+    type: "openrouter:web_fetch",
+    parameters: {
+      engine: "exa",
+      // A failed try counts, and models try other addresses for a blocked page.
+      maxUses: 5,
+      maxContentTokens: 8_000,
+    },
+  },
+];
+
+/**
+ * Without this, models were seen to answer from memory about a page they had
+ * just failed to open, and to date their answers by their training data.
+ */
+function webInstructions() {
+  const today = new Date().toISOString().slice(0, 10);
+  return `Today is ${today}. You can search the web and open web pages. If you can't open a page you were asked about, say so plainly, and don't describe what it says from memory as if you had read it. If you read a copy of a page on another site instead of the original, name the site you read it on.`;
+}
 
 /** The model reached its token ceiling while thinking, so it wrote nothing. */
 export class NoRoomToReply extends Error {
@@ -113,35 +137,66 @@ export class NoRoomToReply extends Error {
   }
 }
 
+/** Everything the model wrote, across the messages of a response. */
+function replyText(response: OpenResponsesResult) {
+  return response.output
+    .flatMap((item) => (item.type === "message" ? item.content : []))
+    .flatMap((part) => (part.type === "output_text" ? [part.text] : []))
+    .join("");
+}
+
 async function nonStreamChatAI(
   sender: OpenRouter,
-  chatRequest: ChatRequest,
+  responsesRequest: ResponsesRequest,
   abortSignal: AbortSignal,
 ) {
-  const completion = await sender.chat.send(
-    { chatRequest },
+  const response = await sender.beta.responses.send(
+    { responsesRequest: { ...responsesRequest, stream: false } },
     { signal: abortSignal },
   );
 
-  if (!("choices" in completion))
+  if (!("output" in response))
     throw new Error("Expected a non-streaming chat response");
 
-  const content = completion.choices[0]?.message?.content;
-  return typeof content === "string" ? content : "";
+  return replyText(response);
+}
+
+/** What a finished part of a response says about the pages behind the reply. */
+function readPages(
+  item: OutputItems,
+  { onSource, onUnreadPage }: Pick<ChatOptions, "onSource" | "onUnreadPage">,
+) {
+  if (item.type === "openrouter:web_fetch") {
+    if (item.status === "completed" && !item.error) {
+      onSource?.(item.url, item.title);
+    } else {
+      onUnreadPage?.(item.url, item.error);
+    }
+    return;
+  }
+  if (item.type !== "message") return;
+  for (const part of item.content) {
+    if (part.type !== "output_text") continue;
+    for (const annotation of part.annotations ?? []) {
+      if (annotation.type === "url_citation") {
+        onSource?.(annotation.url, annotation.title);
+      }
+    }
+  }
 }
 
 async function streamChatAI(
   sender: OpenRouter,
-  chatRequest: ChatRequest,
+  responsesRequest: ResponsesRequest,
   onDelta: (delta: string) => void | Promise<void>,
-  onUsage: ((usage: ChatUsage) => void) | undefined,
+  opts: Pick<ChatOptions, "onUsage" | "onSource" | "onUnreadPage">,
   {
     abortSignal,
     markProgress,
   }: { abortSignal: AbortSignal; markProgress: () => void },
 ) {
-  const stream = await sender.chat.send(
-    { chatRequest: { ...chatRequest, stream: true } },
+  const stream = await sender.beta.responses.send(
+    { responsesRequest: { ...responsesRequest, stream: true } },
     { signal: abortSignal },
   );
 
@@ -151,20 +206,32 @@ async function streamChatAI(
   let full = "";
   let reachedCeiling = false;
 
-  for await (const chunk of stream) {
-    if (chunk.error) throw new Error(chunk.error.message);
-    if (chunk.usage) onUsage?.(chunk.usage);
-
-    const choice = chunk.choices[0];
-    const delta = choice?.delta?.content;
-    if (choice?.finishReason === "length") reachedCeiling = true;
-
-    // Only text counts: a stream can open with an empty chunk and then think
-    // silently for longer than the between-chunk limit.
-    if (delta) {
-      markProgress();
-      full += delta;
-      await onDelta(delta);
+  for await (const event of stream) {
+    switch (event.type) {
+      case "error":
+        throw new Error(event.message);
+      case "response.failed":
+        throw new Error(event.response.error?.message ?? "The model failed");
+      case "response.output_text.delta":
+        // Only text counts: a stream can open with an empty chunk and then
+        // think silently for longer than the between-chunk limit.
+        if (event.delta) {
+          markProgress();
+          full += event.delta;
+          await onDelta(event.delta);
+        }
+        break;
+      case "response.output_item.done":
+        readPages(event.item, opts);
+        break;
+      case "response.incomplete":
+        reachedCeiling =
+          event.response.incompleteDetails?.reason === "max_output_tokens";
+        if (event.response.usage) opts.onUsage?.(event.response.usage);
+        break;
+      case "response.completed":
+        if (event.response.usage) opts.onUsage?.(event.response.usage);
+        break;
     }
   }
 
@@ -178,14 +245,14 @@ type ChatOptions = {
    * What a streamed call spent, as the provider reports it. The report comes
    * after the last of the reply, so a call stopped early never gets one.
    */
-  onUsage?: ((usage: ChatUsage) => void) | undefined;
+  onUsage?: ((usage: Usage) => void) | undefined;
   /** Ceiling on the completion, so one call can't run up an unbounded bill. */
   maxOutputTokens?: number | undefined;
   /**
    * How hard a reasoning model thinks. Its thinking counts against
    * maxOutputTokens, so a small ceiling needs "none" or the reply is empty.
    */
-  reasoningEffort?: ChatRequestEffort | undefined;
+  reasoningEffort?: ReasoningEffort | undefined;
   /**
    * Groups a conversation's turns so OpenRouter routes them all to the same
    * provider (sticky), keeping that provider's prompt cache warm across the
@@ -198,10 +265,12 @@ type ChatOptions = {
   signal?: AbortSignal | undefined;
   /** Bills the call to the guest key. */
   guest?: boolean | undefined;
-  /** Lets the model search the web, if it decides it needs to. */
+  /** Lets the model search the web and open pages, if it decides it needs to. */
   webSearch?: boolean | undefined;
-  /** Each page a search finds, as OpenRouter describes it. */
+  /** Each page the model found or read, as OpenRouter describes it. */
   onSource?: ((url: unknown, title: unknown) => void) | undefined;
+  /** Each page the model tried to open and couldn't. */
+  onUnreadPage?: ((url: unknown, error: unknown) => void) | undefined;
 };
 
 async function complete(
@@ -209,10 +278,11 @@ async function complete(
   messages: ChatTurn[],
   opts: ChatOptions = {},
 ): Promise<string> {
-  const chatRequest: ChatRequest = {
+  const responsesRequest: ResponsesRequest = {
     model,
-    messages,
-    maxCompletionTokens: opts.maxOutputTokens,
+    input: messages,
+    instructions: opts.webSearch ? webInstructions() : undefined,
+    maxOutputTokens: opts.maxOutputTokens,
     reasoning: opts.reasoningEffort
       ? { effort: opts.reasoningEffort }
       : undefined,
@@ -221,7 +291,7 @@ async function complete(
     // warm provider.
     provider: { sort: "latency" },
     sessionId: opts.sessionId,
-    tools: opts.webSearch ? [WEB_SEARCH_TOOL] : undefined,
+    tools: opts.webSearch ? WEB_TOOLS : undefined,
   };
 
   const timeoutOptions = {
@@ -231,40 +301,17 @@ async function complete(
       : undefined,
     progressTimeoutMs: opts.onDelta
       ? opts.webSearch
-        ? CHAT_BETWEEN_CHUNKS_SEARCHING_TIMEOUT_MS
+        ? CHAT_BETWEEN_CHUNKS_ON_THE_WEB_TIMEOUT_MS
         : CHAT_BETWEEN_CHUNKS_TIMEOUT_MS
       : undefined,
     signal: opts.signal,
   };
 
-  // Only a search has citations to read, so only a search pays for reading
-  // the stream twice. Guests don't search, and this client bills the main key.
-  const { onDelta, onSource } = opts;
-  if (onDelta && onSource && !opts.guest) {
-    const tap = tapCitations(onSource);
-    const sender = new OpenRouter({
-      apiKey: getEnv().OPENROUTER_API_KEY,
-      serverURL: getEnv().OPENROUTER_BASE_URL,
-      httpClient: new HTTPClient({ fetcher: tap.fetcher }),
-    });
-    return withTimeout(timeoutOptions, async (ctx) => {
-      const reply = await streamChatAI(
-        sender,
-        chatRequest,
-        onDelta,
-        opts.onUsage,
-        ctx,
-      );
-      await tap.finished();
-      return reply;
-    });
-  }
-
   const sender = clientFor(opts.guest ?? false);
   return withTimeout(timeoutOptions, (ctx) =>
     opts.onDelta
-      ? streamChatAI(sender, chatRequest, opts.onDelta, opts.onUsage, ctx)
-      : nonStreamChatAI(sender, chatRequest, ctx.abortSignal),
+      ? streamChatAI(sender, responsesRequest, opts.onDelta, opts, ctx)
+      : nonStreamChatAI(sender, responsesRequest, ctx.abortSignal),
   );
 }
 

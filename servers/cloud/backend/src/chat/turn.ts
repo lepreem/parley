@@ -37,7 +37,7 @@ export type TurnRequest = {
   chosenModelId: string;
   /** How hard the model thinks; left to the model when undefined. */
   reasoningEffort: ReasoningEffort | undefined;
-  /** Whether the model may search the web. */
+  /** Whether the model may search the web and open pages. */
   webSearch: boolean;
   /** Every attachment, images and transcripts, in the order they were sent. */
   attachmentIds: string[];
@@ -406,11 +406,13 @@ export async function answerTurn(
             conversationId: request.conversationId,
             model: request.chosenModelId,
             imageCount: countImageInputs(prepared.prompt),
-            promptTokens: usage.promptTokens,
-            cachedTokens: usage.promptTokensDetails?.cachedTokens,
-            cacheWriteTokens: usage.promptTokensDetails?.cacheWriteTokens,
-            completionTokens: usage.completionTokens,
-            reasoningTokens: usage.completionTokensDetails?.reasoningTokens,
+            promptTokens: usage.inputTokens,
+            cachedTokens: usage.inputTokensDetails.cachedTokens,
+            cacheWriteTokens: usage.inputTokensDetails.cacheWriteTokens,
+            completionTokens: usage.outputTokens,
+            reasoningTokens: usage.outputTokensDetails.reasoningTokens,
+            webSearches: usage.serverToolUseDetails?.webSearchRequests,
+            webToolCalls: usage.serverToolUseDetails?.toolCallsExecuted,
             cost: usage.cost,
           }),
         maxOutputTokens: completionTokenCeiling(model, request.reasoningEffort),
@@ -420,6 +422,16 @@ export async function answerTurn(
               webSearch: true,
               onSource: (url: unknown, title: unknown) =>
                 addSource(sources, url, title),
+              // Only the site: the full address can say what someone is asking
+              // about. Counted by site, this says what's worth building for.
+              onUnreadPage: (url: unknown, error: unknown) =>
+                log.info("Web page unread", {
+                  site:
+                    typeof url === "string" && URL.canParse(url)
+                      ? new URL(url).hostname
+                      : undefined,
+                  error,
+                }),
             }
           : {}),
         sessionId: request.conversationId,
