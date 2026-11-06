@@ -116,7 +116,7 @@ export type SendMessageBody = {
    * thinks as hard as it does by default.
    */
   reasoningEffort?: ReasoningEffort;
-  /** Lets the model search the web, if it decides it needs to. */
+  /** Lets the model use the web, if it decides it needs to. */
   webSearch?: boolean;
 };
 
@@ -213,7 +213,7 @@ export type ChatModel = {
   pricing: ModelPricing | null;
   /** How hard it can be asked to think, or null when that isn't a choice. */
   reasoning: ModelReasoning | null;
-  /** Whether a turn may let it search the web. */
+  /** Whether a turn may let it use the web. */
   searchesWeb: boolean;
 };
 

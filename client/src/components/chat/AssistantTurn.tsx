@@ -24,7 +24,7 @@ export function AssistantTurn({
   elsewhere?: boolean;
   /** Someone stopped it before it finished. */
   stopped?: boolean;
-  /** The web pages a search found for it. */
+  /** The web pages the model found or read for it. */
   sources?: MessageSource[];
   /** How the turn went, when it was streamed to this page. */
   stats?: TurnStats;

@@ -49,7 +49,8 @@ export function countImageInputs(turns: readonly ChatTurn[]) {
     (count, turn) =>
       Array.isArray(turn.content)
         ? count +
-          turn.content.filter((content) => content.type === "image_url").length
+          turn.content.filter((content) => content.type === "input_image")
+            .length
         : count,
     0,
   );

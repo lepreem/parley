@@ -11,7 +11,7 @@ function readStored(): string | null {
   }
 }
 
-/** Whether the person wants web search, which is on until they turn it off. */
+/** Whether the person wants the model on the web, on until they turn it off. */
 export function useWebSearchPreference() {
   const [on, setOn] = useState(() => readStored() !== "off");
 
