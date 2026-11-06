@@ -22,7 +22,13 @@ function askBash(command: string) {
   const run = memory.toolApprovals.open(CONVERSATION);
   opened.push(run);
   return run.ask(
-    { toolName: "Bash", input: { command }, suggestions: [] },
+    {
+      program: "Claude Code",
+      toolName: "Bash",
+      detail: command,
+      always: null,
+      carry: [],
+    },
     new AbortController().signal,
   );
 }
@@ -52,7 +58,7 @@ describe("tool approvals over HTTP", () => {
     expect(await listed.json()).toEqual([approval]);
 
     expect((await answer(approval.id, "allow")).status).toBe(204);
-    await expect(asked).resolves.toMatchObject({ behavior: "allow" });
+    await expect(asked).resolves.toEqual({ decision: "allow" });
   });
 
   it("passes a refusal back", async () => {
@@ -60,7 +66,7 @@ describe("tool approvals over HTTP", () => {
 
     await answer(firstWaiting().id, "deny");
 
-    await expect(asked).resolves.toMatchObject({ behavior: "deny" });
+    await expect(asked).resolves.toMatchObject({ decision: "deny" });
   });
 
   it("is a 404 for something no longer waiting", async () => {

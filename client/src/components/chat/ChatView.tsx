@@ -155,7 +155,7 @@ export function ChatView() {
   // Likewise: guests can't search, and not every model can.
   const canSearchWeb = !guest && !!chosenModel?.searchesWeb;
   const webSearch = canSearchWeb && webSearchOn;
-  // Only Claude Code on this computer has permissions to loosen.
+  // Only the programs on this computer have permissions to loosen.
   const permissionMode = server.toolApprovals ? permissionPick : null;
 
   const replyInProgress = messagesQuery.data?.replyInProgress ?? null;

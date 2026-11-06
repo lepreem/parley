@@ -28,7 +28,6 @@ import {
   chatAI,
   chatImageInput,
   generateTitle,
-  findChatModel,
 } from "../../../core/ai/ai_chat_client";
 import type { ChatImage, ChatTurn } from "../../../core/ai/ai_chat_client";
 import { logger, messageOf } from "@parley/server-kit/runtime/logger";
@@ -67,7 +66,13 @@ async function titleForFirstTurn(content: string, conversationId: string) {
     .slice(0, FALLBACK_CONVERSATION_TITLE_CHARS);
 
   try {
-    return (await generateTitle("conversation", content)) || fallback;
+    return (
+      (await generateTitle(
+        "conversation",
+        content,
+        await memory.chatCatalog.helper(),
+      )) || fallback
+    );
   } catch (error) {
     log.warn("Conversation title generation failed", {
       conversationId,
@@ -405,7 +410,7 @@ async function prepareMessageTurn(
   );
   if (
     containsImageInput(turns) &&
-    !(await findChatModel(messageInput.chosenModelId))?.acceptsImages
+    !(await memory.chatCatalog.find(messageInput.chosenModelId))?.acceptsImages
   ) {
     throw new MessageRequestError(400, {
       message: "Invalid model: must accept image input",
@@ -559,9 +564,6 @@ async function writeReply({
     let assistantContent: string;
     let stopped = false;
     const approvals = memory.toolApprovals.open(messageInput.conversationId);
-    const grants = memory.toolApprovals.sessionGrants(
-      messageInput.conversationId,
-    );
     try {
       assistantContent = await chatAI(messageInput.chosenModelId, turns, {
         onDelta: async (delta) => {
@@ -573,15 +575,9 @@ async function writeReply({
         onSource: (url, title) => addSource(sources, url, title),
         signal: entry.signal,
         askPermission: approvals.ask,
-        // The person's pick, or what they let an earlier run switch to.
-        permissionMode:
-          messageInput.permissionMode ?? grants?.mode ?? undefined,
-        settings: grants && {
-          permissions: {
-            allow: grants.allow,
-            additionalDirectories: grants.directories,
-          },
-        },
+        permissionMode: messageInput.permissionMode,
+        // What the person let earlier runs in this chat do for the session.
+        carried: memory.toolApprovals.carried(messageInput.conversationId),
       });
     } catch (error) {
       // A stopped reply is saved with what came before the stop; one

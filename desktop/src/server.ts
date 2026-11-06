@@ -27,7 +27,9 @@ export type ServerOptions = {
   serverDir: string;
   clientDir: string;
   dataDir: string;
-  claudePath: string;
+  /** Each program chat can run on, when this computer has it. */
+  claudePath: string | undefined;
+  codexPath: string | undefined;
   ytDlpPath: string;
   searchPath: string;
 };
@@ -95,7 +97,8 @@ export async function startServer(
         PORT: String(port),
         DATA_DIR: options.dataDir,
         CLIENT_DIR: options.clientDir,
-        CLAUDE_PATH: options.claudePath,
+        ...(options.claudePath ? { CLAUDE_PATH: options.claudePath } : {}),
+        ...(options.codexPath ? { CODEX_PATH: options.codexPath } : {}),
         YT_DLP_PATH: options.ytDlpPath,
       },
     },

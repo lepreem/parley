@@ -16,6 +16,7 @@ import {
   type MessageBoxOptions,
 } from "electron";
 import { claudeStatus, installerCommand, runSetupStep } from "./claudeCode";
+import { codexStatus } from "./codex";
 import { isPermitted } from "./permissions";
 import { PhoneAccess } from "./phoneAccess";
 import { phoneSummary, type PhoneState } from "./phoneState";
@@ -213,8 +214,10 @@ function focusWindow() {
 }
 
 /**
- * Takes the app as far as it can go: Claude Code, then the server, then the
- * chat page. Stops at whichever needs the person, whose button calls it again.
+ * Takes the app as far as it can go: Claude Code or Codex, then the server,
+ * then the chat page. Stops at whichever needs the person, whose button calls
+ * it again. Either program is enough to chat; setup offers Claude Code, the
+ * one it can install.
  */
 async function advance() {
   if (advancing || server) return;
@@ -229,9 +232,14 @@ async function advance() {
 async function takeNextSteps() {
   showSetup({ screen: "starting" });
   searchPath ||= await userPath();
-  const claude = await claudeStatus(searchPath);
-  if (claude.state === "missing") return showSetup({ screen: "missing" });
-  if (claude.state === "signedOut") return showSetup({ screen: "signedOut" });
+  const [claude, codex] = await Promise.all([
+    claudeStatus(searchPath),
+    codexStatus(searchPath),
+  ]);
+  if (claude.state !== "ready" && codex.state !== "ready") {
+    if (claude.state === "missing") return showSetup({ screen: "missing" });
+    return showSetup({ screen: "signedOut" });
+  }
 
   try {
     const ytDlpPath = await installYtDlp(path.join(resources, "bin"), dataDir);
@@ -239,7 +247,10 @@ async function takeNextSteps() {
       serverDir: path.join(resources, "server"),
       clientDir: path.join(resources, "client"),
       dataDir,
-      claudePath: claude.claudePath,
+      // One that's there but signed out is still handed over: the server
+      // leaves its models out and says why.
+      claudePath: claude.state === "missing" ? undefined : claude.claudePath,
+      codexPath: codex.state === "missing" ? undefined : codex.codexPath,
       ytDlpPath,
       searchPath,
     });

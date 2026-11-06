@@ -39,20 +39,51 @@ handed it inline, base64-encoded in the prompt (`chatImageInput`).
 
 ## Chat
 
-Chat runs on the user's own Claude Code (`core/ai/ai_chat_client.ts`): each
-turn is one `claude --print` run from the home folder, on the user's own setup:
-their settings, permissions, CLAUDE.md, MCP servers and hooks decide what it can
-do, as in their terminal. Nothing can answer a permission prompt under
-`--print`, so a tool their settings don't allow is refused. The app adds only
-instructions for reading the conversation and what the person picked for that
-message: model, effort and web search. Its own small jobs, like titles, run as a
-plain model with no tools or settings, since they read text they shouldn't act
-on. Claude Code keeps history only in its own sessions,
-while the app's changes under edits and deletes, so each run is handed the
-whole conversation as one message: every turn in `<user>` or `<assistant>`
-tags, its images in place. The models are Claude Code's aliases (`opus`,
-`sonnet`, `haiku`), which follow the newest of each family. `CLAUDE_PATH`
-names the program when it isn't on PATH.
+Chat runs on the user's own coding agent: Claude Code, Codex, or both,
+whichever is installed and logged in. Each has an adapter in `core/ai/` that
+holds everything about talking to it, so when one breaks after an update, its
+file is where to look:
+
+- `claudeCode.adapter.ts`: each turn is one `claude --print` run, its prompts
+  taken over the run's own input and output (`--permission-prompt-tool stdio`),
+  as Anthropic's Agent SDK does. `CLAUDE_PATH` names the program when it isn't
+  on PATH.
+- `codex.adapter.ts`: each turn is one `codex app-server` run, spoken to in
+  JSON-RPC over stdin and stdout. Its protocol is marked experimental by
+  OpenAI, so a Codex update can break it. `CODEX_PATH` names the program.
+
+`chatAdapter.ts` is what they share, and `ai_chat_client.ts` picks the adapter
+by model id: Codex's are prefixed `codex/`, keeping them apart from Claude
+Code's aliases (`opus`, `sonnet`, `haiku`, which follow the newest of each
+family).
+
+Either way a turn runs from the home folder on the user's own setup: their
+settings, permissions, instructions files, MCP servers and hooks decide what it
+can do, as in their terminal. The app adds only instructions for reading the
+conversation and what the person picked for that message: model, effort, web
+search, and how freely it may act (the picker under the message box: their own
+settings, allow edits, or allow all; for Codex those are its own config, the
+`workspace-write` sandbox, and no approvals with full access).
+
+When their settings say to ask, the program's request becomes an approval card
+in the chat (`api/src/memory/toolApprovals.ts`), which waits for as long as the
+reply runs. Each adapter turns its program's request into the card and the
+person's answer back into the program's: Claude Code's "don't ask again" is its
+own suggestion, saved to its settings; Codex's is the rule it proposes, or this
+command for the rest of the chat. What a terminal keeps for the session, the
+app hands to the conversation's later runs (`carry`), since each message is a
+run of its own.
+
+Neither program keeps history the way the app does (edits and deletes rewrite
+it), so each run is handed the whole conversation as one message: every turn in
+`<user>` or `<assistant>` tags, its images in place. The app's own small jobs,
+like titles, run as a plain model with no tools or settings, since they read
+text they shouldn't act on: Claude Code's Haiku, or Codex's default model when
+it's the only one.
+
+At startup the API asks both for their models (`api/src/memory/chatCatalog.ts`).
+It needs only one; a missing one is logged with why, and its models stay out
+until a restart finds it.
 
 ## Transcription
 
@@ -80,7 +111,7 @@ finish, because stopping whisper.cpp ties up its context for far longer (see
 
 ## External dependencies
 
-The programs the API runs: Claude Code (logged in), ffmpeg and yt-dlp, and it loads the whisper.cpp binding. It runs a
+The programs the API runs: Claude Code or Codex (logged in, either is enough), ffmpeg and yt-dlp, and it loads the whisper.cpp binding. It runs a
 **fail-fast preflight** on boot (`startup.ts` → `verifyServices`): if any of
 them can't run, it aborts instead of starting half-alive.
 

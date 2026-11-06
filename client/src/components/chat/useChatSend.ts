@@ -214,7 +214,7 @@ type TurnInput = {
   /** Null leaves it to the model. */
   reasoningEffort: ReasoningEffort | null;
   webSearch: boolean;
-  /** Null leaves it to the person's Claude Code settings. */
+  /** Null leaves it to the person's own settings. */
   permissionMode: PermissionMode | null;
   sources: StagedSource[];
   lastMessageId: string | null;

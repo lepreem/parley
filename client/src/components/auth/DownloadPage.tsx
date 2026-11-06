@@ -87,7 +87,7 @@ function PlatformDownloads({
 
 /**
  * Where "Use this computer" leads when the app isn't installed. On this
- * computer, chats go through the person's own Claude Code and audio is
+ * computer, chats go through the person's own Claude Code or Codex and audio is
  * transcribed locally, which takes an app rather than a website.
  */
 export function DownloadPage() {
@@ -114,9 +114,9 @@ export function DownloadPage() {
             Parley on your computer
           </h1>
           <p className="mt-3 text-[15px] leading-relaxed text-muted">
-            Chats run on your own Claude Code and recordings are transcribed on
-            your machine, without an account here. If you don't have Claude Code
-            yet, the app sets it up.
+            Chats run on your own Claude Code or Codex and recordings are
+            transcribed on your machine, without an account here. If you have
+            neither yet, the app sets up Claude Code.
           </p>
           <a
             href={DESKTOP_APP_LINK}

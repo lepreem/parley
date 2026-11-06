@@ -16,7 +16,7 @@ function readStored(): PermissionMode | null {
 }
 
 /**
- * How freely Claude Code on this computer may act, beyond the person's own
+ * How freely Claude Code or Codex on this computer may act, beyond the person's own
  * settings. Null, the start, leaves it to those settings.
  */
 export function usePermissionModePreference() {

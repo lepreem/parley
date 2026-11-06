@@ -25,7 +25,7 @@ export type Server = {
   uploads: "signed" | "direct";
   /**
    * Whether a reply can stop to ask the person's approval for a tool: the local
-   * server's Claude Code can.
+   * server's Claude Code and Codex can.
    */
   toolApprovals: boolean;
   /**

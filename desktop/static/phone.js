@@ -58,7 +58,7 @@ const screens = {
       "Chat from your phone on any network, for as long as this computer is awake and Parley is open. It goes through Tailscale, a private network between your own devices with a free plan, and only your Tailscale account can get in.",
       [button("Turn on", phone.turnOn, true)],
       {
-        note: "Your phone can then ask Claude Code to do whatever it's allowed to do on this computer.",
+        note: "Your phone can then ask Claude Code or Codex to do whatever it's allowed to do on this computer.",
       },
     ),
   starting: () =>

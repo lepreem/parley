@@ -26,7 +26,7 @@ const screens = {
   missing: () =>
     show(
       "Parley needs Claude Code",
-      "Chats here run on Claude Code, on your own Claude plan. Parley can install it for you with Anthropic's official installer.",
+      "Chats here run on Claude Code, on your own Claude plan. Parley can install it for you with Anthropic's official installer. If you use Codex, run `codex login` and check again instead.",
       [
         button("Install Claude Code", setup.install, true),
         button("Install it myself", setup.openInstallDocs),
