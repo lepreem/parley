@@ -65,6 +65,90 @@ beforeEach(() => {
   mockSpawn.mockReset();
 });
 
+describe("permission prompts", () => {
+  const approvalServer = {
+    url: "http://127.0.0.1:3002/tool-approvals/mcp",
+    token: "run-token",
+    timeoutMs: 270_000,
+    onActivity: vi.fn(),
+  };
+
+  it("sends a chat turn's prompts to the app, on the person's own settings", async () => {
+    mockSpawn.mockImplementation(answers("Hi"));
+
+    await chatAI("sonnet", [{ role: "user", content: "Hi" }], {
+      approvalServer,
+    });
+
+    const { args } = runOf();
+    expect(valueOf(args, "--permission-prompt-tool")).toBe(
+      "mcp__parley-approvals__ask",
+    );
+    expect(JSON.parse(valueOf(args, "--mcp-config") as string)).toEqual({
+      mcpServers: {
+        "parley-approvals": {
+          type: "http",
+          url: approvalServer.url,
+          headers: { Authorization: "Bearer run-token" },
+          timeout: approvalServer.timeoutMs,
+        },
+      },
+    });
+    // Only who's asked changes: nothing that would decide what's asked about.
+    for (const flag of [
+      "--permission-mode",
+      "--strict-mcp-config",
+      "--setting-sources",
+      "--dangerously-skip-permissions",
+    ]) {
+      expect(args).not.toContain(flag);
+    }
+  });
+
+  it("leaves a run nobody can answer for alone", async () => {
+    mockSpawn.mockImplementation(answers("Hi"));
+
+    await chatAI("sonnet", [{ role: "user", content: "Hi" }]);
+
+    expect(runOf().args).not.toContain("--permission-prompt-tool");
+    expect(runOf().args).not.toContain("--mcp-config");
+  });
+
+  it("doesn't count a person deciding as a stalled run", async () => {
+    vi.useFakeTimers();
+    try {
+      mockSpawn.mockImplementation(
+        fakeProcess([
+          { afterMs: 4 * 60 * 1000, line: textLine("Part one. ") },
+          // Longer than the between-chunk limit in all, with an answer between.
+          { afterMs: 4 * 60 * 1000, line: textLine("Part two.") },
+          { line: resultLine("Part one. Part two.") },
+        ]),
+      );
+      let markProgress = () => {};
+      const reply = chatAI("sonnet", [{ role: "user", content: "Hi" }], {
+        onDelta: () => {},
+        timeoutMs: 20 * 60 * 1000,
+        approvalServer: {
+          ...approvalServer,
+          onActivity: (mark) => {
+            markProgress = mark;
+          },
+        },
+      });
+
+      await vi.advanceTimersByTimeAsync(4 * 60 * 1000);
+      await vi.advanceTimersByTimeAsync(3 * 60 * 1000);
+      markProgress();
+      await vi.advanceTimersByTimeAsync(1 * 60 * 1000);
+
+      await expect(reply).resolves.toBe("Part one. Part two.");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe("pingChatAI", () => {
   it("passes when Claude Code is logged in", async () => {
     mockSpawn.mockImplementation(

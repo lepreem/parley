@@ -24,18 +24,38 @@ export function useReplyUpdatesBridge(enabled: boolean) {
   useEffect(() => {
     if (!enabled || !events) return;
 
-    return events.subscribe("replyFinished", ({ conversationId }) => {
-      if (!conversationId) return;
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.messages(server.id, conversationId),
-        predicate: showsReplyElsewhere,
-      });
-      // A first turn names the chat.
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.conversations(server.id),
-        exact: true,
-      });
-    });
+    const stopApprovals = events.subscribe(
+      "toolApprovalsChanged",
+      ({ conversationId, approvals }) => {
+        queryClient.setQueryData(
+          queryKeys.toolApprovals(server.id, conversationId),
+          approvals,
+        );
+      },
+    );
+    const stopFinished = events.subscribe(
+      "replyFinished",
+      ({ conversationId }) => {
+        if (!conversationId) return;
+        queryClient.setQueryData(
+          queryKeys.toolApprovals(server.id, conversationId),
+          [],
+        );
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.messages(server.id, conversationId),
+          predicate: showsReplyElsewhere,
+        });
+        // A first turn names the chat.
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.conversations(server.id),
+          exact: true,
+        });
+      },
+    );
+    return () => {
+      stopApprovals();
+      stopFinished();
+    };
   }, [enabled, server, events, queryClient]);
 
   // A reply that finished while the stream was down reached nobody, so each

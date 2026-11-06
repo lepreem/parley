@@ -179,6 +179,20 @@ export type ReplyStreamEvents = {
   error: ErrorBody;
 };
 
+/* ---------------------------------------------------------- tool approvals */
+
+/**
+ * Something Claude Code wants to do that the person's settings say to ask about
+ * (local server only). `detail` is exactly what it would run or send.
+ *
+ * GET /conversations/:conversationId/tool-approvals lists a conversation's as
+ * ToolApproval[].
+ */
+export type ToolApproval = { id: string; toolName: string; detail: string };
+
+/** POST /conversations/:conversationId/tool-approvals/:toolApprovalId */
+export type AnswerToolApprovalBody = { allow: boolean };
+
 /* ------------------------------------------------------------------ models */
 
 /** A chat model, whichever provider serves it. */
@@ -320,6 +334,8 @@ export type ServerEvents = {
   jobUpdated: { audioUploadId: string };
   /** A reply finished, was stopped or failed; refetch the conversation. */
   replyFinished: { conversationId: string };
+  /** What a conversation's reply is waiting for the person to answer, now. */
+  toolApprovalsChanged: { conversationId: string; approvals: ToolApproval[] };
 };
 
 /** POST /speech/transcribe: what was said; empty if nothing was. */

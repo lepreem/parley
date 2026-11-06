@@ -260,6 +260,7 @@ export function ChatView() {
         <MessageList
           messages={messagesQuery.data?.messages ?? []}
           pending={pending}
+          conversationId={conversationId}
           loading={!!conversationId && messagesQuery.isLoading}
           onEdit={handleEdit}
           canEdit={canEdit}

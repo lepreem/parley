@@ -151,6 +151,21 @@ function promptOf(turns: readonly ChatTurn[]): ContentBlock[] {
   return blocks;
 }
 
+/** The MCP tool Claude Code asks when a tool call needs someone's approval. */
+const APPROVAL_SERVER_NAME = "parley-approvals";
+export const APPROVAL_TOOL_NAME = "ask";
+
+/** Where a run's permission prompts go. */
+type ApprovalServer = {
+  url: string;
+  /** Identifies this run to the server. */
+  token: string;
+  /** The longest the server takes to answer a prompt. */
+  timeoutMs: number;
+  /** Receives what to call when a prompt is raised or answered. */
+  onActivity: (markProgress: () => void) => void;
+};
+
 /** How the app talks to a run; nothing here changes what Claude Code may do. */
 const STREAM_ARGS = [
   "--print",
@@ -167,14 +182,17 @@ const STREAM_ARGS = [
  * A chat turn runs the user's Claude Code as they've set it up: their settings,
  * permissions, CLAUDE.md, MCP servers and hooks decide what it can do, as they
  * would in their terminal. The app adds only what it needs to carry the
- * conversation, and what the person picked in the app for this message. With
- * --print nothing can answer a permission prompt, so a tool their settings don't
- * already allow is refused.
+ * conversation, and what the person picked in the app for this message.
+ *
+ * With --print nothing can answer a permission prompt, so a tool their settings
+ * don't already allow is refused, unless `approvalServer` takes the prompts. That
+ * changes who's asked, not what gets asked about.
  */
 function chatArgs(
   model: string,
   effort: ReasoningEffort | undefined,
   webSearch: boolean,
+  approvalServer: ApprovalServer | undefined,
 ) {
   return [
     ...STREAM_ARGS,
@@ -186,6 +204,27 @@ function chatArgs(
     "WebSearch",
     // It has no "none": turning thinking off is an environment variable.
     ...(effort && effort !== "none" ? ["--effort", effort] : []),
+    ...(approvalServer ? approvalArgs(approvalServer) : []),
+  ];
+}
+
+/** Hands the run's permission prompts to `server`, as an MCP tool. */
+function approvalArgs({ url, token, timeoutMs }: ApprovalServer) {
+  return [
+    "--mcp-config",
+    JSON.stringify({
+      mcpServers: {
+        [APPROVAL_SERVER_NAME]: {
+          type: "http",
+          url,
+          headers: { Authorization: `Bearer ${token}` },
+          // Without it, Claude Code gives up on a person after a minute.
+          timeout: timeoutMs,
+        },
+      },
+    }),
+    "--permission-prompt-tool",
+    `mcp__${APPROVAL_SERVER_NAME}__${APPROVAL_TOOL_NAME}`,
   ];
 }
 
@@ -288,6 +327,7 @@ async function runChat(
     webSearch,
     onSource,
     instructions,
+    approvalServer,
   }: {
     abortSignal: AbortSignal;
     onText: (text: string) => void | Promise<void>;
@@ -296,12 +336,13 @@ async function runChat(
     onSource: (url: unknown, title: unknown) => void;
     /** Makes this a helper's run rather than a chat turn. */
     instructions: string | undefined;
+    approvalServer: ApprovalServer | undefined;
   },
 ): Promise<string> {
   const child = spawn(
     getBaseEnv().CLAUDE_PATH,
     instructions === undefined
-      ? chatArgs(model, effort, webSearch)
+      ? chatArgs(model, effort, webSearch, approvalServer)
       : helperArgs(model, instructions, effort),
     {
       windowsHide: true,
@@ -408,6 +449,8 @@ type ChatOptions = {
    * is a chat turn, on the person's own Claude Code setup.
    */
   instructions?: string | undefined;
+  /** Takes a chat turn's permission prompts, which are refused without it. */
+  approvalServer?: ApprovalServer | undefined;
   /** Ceiling on the whole call. Defaults to CHAT_TOTAL_TIMEOUT_MS. */
   timeoutMs?: number | undefined;
   /** Ends the call early: the stop button, through the reply registry. */
@@ -427,21 +470,24 @@ export async function chatAI(
     signal: opts.signal,
   };
 
-  return withTimeout(timeoutOptions, ({ abortSignal, markProgress }) =>
-    runChat(model, messages, {
+  return withTimeout(timeoutOptions, ({ abortSignal, markProgress }) => {
+    // A person deciding isn't a stalled run.
+    opts.approvalServer?.onActivity(markProgress);
+    return runChat(model, messages, {
       abortSignal,
       effort: opts.effort,
       webSearch: opts.webSearch ?? false,
       onSource: opts.onSource ?? (() => {}),
       instructions: opts.instructions,
+      approvalServer: opts.approvalServer,
       // Only text counts: a model can think silently for longer than the
       // between-chunk limit before it starts answering.
       onText: async (text) => {
         markProgress();
         await onDelta?.(text);
       },
-    }),
-  );
+    });
+  });
 }
 
 /** Claude Code's --effort levels, plus turning thinking off. */

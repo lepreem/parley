@@ -24,6 +24,11 @@ export type Server = {
    */
   uploads: "signed" | "direct";
   /**
+   * Whether a reply can stop to ask the person's approval for a tool: the local
+   * server's Claude Code can.
+   */
+  toolApprovals: boolean;
+  /**
    * The model a new chat starts on, when offered. It may be named by alias.
    */
   defaultChatModelId: string;

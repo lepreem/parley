@@ -31,11 +31,13 @@ import {
   findChatModel,
 } from "../../../core/ai/ai_chat_client";
 import type { ChatImage, ChatTurn } from "../../../core/ai/ai_chat_client";
+import { getApiEnv } from "../../../core/env";
 import { logger, messageOf } from "@parley/server-kit/runtime/logger";
 import { files } from "../../../core/files";
 import type { MessageAttachmentInput } from "../schema/messages.schema";
 import { EVERYONE, eventHub } from "../sse/hub";
 import { memory } from "../memory";
+import { TOOL_APPROVAL_SERVER_PATH } from "../memory/toolApprovals";
 
 const log = logger.child({ controller: "messages" });
 
@@ -543,6 +545,7 @@ async function writeReply({
     const sources: MessageSource[] = [];
     let assistantContent: string;
     let stopped = false;
+    const approvals = memory.toolApprovals.open(messageInput.conversationId);
     try {
       assistantContent = await chatAI(messageInput.chosenModelId, turns, {
         onDelta: async (delta) => {
@@ -553,6 +556,12 @@ async function writeReply({
         webSearch: messageInput.webSearch,
         onSource: (url, title) => addSource(sources, url, title),
         signal: entry.signal,
+        approvalServer: {
+          url: `http://127.0.0.1:${getApiEnv().PORT}${TOOL_APPROVAL_SERVER_PATH}`,
+          token: approvals.token,
+          timeoutMs: approvals.timeoutMs,
+          onActivity: approvals.onActivity,
+        },
       });
     } catch (error) {
       // A stopped reply is saved with what came before the stop; one
@@ -565,6 +574,8 @@ async function writeReply({
       }
       assistantContent = entry.text;
       stopped = true;
+    } finally {
+      approvals.close();
     }
     const contextWindowMessageCount = countMessagesInContextWindow([
       assistantContent.length,
