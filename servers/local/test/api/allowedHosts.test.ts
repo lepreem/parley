@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../core/db", async () =>
   (await import("../helpers/inMemoryDb")).inMemoryDbModule(),
@@ -9,6 +9,7 @@ vi.mock("../../core/db", async () =>
 process.env.ALLOWED_HOSTS = "macbook.tail1234.ts.net";
 
 import { createApp } from "../../api/app";
+import { receivePhoneAccess } from "../../api/src/allowedHosts";
 
 async function request(url: string, init: RequestInit = {}) {
   return (await createApp()).request(url, init);
@@ -67,6 +68,84 @@ describe("requests from off this machine", () => {
     });
 
     expect(res.headers.get("Access-Control-Allow-Origin")).toBeNull();
+  });
+});
+
+describe("the desktop app's phone access", () => {
+  const PHONE_NAME = "laptop.tail1234.ts.net";
+  const PHONE_URL = `https://${PHONE_NAME}/conversations`;
+  const fromAccount = (login: string) => ({
+    headers: { "Tailscale-User-Login": login },
+  });
+
+  afterEach(() => {
+    receivePhoneAccess({ hostname: null, login: null });
+  });
+
+  it("answers no one under its name until the app turns it on", async () => {
+    const res = await request(PHONE_URL, fromAccount("me@example.com"));
+    expect(res.status).toBe(403);
+  });
+
+  describe("once on", () => {
+    beforeEach(() => {
+      receivePhoneAccess({ hostname: PHONE_NAME, login: "me@example.com" });
+    });
+
+    it("answers the account that turned it on", async () => {
+      const res = await request(PHONE_URL, fromAccount("me@example.com"));
+      expect(res.status).toBe(200);
+    });
+
+    it("refuses another account on the same tailnet", async () => {
+      const res = await request(PHONE_URL, fromAccount("them@example.com"));
+      expect(res.status).toBe(403);
+    });
+
+    it("refuses a request that names no account, as from outside the tailnet", async () => {
+      expect((await request(PHONE_URL)).status).toBe(403);
+    });
+
+    it("lets its own page post a form", async () => {
+      const res = await request(`https://${PHONE_NAME}/upload/image`, {
+        method: "POST",
+        headers: {
+          Origin: `https://${PHONE_NAME}`,
+          "Tailscale-User-Login": "me@example.com",
+        },
+        body: new FormData(),
+      });
+      // Past the origin check, the empty form fails validation instead.
+      expect(res.status).toBe(400);
+    });
+
+    it("leaves this machine's own requests alone", async () => {
+      const res = await request("http://127.0.0.1/conversations");
+      expect(res.status).toBe(200);
+    });
+
+    it("still refuses other names", async () => {
+      const res = await request(
+        "https://evil.test/conversations",
+        fromAccount("me@example.com"),
+      );
+      expect(res.status).toBe(403);
+    });
+  });
+
+  it("stops answering once the app turns it off", async () => {
+    receivePhoneAccess({ hostname: PHONE_NAME, login: "me@example.com" });
+    receivePhoneAccess({ hostname: null, login: null });
+    const res = await request(PHONE_URL, fromAccount("me@example.com"));
+    expect(res.status).toBe(403);
+  });
+
+  it("ignores a message that isn't one of its own", async () => {
+    receivePhoneAccess({ hostname: PHONE_NAME, login: "me@example.com" });
+    receivePhoneAccess("anything");
+    receivePhoneAccess({ hostname: 7 });
+    const res = await request(PHONE_URL, fromAccount("me@example.com"));
+    expect(res.status).toBe(200);
   });
 });
 

@@ -12,7 +12,7 @@ import { uploadRouter } from "./src/routes/upload.router";
 import { modelsRouter } from "./src/routes/models.router";
 import { conversationsRouter } from "./src/routes/conversations.router";
 import { speechRouter } from "./src/routes/speech.router";
-import { isAllowedHostname, isAllowedOrigin } from "./src/allowedHosts";
+import { isAllowedOrigin, isAllowedRequest } from "./src/allowedHosts";
 import { EVERYONE, eventHub } from "./src/sse/hub";
 
 import { verifyApiServices } from "./startup";
@@ -24,7 +24,8 @@ export async function createApp() {
   // 127.0.0.1. The request still carries that name as its Host, so anything
   // not addressed to this machine is refused.
   app.use("*", async (c, next) => {
-    if (!isAllowedHostname(new URL(c.req.url).hostname)) {
+    const hostname = new URL(c.req.url).hostname;
+    if (!isAllowedRequest(hostname, c.req.header("tailscale-user-login"))) {
       return c.json({ message: "Forbidden" }, 403);
     }
     await next();

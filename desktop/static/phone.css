@@ -1,0 +1,20 @@
+/* A QR code stays dark on white in dark mode too, or phones can't read it. */
+#code {
+  width: 220px;
+  margin: 0 0 16px;
+  padding: 14px;
+  border-radius: 8px;
+  background: white;
+}
+
+#code svg {
+  display: block;
+  width: 100%;
+  fill: black;
+}
+
+#address {
+  color: var(--text);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}

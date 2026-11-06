@@ -66,10 +66,16 @@ can't reach it.
 
 ## Use it from your phone
 
-With [Tailscale](https://tailscale.com) on the Mac and on the phone, signed
-into the same account:
+In the desktop app, choose **Use from your phone** in the sidebar and turn it
+on. You'll need [Tailscale](https://tailscale.com) on the computer and on the
+phone, signed in to the same account; the window walks you through it and shows
+a QR code to scan. It works from any network for as long as the computer is
+awake and the app is open, only your own Tailscale account gets in, and it comes
+back by itself the next time you open the app, until you turn it off.
 
-1. On the Mac, put the app behind Tailscale:
+Running from source, do by hand what the app does:
+
+1. Put the app behind Tailscale:
 
    ```sh
    tailscale serve --bg 3002
@@ -86,9 +92,9 @@ into the same account:
 
 3. Open the address on your phone.
 
-Only devices signed into your Tailscale account can reach it, at home or
-away; the app itself still listens on 127.0.0.1 only. `tailscale serve reset`
-takes it off again.
+This way, every device on your tailnet can reach it, at home or away; the app
+itself still listens on 127.0.0.1 only. `tailscale serve reset` takes it off
+again.
 
 ## Developing
 

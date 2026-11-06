@@ -34,6 +34,11 @@ export type ServerOptions = {
 
 export type RunningServer = {
   url: string;
+  port: number;
+  /** Tells the server which name and account phone access answers, if any. */
+  allowPhoneAccess(
+    access: { hostname: string; login: string } | undefined,
+  ): void;
   /** Resolves when the server has gone, for any reason. */
   exited: Promise<void>;
   stop(): Promise<void>;
@@ -80,7 +85,7 @@ export async function startServer(
     {
       cwd: options.serverDir,
       // stdin stays open for as long as this app lives; see run.mjs.
-      stdio: ["pipe", "pipe", "pipe"],
+      stdio: ["pipe", "pipe", "pipe", "ipc"],
       windowsHide: true,
       env: {
         ...process.env,
@@ -132,5 +137,17 @@ export async function startServer(
     await stop();
     throw new ServerStartError((error as Error).message, output);
   }
-  return { url, exited, stop };
+  return {
+    url,
+    port,
+    allowPhoneAccess: (access) => {
+      if (!child.connected) return;
+      child.send({
+        hostname: access?.hostname ?? null,
+        login: access?.login ?? null,
+      });
+    },
+    exited,
+    stop,
+  };
 }

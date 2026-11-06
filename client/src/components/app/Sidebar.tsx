@@ -21,6 +21,7 @@ import { Icon } from "../ui/Icon";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { UseThisComputer } from "../auth/UseThisComputer";
 import { ConversationRow } from "./ConversationRow";
+import { PhoneAccessButton } from "./PhoneAccessButton";
 import { groupConversations } from "./conversationGroups";
 import { sectionPath } from "./sections";
 import { useShell } from "./shellContext";
@@ -178,6 +179,7 @@ export function Sidebar() {
               Sources
             </button>
           )}
+          <PhoneAccessButton />
         </div>
 
         <nav className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">

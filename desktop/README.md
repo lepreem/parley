@@ -21,6 +21,12 @@ image and out of every other install.
   Finder doesn't get.
 - `src/ytDlp.ts` keeps yt-dlp in the data folder, where it can update itself,
   but only to a release that has been out for a week.
+- `src/phoneAccess.ts` keeps the person's phone connected while they want it,
+  over their own Tailscale (`src/tailscale.ts`, `static/phone.*`). It runs
+  `tailscale serve` in the foreground, so serving ends with the app, tells the
+  running server over its IPC channel which name and account to answer, and
+  stops the machine going to sleep by itself in the meantime. The setting is
+  `phone-access.json` in the data folder.
 - `src/updates.ts` tells people about a new release. The app can't replace
   itself on a Mac without a paid signing certificate, so no platform does.
 
