@@ -138,7 +138,7 @@ export function offeredModels(
     )
     .map((model): ChatModel => ({
       id: model.id,
-      name: model.name,
+      ...namesOf(model),
       contextTokens: model.contextLength,
       maxOutputTokens: model.topProvider.maxCompletionTokens ?? null,
       acceptsImages: model.architecture.inputModalities.includes("image"),
@@ -150,6 +150,8 @@ export function offeredModels(
       reasoning: reasoningOf(model),
       // The search is a tool OpenRouter runs, so the model has to take tools.
       searchesWeb: model.supportedParameters.includes("tools"),
+      // It runs nothing on anyone's computer.
+      asksPermission: false,
     }));
 
   const replacements = replacementsOf(offered);
@@ -171,18 +173,62 @@ export function guestModelsOf(models: readonly ChatModel[]): ChatModel[] {
   );
 }
 
-/* ----------------------------------------------------------------- archive */
+/* ------------------------------------------------------------------- names */
+
+/** For the rare name that comes without its provider, by id prefix. */
+const PROVIDER_LABELS: Record<string, string> = {
+  openai: "OpenAI",
+  anthropic: "Anthropic",
+  google: "Google",
+  "meta-llama": "Meta",
+  mistralai: "Mistral",
+  deepseek: "DeepSeek",
+  "x-ai": "xAI",
+  qwen: "Qwen",
+  cohere: "Cohere",
+  perplexity: "Perplexity",
+  microsoft: "Microsoft",
+  nvidia: "NVIDIA",
+  amazon: "Amazon",
+  ai21: "AI21",
+};
+
+/** "mistral-ai" as "Mistral Ai", for a prefix the labels don't know. */
+function labelOf(slug: string): string {
+  return (
+    PROVIDER_LABELS[slug] ??
+    slug
+      .split(/[-_]/)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ")
+  );
+}
 
 /**
- * The model's provider as OpenRouter names it ("Anthropic: Claude Opus 5.5"),
- * which one provider's several id prefixes ("meta", "meta-llama") share.
+ * OpenRouter names a model "Anthropic: Claude Opus 5.5": the provider, which
+ * one provider's several id prefixes ("meta", "meta-llama") share, then the
+ * model's own name.
  */
-function providerOf(model: ChatModel): string {
-  const separator = model.name.indexOf(": ");
-  return separator > 0
-    ? model.name.slice(0, separator)
-    : (model.id.split("/")[0] ?? model.id);
+function namesOf(model: Pick<Model, "id" | "name">): {
+  name: string;
+  provider: string;
+} {
+  const raw = model.name.trim() || model.id;
+  const separator = raw.indexOf(": ");
+  if (separator > 0) {
+    return {
+      provider: raw.slice(0, separator).trim(),
+      name: raw.slice(separator + 2).trim(),
+    };
+  }
+  const [slug] = model.id.split("/");
+  return {
+    provider: labelOf(slug && slug !== model.id ? slug : "other"),
+    name: raw,
+  };
 }
+
+/* ----------------------------------------------------------------- archive */
 
 /**
  * The model's id after the provider, split into words: "gpt-6-luna" is
@@ -294,7 +340,7 @@ function replaces(newer: ChatModel, older: ChatModel): boolean {
 function replacementsOf(models: readonly ChatModel[]): Map<string, ChatModel> {
   const byProvider = new Map<string, ChatModel[]>();
   for (const model of models) {
-    const provider = providerOf(model);
+    const { provider } = model;
     const list = byProvider.get(provider) ?? [];
     list.push(model);
     byProvider.set(provider, list);

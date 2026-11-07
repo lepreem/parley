@@ -97,9 +97,16 @@ export async function connectChat(): Promise<ConnectedChat> {
   }
   return {
     models: catalogs.flatMap((catalog) => catalog.models),
+    // Claude Code's when it's there, as for the helper.
+    defaultModel: first.defaultModel,
     helper: first.helper,
     unavailable,
   };
+}
+
+/** Every program's settings files, which can change what `connectChat` finds. */
+export function chatSettingsFiles(): string[] {
+  return ADAPTERS.flatMap((adapter) => adapter.settingsFiles());
 }
 
 function adapterFor(model: string): ChatAdapter {

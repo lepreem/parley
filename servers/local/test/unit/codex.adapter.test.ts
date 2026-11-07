@@ -47,6 +47,8 @@ function codexServer({
   models = [codexModel("gpt-6", { isDefault: true })],
   account = { type: "chatgpt" } as unknown,
   mcpServers = {} as Record<string, unknown>,
+  /** The rest of the person's config.toml. */
+  config = {} as Record<string, unknown>,
   script = (({ emit, complete }) => {
     emit(delta("Hello"));
     complete();
@@ -70,7 +72,7 @@ function codexServer({
       case "model/list":
         return reply({ data: models, nextCursor: null });
       case "config/read":
-        return reply({ config: { mcp_servers: mcpServers } });
+        return reply({ config: { ...config, mcp_servers: mcpServers } });
       case "thread/start":
         return reply({ thread: { id: "t1" } });
       case "turn/start":
@@ -162,6 +164,40 @@ describe("codex.connect", () => {
     expect(catalog.helper).toEqual({ model: "codex/gpt-6", effort: "minimal" });
     expect(mockSpawn.mock.calls[0]?.[0]).toBe("codex");
     expect(mockSpawn.mock.calls[0]?.[1]).toEqual(["app-server"]);
+  });
+
+  it("runs at the person's own default model and effort", async () => {
+    codexServer({
+      models: [
+        codexModel("gpt-6", { isDefault: true }),
+        codexModel("gpt-6-mini", {
+          supportedReasoningEfforts: [{ reasoningEffort: "low" }],
+          defaultReasoningEffort: "low",
+        }),
+      ],
+      config: { model: "gpt-6-mini", model_reasoning_effort: "high" },
+    });
+
+    const catalog = await codex.connect();
+
+    expect(catalog.defaultModel).toBe("codex/gpt-6-mini");
+    expect(
+      catalog.models.map(({ id, provider, reasoning }) => ({
+        id,
+        provider,
+        defaultEffort: reasoning?.defaultEffort,
+      })),
+    ).toEqual([
+      { id: "codex/gpt-6", provider: "Codex", defaultEffort: "high" },
+      // A model that can't run at it keeps its own.
+      { id: "codex/gpt-6-mini", provider: "Codex", defaultEffort: "low" },
+    ]);
+  });
+
+  it("starts chats on Codex's default model when the config names none", async () => {
+    codexServer();
+
+    expect((await codex.connect()).defaultModel).toBe("codex/gpt-6");
   });
 
   it("fails when Codex isn't logged in", async () => {

@@ -56,7 +56,14 @@ describe("GET /models/chat", () => {
       headers: { Cookie: await sessionCookieHeader("user_01") },
     });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ models: [sampleModel] });
+    expect(await res.json()).toEqual({
+      models: [sampleModel],
+      defaultModelId: "~openai/gpt-luna-latest",
+      recommendedModelIds: expect.arrayContaining([
+        "~openai/gpt-luna-latest",
+        "~anthropic/claude-sonnet-latest",
+      ]) as unknown,
+    });
     expect(mockListChatModels).toHaveBeenCalledTimes(1);
   });
 

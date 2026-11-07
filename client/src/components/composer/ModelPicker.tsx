@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import {
-  describeModel,
   findChatModel,
   describePricing,
   meetsRequirements,
@@ -9,7 +8,6 @@ import {
   type MessageRequirements,
   type ModelPricing,
 } from "../../api/models";
-import { useServer } from "../../hooks/server/useServer";
 import { fuzzyScoreAny } from "../../lib/fuzzy";
 import { Icon } from "../ui/Icon";
 import { useDismissable } from "../ui/useDismissable";
@@ -18,6 +16,8 @@ type ModelPickerProps = {
   models: ChatModel[];
   value: string | null;
   onChange: (modelId: string) => void;
+  /** Listed first, in this order, by id or alias. */
+  recommendedModelIds: readonly string[];
   /** What the message being written needs; models that can't serve it are hidden. */
   requirements: MessageRequirements;
   loading: boolean;
@@ -66,7 +66,7 @@ function archivedBecause(
   const replacement = model.replacedBy && byId.get(model.replacedBy);
   if (replacement)
     return {
-      text: `Replaced by ${describeModel(replacement).name}`,
+      text: `Replaced by ${replacement.name}`,
       title: "Newer, from the same provider, and costs no more",
     };
   if (model.retires)
@@ -136,6 +136,7 @@ export function ModelPicker({
   models,
   value,
   onChange,
+  recommendedModelIds: recommendedIds,
   requirements,
   loading,
   error,
@@ -145,7 +146,6 @@ export function ModelPicker({
   const [provider, setProvider] = useState<string | null>(null);
   // The providers whose archived models are unfolded.
   const [unfolded, setUnfolded] = useState<ReadonlySet<string>>(new Set());
-  const recommendedIds = useServer().recommendedChatModelIds;
   const menuRef = useDismissable<HTMLDivElement>(open, () => setOpen(false));
 
   const byId = useMemo(
@@ -160,12 +160,11 @@ export function ModelPicker({
       models
         .filter((model) => meetsRequirements(model, requirements))
         .map((model) => {
-          const { provider: label, name } = describeModel(model);
           return {
             id: model.id,
             model,
-            provider: label,
-            name,
+            provider: model.provider,
+            name: model.name,
             score: 0,
             archived: archivedBecause(model, byId),
           } satisfies Entry;

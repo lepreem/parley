@@ -1,8 +1,10 @@
 /**
  * A server the client talks to: the cloud one, which signs in with WorkOS
  * session cookies, or the local one on the user's own machine, which has no
- * sign-in. Everything the client asks of a server goes through one of these,
- * and the ways the two differ are fixed here rather than discovered.
+ * sign-in. Everything the client asks of a server goes through one of these.
+ * Only what the client needs before it can ask the server anything is fixed
+ * here; the rest, like which models it offers and what they can do, the
+ * server says.
  */
 export type Server = {
   id: "cloud" | "local";
@@ -23,20 +25,6 @@ export type Server = {
    * request carries the file (local).
    */
   uploads: "signed" | "direct";
-  /**
-   * Whether a reply can stop to ask the person's approval for a tool: the local
-   * server's Claude Code and Codex can.
-   */
-  toolApprovals: boolean;
-  /**
-   * The model a new chat starts on, when offered. It may be named by alias.
-   */
-  defaultChatModelId: string;
-  /**
-   * Chat models listed first in the picker, in this order, ahead of the full
-   * catalog, by id or alias. Ones the catalog doesn't offer are skipped.
-   */
-  recommendedChatModelIds: readonly string[];
 };
 
 /**

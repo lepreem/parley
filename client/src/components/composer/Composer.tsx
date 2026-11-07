@@ -37,6 +37,8 @@ type ComposerProps = {
   text: string;
   onTextChange: (text: string) => void;
   models: ChatModel[];
+  /** Listed first in the picker, by id or alias. */
+  recommendedModelIds: readonly string[];
   modelId: string | null;
   onModelChange: (modelId: string) => void;
   effort: ReasoningEffort | null;
@@ -44,7 +46,7 @@ type ComposerProps = {
   canSearchWeb: boolean;
   webSearch: boolean;
   onWebSearchChange: (on: boolean) => void;
-  /** Whether this server's model asks before it acts: Claude Code does. */
+  /** Whether the chosen model asks before it acts: Claude Code's do. */
   canChoosePermissions: boolean;
   permissionMode: PermissionMode | null;
   onPermissionModeChange: (mode: PermissionMode | null) => void;
@@ -66,6 +68,7 @@ export function Composer({
   text,
   onTextChange,
   models,
+  recommendedModelIds,
   modelId,
   onModelChange,
   effort,
@@ -221,6 +224,7 @@ export function Composer({
             )}
             <ModelPicker
               models={models}
+              recommendedModelIds={recommendedModelIds}
               value={modelId}
               onChange={onModelChange}
               requirements={requirements}

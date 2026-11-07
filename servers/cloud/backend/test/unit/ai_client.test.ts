@@ -57,6 +57,7 @@ const textDelta = (delta: string) => ({
 const sampleModel = {
   id: MODEL_ID,
   name: "GPT-4o Mini",
+  provider: "OpenAI",
   contextTokens: 128000,
   maxOutputTokens: null,
   acceptsImages: true,
@@ -67,6 +68,7 @@ const sampleModel = {
   pricing: { inputPerMillionTokens: 0.15, outputPerMillionTokens: 0.6 },
   reasoning: null,
   searchesWeb: false,
+  asksPermission: false,
 };
 
 const openRouterListModel = {
@@ -142,6 +144,7 @@ describe("listChatModels", () => {
       {
         id: "vendor/text-only",
         name: "Text only",
+        provider: "Vendor",
         contextTokens: null,
         maxOutputTokens: null,
         acceptsImages: false,
@@ -152,10 +155,12 @@ describe("listChatModels", () => {
         pricing: { inputPerMillionTokens: 0.15, outputPerMillionTokens: 0.6 },
         reasoning: null,
         searchesWeb: false,
+        asksPermission: false,
       },
       {
         id: "openrouter/auto",
         name: "Auto Router",
+        provider: "Openrouter",
         contextTokens: 128000,
         maxOutputTokens: null,
         acceptsImages: true,
@@ -166,6 +171,7 @@ describe("listChatModels", () => {
         pricing: null,
         reasoning: null,
         searchesWeb: false,
+        asksPermission: false,
       },
     ]);
     // Only text-output models are relevant here; transcription is Deepgram's.

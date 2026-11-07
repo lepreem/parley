@@ -52,9 +52,16 @@ export function useReplyUpdatesBridge(enabled: boolean) {
         });
       },
     );
+    // Both catalogs, a guest's and a member's.
+    const stopModels = events.subscribe("chatModelsChanged", () => {
+      void queryClient.invalidateQueries({
+        queryKey: [server.id, "models", "chat"],
+      });
+    });
     return () => {
       stopApprovals();
       stopFinished();
+      stopModels();
     };
   }, [enabled, server, events, queryClient]);
 

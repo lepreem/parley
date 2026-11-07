@@ -1,13 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Only hoist the mock function factory — no async work here
-const { mockListChatModels } = vi.hoisted(() => ({
+const { mockListChatModels, mockDefaultModel } = vi.hoisted(() => ({
   mockListChatModels: vi.fn(),
+  mockDefaultModel: vi.fn(),
 }));
 
 // The catalog is what the programs listed at startup.
 vi.mock("../../api/src/memory/chatCatalog", () => ({
-  chatCatalog: { list: mockListChatModels },
+  chatCatalog: { list: mockListChatModels, defaultModel: mockDefaultModel },
 }));
 
 import { createApp } from "../../api/app";
@@ -27,6 +28,7 @@ describe("GET /models/chat", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockListChatModels.mockResolvedValue([sampleModel]);
+    mockDefaultModel.mockResolvedValue("sonnet");
   });
 
   it("returns the chat models", async () => {
@@ -34,7 +36,11 @@ describe("GET /models/chat", () => {
       await createApp()
     ).request("http://localhost/models/chat");
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ models: [sampleModel] });
+    expect(await res.json()).toEqual({
+      models: [sampleModel],
+      defaultModelId: "sonnet",
+      recommendedModelIds: [],
+    });
     expect(mockListChatModels).toHaveBeenCalledTimes(1);
   });
 
@@ -60,14 +66,15 @@ describe("GET /models/chat", () => {
     expect(res.headers.get("Content-Encoding")).toBe("gzip");
   });
 
-  it("revalidates with an ETag instead of resending the catalog", async () => {
+  it("revalidates every time with an ETag instead of resending the catalog", async () => {
     const app = await createApp();
 
     const first = await app.request("http://localhost/models/chat");
     const tag = first.headers.get("ETag");
     expect(first.status).toBe(200);
     expect(tag).toBeTruthy();
-    expect(first.headers.get("Cache-Control")).toContain("max-age=300");
+    // A settings change can change it, so it's never used unasked.
+    expect(first.headers.get("Cache-Control")).toBe("private, no-cache");
 
     const second = await app.request("http://localhost/models/chat", {
       headers: { "If-None-Match": tag as string },
@@ -76,7 +83,7 @@ describe("GET /models/chat", () => {
     expect(second.status).toBe(304);
     expect(await second.text()).toBe("");
     // The header has to survive onto the 304, or the browser stops caching.
-    expect(second.headers.get("Cache-Control")).toContain("max-age=300");
+    expect(second.headers.get("Cache-Control")).toBe("private, no-cache");
   });
 });
 

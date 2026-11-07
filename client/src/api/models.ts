@@ -1,22 +1,20 @@
 import type {
   ChatModel,
+  ChatModelsResponse,
   ModelPricing,
-  ModelsResponse,
   ReasoningEffort,
 } from "@parley/contract";
 import { apiJson } from "./http";
 import type { Server } from "./server";
 
-export type { ChatModel, ModelPricing, ReasoningEffort };
+export type { ChatModel, ChatModelsResponse, ModelPricing, ReasoningEffort };
 
-async function fetchModels<T>(server: Server, path: string): Promise<T[]> {
-  const data = await apiJson<ModelsResponse<T>>(server, path);
+export async function fetchChatModels(
+  server: Server,
+): Promise<ChatModelsResponse> {
+  const data = await apiJson<ChatModelsResponse>(server, "/models/chat");
   if (!Array.isArray(data?.models)) throw new Error("Invalid models response");
-  return data.models;
-}
-
-export function fetchChatModels(server: Server): Promise<ChatModel[]> {
-  return fetchModels<ChatModel>(server, "/models/chat");
+  return data;
 }
 
 /** The model with this id or alias, if it's one of these. */
@@ -30,64 +28,11 @@ export function findChatModel(
 /** Fall back to the first available model when the preferred one isn't offered. */
 export function resolveDefaultModel(
   modelIds: string[],
-  preferredModelId: string,
+  preferredModelId: string | null,
 ): string | null {
-  if (modelIds.includes(preferredModelId)) return preferredModelId;
+  if (preferredModelId && modelIds.includes(preferredModelId))
+    return preferredModelId;
   return modelIds[0] ?? null;
-}
-
-/* ------------------------------------------------------------------ naming */
-
-// OpenRouter ids are "<provider>/<model>" and its names are "Provider: Model",
-// so both the grouping key and a clean display name come from the catalog
-// itself. This map only covers the fallback path, where a name arrives without
-// its prefix.
-const PROVIDER_LABELS: Record<string, string> = {
-  openai: "OpenAI",
-  anthropic: "Anthropic",
-  google: "Google",
-  "meta-llama": "Meta",
-  mistralai: "Mistral",
-  deepseek: "DeepSeek",
-  "x-ai": "xAI",
-  qwen: "Qwen",
-  cohere: "Cohere",
-  perplexity: "Perplexity",
-  microsoft: "Microsoft",
-  nvidia: "NVIDIA",
-  amazon: "Amazon",
-  ai21: "AI21",
-};
-
-// A leading "~" marks OpenRouter's alias ids ("~openai/gpt-chat-latest"), which
-// belong to the same provider as the model they point at.
-function providerSlug(modelId: string): string {
-  const [slug] = modelId.split("/");
-  return slug && slug !== modelId ? slug.replace(/^~/, "") : "other";
-}
-
-function labelForSlug(slug: string): string {
-  if (PROVIDER_LABELS[slug]) return PROVIDER_LABELS[slug];
-  return slug
-    .split(/[-_]/)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
-/** "Anthropic: Claude Sonnet 4.5" becomes { provider, name } for display. */
-export function describeModel(model: ChatModel): {
-  provider: string;
-  name: string;
-} {
-  const raw = model.name.trim() || model.id;
-  const separator = raw.indexOf(": ");
-  if (separator > 0) {
-    return {
-      provider: raw.slice(0, separator).trim(),
-      name: raw.slice(separator + 2).trim(),
-    };
-  }
-  return { provider: labelForSlug(providerSlug(model.id)), name: raw };
 }
 
 /* ---------------------------------------------------- message requirements */

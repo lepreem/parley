@@ -118,6 +118,8 @@ type HelperRunOptions = {
 /** What a program offers, as it says when the app starts. */
 export type ChatCatalog = {
   models: ChatModel[];
+  /** The program's own default model, which a new chat starts on. */
+  defaultModel: string;
   /** The quick model, and its least effort, for the app's own small jobs. */
   helper: { model: string; effort: ReasoningEffort | undefined };
 };
@@ -132,6 +134,11 @@ export type ChatAdapter = {
    * logged in, and otherwise resolves with the models it offers.
    */
   connect: () => Promise<ChatCatalog>;
+  /**
+   * The person's settings files for the program: when one changes, what it
+   * offers may have, like the effort a model runs at.
+   */
+  settingsFiles: () => string[];
   /**
    * A chat turn, on the person's own setup of the program: their settings
    * decide what it may do. Resolves with the whole answer.
