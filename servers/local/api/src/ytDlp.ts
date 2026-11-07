@@ -15,7 +15,7 @@ export class YtDlpError extends Error {
  * or a yt-dlp config file of their own, would sign it in to their Google
  * account, and YouTube bans accounts it sees fetching like this. Each is
  * yt-dlp's default already; saying so keeps a config file, a plugin or a
- * later release (the desktop app updates yt-dlp by itself) from changing it.
+ * later release from changing it.
  * test/integration/ytDlpSignedOut.test.ts checks it against the real yt-dlp.
  */
 const SIGNED_OUT_ARGS = [
@@ -25,6 +25,8 @@ const SIGNED_OUT_ARGS = [
   "--no-plugin-dirs",
   "--no-cookies",
   "--no-cookies-from-browser",
+  // yt-dlp changes only when the person installs a new Parley, which ships it.
+  "--no-update",
 ];
 
 /**
@@ -32,7 +34,7 @@ const SIGNED_OUT_ARGS = [
  * them. Never take one off this list to make YouTube work: a signed-in fetch
  * puts the person's Google account at risk.
  */
-const SIGNED_IN_FLAGS = new Set([
+const REFUSED_FLAGS = new Set([
   "--cookies",
   "--cookies-from-browser",
   "-u",
@@ -59,11 +61,16 @@ const SIGNED_IN_FLAGS = new Set([
   "--config-location",
   "--config-locations",
   "--plugin-dirs",
+  // Not signing in, but new code all the same, which only an update of
+  // Parley the person chose should bring.
+  "-U",
+  "--update",
+  "--update-to",
 ]);
 
-/** The first of `args` that would sign yt-dlp in, if any. */
-export function signedInFlag(args: readonly string[]): string | undefined {
-  return args.find((arg) => SIGNED_IN_FLAGS.has(arg.split("=", 1)[0]));
+/** The first of `args` that would sign yt-dlp in or update it, if any. */
+export function refusedFlag(args: readonly string[]): string | undefined {
+  return args.find((arg) => REFUSED_FLAGS.has(arg.split("=", 1)[0]));
 }
 
 /**
@@ -95,10 +102,12 @@ function run(
   abortSignal?: AbortSignal,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
-    const refused = signedInFlag(args);
+    const refused = refusedFlag(args);
     if (refused) {
       reject(
-        new Error(`yt-dlp must never run signed in, so ${refused} is refused`),
+        new Error(
+          `yt-dlp must never run signed in or update itself, so ${refused} is refused`,
+        ),
       );
       return;
     }

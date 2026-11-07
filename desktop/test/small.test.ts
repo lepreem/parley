@@ -1,19 +1,10 @@
-import {
-  mkdir,
-  mkdtemp,
-  readFile,
-  rm,
-  stat,
-  writeFile,
-} from "node:fs/promises";
 import { createServer } from "node:net";
-import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { freePort } from "../src/ports";
 import { joinPath, pathFromShellOutput } from "../src/shellPath";
 import { isNewer, newerRelease } from "../src/updates";
-import { installYtDlp, settledRelease, ytDlpName } from "../src/ytDlp";
+import { bundledYtDlp, ytDlpName } from "../src/ytDlp";
 
 describe("freePort", () => {
   it("takes the preferred port when it's free", async () => {
@@ -87,73 +78,8 @@ describe("newerRelease", () => {
   });
 });
 
-describe("installYtDlp", () => {
-  let dir: string;
-  beforeEach(async () => {
-    dir = await mkdtemp(path.join(tmpdir(), "parley-ytdlp-"));
-    await mkdir(path.join(dir, "bundled"));
-    await writeFile(path.join(dir, "bundled", ytDlpName()), "shipped");
-  });
-  afterEach(async () => {
-    await rm(dir, { recursive: true, force: true });
-  });
-
-  it("copies the bundled one to the data folder, runnable", async () => {
-    const installed = await installYtDlp(path.join(dir, "bundled"), dir);
-    expect(installed).toBe(path.join(dir, "bin", ytDlpName()));
-    expect(await readFile(installed, "utf8")).toBe("shipped");
-    if (process.platform !== "win32") {
-      expect((await stat(installed)).mode & 0o111).not.toBe(0);
-    }
-  });
-
-  it("leaves one that has since updated itself alone", async () => {
-    const installed = await installYtDlp(path.join(dir, "bundled"), dir);
-    await writeFile(installed, "updated");
-    await installYtDlp(path.join(dir, "bundled"), dir);
-    expect(await readFile(installed, "utf8")).toBe("updated");
-  });
-});
-
-describe("settledRelease", () => {
-  const NOW = Date.parse("2026-11-20T00:00:00Z");
-  const release = (tag: string, published: string, rest = {}) => ({
-    tag_name: tag,
-    published_at: published,
-    draft: false,
-    prerelease: false,
-    ...rest,
-  });
-
-  it("skips a release less than a week old", () => {
-    expect(
-      settledRelease(
-        [
-          release("2026.11.19", "2026-11-19T00:00:00Z"),
-          release("2026.11.10", "2026-11-10T00:00:00Z"),
-          release("2026.10.01", "2026-10-01T00:00:00Z"),
-        ],
-        NOW,
-      ),
-    ).toBe("2026.11.10");
-  });
-
-  it("skips drafts and prereleases", () => {
-    expect(
-      settledRelease(
-        [
-          release("draft", "2026-11-01T00:00:00Z", { draft: true }),
-          release("pre", "2026-11-02T00:00:00Z", { prerelease: true }),
-          release("2026.10.01", "2026-10-01T00:00:00Z"),
-        ],
-        NOW,
-      ),
-    ).toBe("2026.10.01");
-  });
-
-  it("is nothing when no release has settled", () => {
-    expect(
-      settledRelease([release("new", "2026-11-19T00:00:00Z")], NOW),
-    ).toBeUndefined();
+describe("bundledYtDlp", () => {
+  it("runs the one inside the app, never a copy that could update", () => {
+    expect(bundledYtDlp("/app/bin")).toBe(path.join("/app/bin", ytDlpName()));
   });
 });

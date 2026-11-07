@@ -26,7 +26,7 @@ import type { SetupState } from "./setupState";
 import { userPath } from "./shellPath";
 import { readTailscale, startServe } from "./tailscale";
 import { newerRelease } from "./updates";
-import { installYtDlp, updateYtDlp } from "./ytDlp";
+import { bundledYtDlp } from "./ytDlp";
 
 const INSTALL_DOCS = "https://code.claude.com/docs/en/setup";
 const TAILSCALE_DOWNLOAD = "https://tailscale.com/download";
@@ -242,7 +242,7 @@ async function takeNextSteps() {
   }
 
   try {
-    const ytDlpPath = await installYtDlp(path.join(resources, "bin"), dataDir);
+    const ytDlpPath = bundledYtDlp(path.join(resources, "bin"));
     const running = await startServer({
       serverDir: path.join(resources, "server"),
       clientDir: path.join(resources, "client"),
@@ -264,7 +264,6 @@ async function takeNextSteps() {
       }
     });
     await window?.loadURL(`${running.url}/`);
-    void updateYtDlp(ytDlpPath);
     void offerUpdate();
   } catch (error) {
     showServerFailure(

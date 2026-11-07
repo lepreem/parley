@@ -21,8 +21,9 @@ image and out of every other install.
   can't outlive the app.
 - `src/shellPath.ts` finds the terminal's PATH, which an app opened from the
   Finder doesn't get.
-- `src/ytDlp.ts` keeps yt-dlp in the data folder, where it can update itself,
-  but only to a release that has been out for a week.
+- `src/ytDlp.ts` runs the yt-dlp inside the app, so it only changes when the
+  person installs a new Parley. YouTube breaks old ones every few weeks, so a
+  release should carry a recent one (pinned in `scripts/stage.mts`).
 - `src/phoneAccess.ts` keeps the person's phone connected while they want it,
   over their own Tailscale (`src/tailscale.ts`, `static/phone.*`). It runs
   `tailscale serve` in the foreground, so serving ends with the app, tells the
