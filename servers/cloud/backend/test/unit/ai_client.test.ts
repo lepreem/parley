@@ -37,6 +37,7 @@ vi.mock("@openrouter/sdk", () => ({
 import {
   buildUserTurn,
   chat,
+  type ChatTurn,
   NoRoomToReply,
 } from "../../src/ai/ai_chat_client/ai_chat_client";
 
@@ -328,6 +329,24 @@ describe("chatAI", () => {
       },
       { signal: expect.any(AbortSignal) },
     );
+  });
+
+  it("asks Claude, and only Claude, to cache the prompt", async () => {
+    mockResponsesSend.mockResolvedValue(responseOf("hi"));
+    const turn: ChatTurn[] = [{ role: "user", content: "yo" }];
+
+    await chat.complete("anthropic/claude-sonnet-4.5", turn);
+    await chat.complete("~anthropic/claude-sonnet-latest", turn);
+    await chat.complete(MODEL_ID, turn);
+
+    const sent = mockResponsesSend.mock.calls.map(
+      ([{ responsesRequest }]) => responsesRequest.cacheControl,
+    );
+    expect(sent).toEqual([
+      { type: "ephemeral" },
+      { type: "ephemeral" },
+      undefined,
+    ]);
   });
 
   it("reports the usage that ends a stream", async () => {

@@ -273,6 +273,16 @@ type ChatOptions = {
   onUnreadPage?: ((url: unknown, error: unknown) => void) | undefined;
 };
 
+/**
+ * Claude caches a prompt only when asked. Asking makes the first turn of a chat
+ * about a quarter dearer (writing the cache) and each reply within 5 minutes of
+ * the last about 15x cheaper (reading it); every read restarts the 5 minutes.
+ * Other providers cache on their own, so they're left alone.
+ */
+function cachesOnRequest(model: string): boolean {
+  return model.replace(/^~/, "").startsWith("anthropic/");
+}
+
 async function complete(
   model: string,
   messages: ChatTurn[],
@@ -292,6 +302,7 @@ async function complete(
     provider: { sort: "latency" },
     sessionId: opts.sessionId,
     tools: opts.webSearch ? WEB_TOOLS : undefined,
+    cacheControl: cachesOnRequest(model) ? { type: "ephemeral" } : undefined,
   };
 
   const timeoutOptions = {
