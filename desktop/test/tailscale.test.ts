@@ -75,7 +75,8 @@ describe("what tailscale serve prints", () => {
   });
 });
 
-describe("the tailscale program", () => {
+// The stand-in is a #! script, which Windows can't run, as in claudeCode.test.ts.
+describe.skipIf(process.platform === "win32")("the tailscale program", () => {
   let dir: string;
 
   /** A stand-in `tailscale` on the PATH, run by this same Node. */
