@@ -465,61 +465,19 @@ describe.skipIf(!testState.databaseUrl)("storage ledger in PostgreSQL", () => {
       expect(await statusOf(a)).toBe("confirmed");
     });
 
-    it.each([
-      ["queued", true],
-      ["processing", true],
-      ["completed", false],
-      ["failed", false],
-    ])(
-      "reports whether a %s youtube fetch could still write",
-      async (status, fetchMayStillWrite) => {
-        const audioUploadId = await addJob();
-        await db
-          .update(AudioTranscriptionJobs)
-          .set({ status: status as "queued" })
-          .where(
-            sql`${AudioTranscriptionJobs.audioUploadId} = ${audioUploadId}`,
-          );
-
-        expect(await jobs.deleteAudioJob(userId, audioUploadId)).toMatchObject({
-          fetchMayStillWrite,
-        });
-      },
-    );
-
-    // Nothing writes a direct upload's objects after it exists.
-    it("reports that a queued direct upload's objects are settled", async () => {
-      const audioUploadId = randomUUID();
-      await jobs.createAudioJob({
-        audioUploadId: audioUploadId as never,
-        userId,
-        source: "audio",
-        fileName: "clip.webm",
-        mimeType: "audio/webm",
-        sizeBytes: 1,
-      });
-      await storageLedger.recordConfirmedObjects(userId, [
-        { kind: "audio", uploadId: audioUploadId },
-      ]);
-
-      expect(await jobs.deleteAudioJob(userId, audioUploadId)).toMatchObject({
-        fetchMayStillWrite: false,
-      });
-    });
-
     it("marks a deleted job's audio", async () => {
       const audioUploadId = await addJob();
 
-      expect(await jobs.deleteAudioJob(userId, audioUploadId)).not.toBeNull();
+      expect(await jobs.deleteAudioJob(userId, audioUploadId)).toBe(true);
       expect(await statusOf(audioUploadId)).toBe("deleted");
     });
 
     it("marks nothing for a job that isn't the caller's", async () => {
       const audioUploadId = await addJob();
 
-      expect(
-        await jobs.deleteAudioJob("someone-else", audioUploadId),
-      ).toBeNull();
+      expect(await jobs.deleteAudioJob("someone-else", audioUploadId)).toBe(
+        false,
+      );
       expect(await statusOf(audioUploadId)).toBe("confirmed");
     });
 
@@ -553,37 +511,6 @@ describe.skipIf(!testState.databaseUrl)("storage ledger in PostgreSQL", () => {
 
       expect(await statusOf(a)).toBe("deleted");
       expect(await db.select().from(Attachments)).toEqual([]);
-    });
-  });
-
-  describe("createYoutubeAudioJob", () => {
-    const youtubeJob = () => ({
-      audioUploadId: randomUUID() as never,
-      userId,
-      source: "youtube" as const,
-      youtubeVideoId: "dQw4w9WgXcQ",
-      fileName: "YouTube audio",
-      mimeType: null,
-      sizeBytes: 0,
-    });
-
-    it("records the job's audio as referenced", async () => {
-      const job = youtubeJob();
-
-      await jobs.createYoutubeAudioJob(job);
-
-      expect(await ledger()).toEqual([
-        { uploadId: job.audioUploadId, kind: "audio", status: "confirmed" },
-      ]);
-      expect(await db.select().from(AudioTranscriptionJobs)).toHaveLength(1);
-    });
-
-    it("records nothing when the job can't be created", async () => {
-      const job = { ...youtubeJob(), userId: "no-such-user" };
-
-      await expect(jobs.createYoutubeAudioJob(job)).rejects.toThrow();
-
-      expect(await ledger()).toEqual([]);
     });
   });
 
@@ -713,17 +640,12 @@ describe.skipIf(!testState.databaseUrl)("storage ledger in PostgreSQL", () => {
         mimeType: "audio/webm",
         sizeBytes: 1,
       };
-      if (source === "youtube") {
-        await jobs.createYoutubeAudioJob({
-          ...job,
-          youtubeVideoId: "dQw4w9WgXcQ",
-        });
-      } else {
-        await storageLedger.recordConfirmedObjects(userId, [
-          { kind: "audio", uploadId: audioUploadId },
-        ]);
-        await jobs.createAudioJob(job);
-      }
+      await storageLedger.recordConfirmedObjects(userId, [
+        { kind: "audio", uploadId: audioUploadId },
+      ]);
+      await jobs.createAudioJob(
+        source === "youtube" ? { ...job, youtubeVideoId: "dQw4w9WgXcQ" } : job,
+      );
       await db
         .update(AudioTranscriptionJobs)
         .set({ status })

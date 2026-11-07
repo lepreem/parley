@@ -5,7 +5,6 @@ import { Attachments, AudioTranscriptionJobs, db, type Executor } from "../db";
 import type { jobStatusEnum } from "../db";
 import type { UploadId } from "@parley/server-kit/ids";
 import { attachments } from "./attachments.data";
-import { storageLedger } from "./storageLedger.data";
 
 /**
  * The API reads and writes this table both on the request path and as
@@ -191,63 +190,24 @@ async function createAudioJob(
 }
 
 /**
- * A YouTube job, and the audio the fetcher may write for it recorded as
- * referenced, in the same transaction. It's recorded now rather than when it
- * lands, so audio the fetcher writes is never unrecorded; recording audio that
- * never arrives (the video had captions) costs nothing, since deleting a
- * missing object is a no-op.
- */
-async function createYoutubeAudioJob(
-  job: Parameters<typeof createAudioJob>[0],
-) {
-  await db.transaction(async (tx) => {
-    await createAudioJob(job, tx);
-    await storageLedger.recordConfirmedObjects(
-      job.userId,
-      [{ kind: "audio", uploadId: job.audioUploadId }],
-      tx,
-    );
-  });
-}
-
-/**
  * Deletes a job's audio attachment, and with it the job, unless it's linked to
  * a message or reserved for a response. Marks the audio as deleted in the same
- * transaction. Returns null when nothing was deleted, and otherwise says
- * whether its fetch could still write the audio the caller is about to remove.
+ * transaction. Returns whether anything was deleted.
  */
 async function deleteAudioJob(userId: string, audioUploadId: string) {
   return db.transaction(async (tx) => {
-    const [job] = await tx
-      .select({
-        source: AudioTranscriptionJobs.source,
-        status: AudioTranscriptionJobs.status,
-      })
-      .from(AudioTranscriptionJobs)
-      .where(eq(AudioTranscriptionJobs.audioUploadId, audioUploadId));
-
     const deletedAudioUploadId =
       await attachments.deleteOwnedUnlinkedUnreservedAttachment(
         { userId, attachmentId: audioUploadId, kind: "audio" },
         tx,
       );
-    if (!deletedAudioUploadId) return null;
-
-    // A youtube fetch runs in another process, which can be told to stop but
-    // may be past its last check, so until the job reaches a terminal status
-    // its objects may still land.
-    const fetchMayStillWrite =
-      job?.source === "youtube" &&
-      job.status !== "completed" &&
-      job.status !== "failed";
-
-    return { fetchMayStillWrite };
+    return Boolean(deletedAudioUploadId);
   });
 }
 
 /**
- * Out-of-band failure reported by youtube-fetcher over the broker. Not
- * user-scoped: the event carries no session, only the id it was given.
+ * A YouTube job whose captions couldn't be had. Not user-scoped: the queue's
+ * message carries no session, only the id it was given.
  *
  * Only an unfinished job can fail this way. A report can arrive after the
  * job completed — a redelivered fetch that fails the second time — and must
@@ -381,7 +341,6 @@ export const jobs = {
   findAudioJob,
   findUserJobsPage,
   createAudioJob,
-  createYoutubeAudioJob,
   deleteAudioJob,
   failAudioJobById,
   claimAudioJob,

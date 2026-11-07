@@ -6,17 +6,13 @@
 
 import { isDeepStrictEqual } from "node:util";
 
-// Exported so the API can publish it on /contract — the youtube-fetcher reads
-// the bucket name from there instead of hardcoding it. Non-sensitive config,
-// same as the queue names.
 export const AUDIO_BUCKET = "Audio";
 
 // Images have a bucket to themselves, so the bucket can hold them to the
 // image limit rather than the audio one.
 export const IMAGE_BUCKET = "Images";
 
-// Cap on audio files entering the bucket. Served on /contract so the
-// youtube-fetcher enforces the same limit the API applies to direct uploads.
+// Cap on audio files entering the bucket.
 // Supabase's Free plan caps every upload in the project at 50 MB, and a
 // bucket's limit can't exceed the project's, so this can only go higher with
 // the plan.

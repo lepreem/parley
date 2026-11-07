@@ -93,9 +93,18 @@ export const handleAudioConfirm = authed.createHandlers(
 );
 
 /**
- * POST /upload/youtube — a YouTube video, fetched out of band by
- * youtube-fetcher. A video someone has already transcribed isn't fetched
- * again: the job starts out completed, with a copy of that transcript.
+ * Why a YouTube video is turned away with captions off. YouTube blocks this
+ * server's downloads, so for now the cloud only takes a video's captions; the
+ * client keeps the option on.
+ */
+export const CAPTIONS_ONLY =
+  "Parley can only use a YouTube video's captions for now. Turn on “Use YouTube captions”, or upload the audio or video file instead.";
+
+/**
+ * POST /upload/youtube — a YouTube video, whose captions are fetched out of
+ * band (src/transcription/youtubeCaptionsJob.ts). A video someone has already
+ * transcribed isn't fetched again: the job starts out completed, with a copy
+ * of that transcript.
  */
 export const handleYoutubeUpload = authed.createHandlers(
   validate("json", youtubeUploadSchema),
@@ -106,6 +115,9 @@ export const handleYoutubeUpload = authed.createHandlers(
       youtubeVideoId,
       useCaptionsIfAvailable,
     } = c.req.valid("json");
+    if (!useCaptionsIfAvailable) {
+      return c.json({ message: CAPTIONS_ONLY }, 400);
+    }
 
     const audioUploadId: UploadId = randomUUID();
     const job = {
@@ -133,23 +145,19 @@ export const handleYoutubeUpload = authed.createHandlers(
       return c.json(queued);
     }
 
-    // Created queued with placeholder metadata. When asked to, the fetcher tries
-    // the video's captions first and sends them back as the transcript, falling
-    // back to the audio when there are none; otherwise it goes straight to the
-    // audio, writes it under `audioUploadId` and queues it to be transcribed.
-    await data.jobs.createYoutubeAudioJob(job);
+    // Created queued with placeholder metadata, for the captions to complete.
+    await data.jobs.createAudioJob(job);
 
-    // A failed publish would leave the job queued with no fetcher coming for
-    // it; failing it puts that in front of the user instead.
+    // A failed publish would leave the job queued with nothing coming for it;
+    // failing it puts that in front of the user instead.
     await audioTranscription.publishOrFail(audioUploadId, () =>
-      mq.publish(
-        useCaptionsIfAvailable
-          ? mq.queues.YT_FETCH_CAPTIONS
-          : mq.queues.YT_FETCH_AUDIO,
+      mq.publish(mq.queues.YT_FETCH_CAPTIONS, {
+        audioUploadId,
         // Only the video: a playlist or start time on the link the user
-        // pasted is nothing the fetcher should act on.
-        { audioUploadId, url: youtubeWatchUrl(youtubeVideoId), userId },
-      ),
+        // pasted is nothing to act on.
+        url: youtubeWatchUrl(youtubeVideoId),
+        userId,
+      }),
     );
     return c.json(queued);
   },

@@ -8,6 +8,7 @@ const validEnv = {
   SUPABASE_SERVICE_ROLE_KEY: "test-key",
   OPENROUTER_API_KEY: "test-key",
   DEEPGRAM_API_KEY: "test-key",
+  SUPADATA_API_KEY: "test-key",
   NODE_ENV: "test" as const,
   WORKOS_API_KEY: "sk_test",
   WORKOS_CLIENT_ID: "client_test",

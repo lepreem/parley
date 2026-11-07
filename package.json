@@ -10,10 +10,9 @@
     "packages/server-kit"
   ],
   "scripts": {
-    "dev": "concurrently -k -n backend,client,fetcher -c blue,green,yellow \"npm run dev --prefix servers/cloud/backend\" \"npm run dev --prefix client\" \"npm run dev:fetcher\"",
+    "dev": "concurrently -k -n backend,client -c blue,green \"npm run dev --prefix servers/cloud/backend\" \"npm run dev --prefix client\"",
     "stack": "npm run --silent doppler -- docker compose -f servers/cloud/compose.yaml up --build",
     "doppler": "set -a; [ -f servers/cloud/.env ] && . ./servers/cloud/.env; set +a; exec mise exec -- doppler run --",
-    "dev:fetcher": "until curl -sf http://localhost:3001/contract > /dev/null; do sleep 1; done && cd servers/cloud/youtube-fetcher && { set -a; [ -f ../.env ] && . ../.env; set +a; exec mise exec -- doppler run -- .venv/bin/python app/app.py; }",
     "dev:local": "cd servers/local && mise exec -- npm run dev",
     "start:local": "cd servers/local && mise exec -- sh -c 'npm run build --prefix ../../client && npm run build && npm run start:api'",
     "knip": "KNIP_DISABLE_RAW_TRANSFER=1 knip",
@@ -25,11 +24,7 @@
       "node scripts/eslintStaged.mjs"
     ],
     "{client,servers/cloud/backend,servers/local}/**/*.{css,html,json,md,yaml,yml}": "prettier --write",
-    "{packages,desktop}/**/*.{css,html,js,json,md,ts,tsx,yaml,yml}": "prettier --write",
-    "servers/cloud/youtube-fetcher/**/*.py": [
-      "servers/cloud/youtube-fetcher/.venv/bin/ruff check --fix",
-      "servers/cloud/youtube-fetcher/.venv/bin/ruff format"
-    ]
+    "{packages,desktop}/**/*.{css,html,js,json,md,ts,tsx,yaml,yml}": "prettier --write"
   },
   "simple-git-hooks": {
     "pre-commit": "npx lint-staged"

@@ -19,7 +19,6 @@ updates:
   - package-ecosystem: docker
     directories:
       - /servers/cloud/backend
-      - /servers/cloud/youtube-fetcher
     schedule:
       interval: monthly
     groups:

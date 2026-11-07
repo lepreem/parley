@@ -40,22 +40,31 @@ to first token (median 1.76 s) far ahead of everything the server does.
   (`prepareTurn`), so a text-only model with stale images costs a storage call,
   and a storage failure there is a 500 instead of the 400.
 
-## Find YouTube videos Parley already has
+## Say whether a YouTube video is free before it's added
 
-A fuzzy search in the client over the YouTube videos the cloud already has
-captions for, so people can pick one without wondering whether it spends a
-Supadata credit. Picking one costs nothing, since the transcript is reused
-across users (`findYoutubeTranscript`).
+When someone pastes a link, check whether Parley already has that video's
+transcript (`findYoutubeTranscript`, reused across users) and say so before
+they add it: "Already in Parley, free" or "Uses one of today's 10 videos".
+Nothing goes to YouTube, and nobody can browse what others have watched,
+since only a link they already have is checked.
 
-- **Titles.** A YouTube source is stored as "YouTube audio", so there's
-  nothing to search yet. Keep the title when a video is fetched. Supadata's
-  metadata call costs a credit; YouTube's oEmbed endpoint is free and needs
-  no key, but check that it answers the VPS.
-- **Privacy.** The transcripts are shared, so listing them shows people what
-  others have watched. Show only videos several people have added, or only
-  confirm a video someone searched for by name or pasted.
 - **The daily limit** (`youtubeDaily`) counts every video added, cached or
-  not. If cached ones become visibly free, stop counting them.
+  not. Stop counting the cached ones once they're shown as free.
+- **Later, maybe: search by title.** Parley stores no titles (a source is
+  "YouTube audio"), and getting them means asking YouTube or a service that
+  does. A browsable list would also show unlisted videos someone added, so
+  it should only show public ones.
+
+## YouTube audio in the cloud
+
+The cloud only takes a video's captions: YouTube blocks the VPS's downloads.
+A video without captions fails, telling the person to upload the file. To
+allow audio again, turn on `youtubeAudio` for the cloud in
+`client/src/config.ts` and drop the `CAPTIONS_ONLY` check in
+`servers/cloud/backend/src/controllers/upload.controller.ts`, once there's a
+way to get the audio: Supadata's `generate` mode (a credit per half minute
+of video, untested), or a residential proxy. The local server downloads
+audio itself, from the person's own connection.
 
 ## Move transcription to OpenRouter Whisper
 
@@ -102,5 +111,3 @@ Nothing needs this yet. Everything below is per process today:
 
 - The contract's `ChatMessage.attachments` holds only images; rename it
   `imageAttachments`.
-- `/contract` serves the audio bucket as `bucket`; rename it `audioBucket`
-  (the fetcher reads it).

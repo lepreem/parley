@@ -40,9 +40,6 @@ jobs:
           - image: parley-cloud
             context: .
             file: servers/cloud/backend/Dockerfile
-          - image: parley-youtube-fetcher
-            context: servers/cloud/youtube-fetcher
-            file: servers/cloud/youtube-fetcher/Dockerfile
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0

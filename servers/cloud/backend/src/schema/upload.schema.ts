@@ -40,9 +40,8 @@ export const audioConfirmSchema = z.object({
 
 /**
  * POST /upload/youtube — a link to one YouTube video, known from here on by
- * its id. The youtube-fetcher service downloads the audio out of band, so the
- * job is created with placeholder file metadata (real title/size are unknown
- * until the fetch completes).
+ * its id. Its captions are fetched out of band, so the job is created with
+ * placeholder file metadata.
  */
 export const youtubeUploadSchema = takesBody<QueueYoutubeBody>()(
   z

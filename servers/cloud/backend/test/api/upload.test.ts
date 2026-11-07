@@ -118,13 +118,13 @@ vi.mock("../../src/message-queue/messageQueue", () => ({
     queues: {
       TRANSCRIBE_AUDIO: "transcribe_audio",
       YT_FETCH_CAPTIONS: "yt_fetch_captions",
-      YT_FETCH_AUDIO: "yt_fetch_audio",
     },
     publish: mockSendEvent,
   },
 }));
 
 import { createApp } from "../../src/app";
+import { CAPTIONS_ONLY } from "../../src/controllers/upload.controller";
 import { resetRateLimits } from "../../src/memory/rateLimitCounts";
 import { authedHeaders, sessionCookieHeader } from "../helpers/session";
 
@@ -526,6 +526,11 @@ describe("POST /upload/audio/confirm", () => {
 describe("POST /upload/youtube", () => {
   const VIDEO_ID = "dQw4w9WgXcQ";
   const YT_URL = `https://www.youtube.com/watch?v=${VIDEO_ID}`;
+  /** A link, with captions on, which is all the cloud takes for now. */
+  const video = (youtubeUrl = YT_URL) => ({
+    youtubeUrl,
+    useCaptionsIfAvailable: true,
+  });
   // Captured so we can assert the inserted row (e.g. youtubeVideoId) directly.
   let mockValues: ReturnType<typeof vi.fn>;
 
@@ -546,7 +551,7 @@ describe("POST /upload/youtube", () => {
     ).request("http://localhost/upload/youtube", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ youtubeUrl: YT_URL }),
+      body: JSON.stringify(video()),
     });
     expect(res.status).toBe(401);
     expect(mockInsert).not.toHaveBeenCalled();
@@ -563,7 +568,7 @@ describe("POST /upload/youtube", () => {
         "Content-Type": "application/json",
         Cookie: await sessionCookieHeader("user_01"),
       },
-      body: JSON.stringify({ youtubeUrl: "https://example.com/watch?v=x" }),
+      body: JSON.stringify(video("https://example.com/watch?v=x")),
     });
     expect(res.status).toBe(400);
     // The schema's own message must reach the client, not a generic string.
@@ -571,7 +576,7 @@ describe("POST /upload/youtube", () => {
     expect(mockSendEvent).not.toHaveBeenCalled();
   });
 
-  it("creates a job and enqueues fetch with the url + userId", async () => {
+  it("creates a job and queues its captions with the url + userId", async () => {
     const res = await (
       await createApp()
     ).request("http://localhost/upload/youtube", {
@@ -580,7 +585,7 @@ describe("POST /upload/youtube", () => {
         "Content-Type": "application/json",
         Cookie: await sessionCookieHeader("user_01"),
       },
-      body: JSON.stringify({ youtubeUrl: YT_URL }),
+      body: JSON.stringify(video()),
     });
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
@@ -601,15 +606,9 @@ describe("POST /upload/youtube", () => {
         youtubeVideoId: VIDEO_ID,
       }),
     );
-    // The fetch event carries the url + userId the fetcher needs (bucket write
-    // happens in Python; the API only enqueues).
-    // What the fetcher will write is on record before it's asked to.
-    expect(ledger.recordConfirmedObjects).toHaveBeenCalledWith(
-      "user_01",
-      [{ kind: "audio", uploadId: body.audioUploadId }],
-      expect.anything(),
-    );
-    expect(mockSendEvent).toHaveBeenCalledWith("yt_fetch_audio", {
+    // Only captions, so there's no audio to put on record.
+    expect(ledger.recordConfirmedObjects).not.toHaveBeenCalled();
+    expect(mockSendEvent).toHaveBeenCalledWith("yt_fetch_captions", {
       audioUploadId: body.audioUploadId,
       url: YT_URL,
       userId: "user_01",
@@ -627,7 +626,7 @@ describe("POST /upload/youtube", () => {
         "Content-Type": "application/json",
         Cookie: await sessionCookieHeader("user_01"),
       },
-      body: JSON.stringify({ youtubeUrl: YT_URL }),
+      body: JSON.stringify(video()),
     });
 
     expect(res.status).toBe(500);
@@ -637,72 +636,56 @@ describe("POST /upload/youtube", () => {
     });
   });
 
-  it("sends a caption preference to the fetcher's captions queue", async () => {
-    const res = await (
-      await createApp()
-    ).request("http://localhost/upload/youtube", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Cookie: await sessionCookieHeader("user_01"),
-      },
-      body: JSON.stringify({
+  it.each([
+    ["off", { useCaptionsIfAvailable: false }],
+    ["left out", {}],
+  ])("refuses a video with captions %s", async (_, captions) => {
+    for (let i = 0; i < 12; i++) {
+      const res = await postJson("/upload/youtube", {
         youtubeUrl: YT_URL,
-        useCaptionsIfAvailable: true,
-      }),
-    });
-
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as { audioUploadId: string };
-    // The captions come back in the fetcher's message, so nothing is
-    // reserved for them here.
-    expect(ledger.recordConfirmedObjects).toHaveBeenCalledWith(
-      "user_01",
-      [{ kind: "audio", uploadId: body.audioUploadId }],
-      expect.anything(),
-    );
-    expect(mockSendEvent).toHaveBeenCalledWith("yt_fetch_captions", {
-      audioUploadId: body.audioUploadId,
-      url: YT_URL,
-      userId: "user_01",
-    });
+        ...captions,
+      });
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ message: CAPTIONS_ONLY });
+    }
+    expect(mockInsert).not.toHaveBeenCalled();
+    expect(mockSendEvent).not.toHaveBeenCalled();
+    // Nor do they count toward the day's videos.
+    expect((await postJson("/upload/youtube", video())).status).toBe(200);
   });
 
   it("lets each user add ten videos a day", async () => {
     for (let i = 0; i < 10; i++) {
-      expect(
-        (await postJson("/upload/youtube", { youtubeUrl: YT_URL })).status,
-      ).toBe(200);
+      expect((await postJson("/upload/youtube", video())).status).toBe(200);
     }
 
-    const refused = await postJson("/upload/youtube", { youtubeUrl: YT_URL });
+    const refused = await postJson("/upload/youtube", video());
     expect(refused.status).toBe(429);
     expect(((await refused.json()) as { message: string }).message).toMatch(
       /^You can add 10 YouTube videos a day/,
     );
-    expect(
-      (await postJson("/upload/youtube", { youtubeUrl: YT_URL }, "user_02"))
-        .status,
-    ).toBe(200);
+    expect((await postJson("/upload/youtube", video(), "user_02")).status).toBe(
+      200,
+    );
   });
 
   it("doesn't count a link it refuses toward the day's videos", async () => {
     for (let i = 0; i < 12; i++) {
-      const res = await postJson("/upload/youtube", {
-        youtubeUrl: "https://www.youtube.com/@somechannel",
-      });
+      const res = await postJson(
+        "/upload/youtube",
+        video("https://www.youtube.com/@somechannel"),
+      );
       expect(res.status).toBe(400);
     }
 
-    expect(
-      (await postJson("/upload/youtube", { youtubeUrl: YT_URL })).status,
-    ).toBe(200);
+    expect((await postJson("/upload/youtube", video())).status).toBe(200);
   });
 
   it("returns 400 for a YouTube link that isn't to one video", async () => {
-    const res = await postJson("/upload/youtube", {
-      youtubeUrl: "https://www.youtube.com/@somechannel",
-    });
+    const res = await postJson(
+      "/upload/youtube",
+      video("https://www.youtube.com/@somechannel"),
+    );
 
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ message: "Not a valid YouTube URL" });
@@ -711,7 +694,7 @@ describe("POST /upload/youtube", () => {
 
   it("gives a client no say in the transcription model", async () => {
     const res = await postJson("/upload/youtube", {
-      youtubeUrl: YT_URL,
+      ...video(),
       transcriptModelId: "nova-3-pharma",
     });
 
@@ -720,21 +703,22 @@ describe("POST /upload/youtube", () => {
     expect(JSON.stringify(mockValues.mock.calls)).not.toContain(
       "nova-3-pharma",
     );
-    expect(mockSendEvent).toHaveBeenCalledWith("yt_fetch_audio", {
+    expect(mockSendEvent).toHaveBeenCalledWith("yt_fetch_captions", {
       audioUploadId: body.audioUploadId,
       url: YT_URL,
       userId: "user_01",
     });
   });
 
-  it("hands the fetcher only the video, not the rest of the link", async () => {
-    const res = await postJson("/upload/youtube", {
-      youtubeUrl: `https://youtu.be/${VIDEO_ID}?list=PL123&t=90`,
-    });
+  it("queues only the video, not the rest of the link", async () => {
+    const res = await postJson(
+      "/upload/youtube",
+      video(`https://youtu.be/${VIDEO_ID}?list=PL123&t=90`),
+    );
 
     expect(res.status).toBe(200);
     const body = (await res.json()) as { audioUploadId: string };
-    expect(mockSendEvent).toHaveBeenCalledWith("yt_fetch_audio", {
+    expect(mockSendEvent).toHaveBeenCalledWith("yt_fetch_captions", {
       audioUploadId: body.audioUploadId,
       url: YT_URL,
       userId: "user_01",
@@ -772,7 +756,7 @@ describe("POST /upload/youtube", () => {
       audioUploadId: body.audioUploadId,
       ...transcript,
     });
-    // Nothing is fetched, so no audio is waited on or recorded.
+    // Nothing is fetched.
     expect(mockSendEvent).not.toHaveBeenCalled();
     expect(ledger.recordConfirmedObjects).not.toHaveBeenCalled();
   });

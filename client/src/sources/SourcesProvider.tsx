@@ -51,7 +51,9 @@ export function SourcesProvider({ children }: { children: ReactNode }) {
   const [drafts, setDrafts] = useState<Drafts>({});
   // On by default: a video's captions are free and immediate, where
   // transcribing its audio is billed.
-  const [useCaptionsIfAvailable, setUseCaptionsIfAvailable] = useState(true);
+  const [captionsChosen, setUseCaptionsIfAvailable] = useState(true);
+  const captionsRequired = !server.youtubeAudio;
+  const useCaptionsIfAvailable = captionsRequired || captionsChosen;
 
   // Mirrors read by the async upload runs and by callbacks that must not change
   // identity every time a draft does. Synced after commit, which is always
@@ -435,6 +437,7 @@ export function SourcesProvider({ children }: { children: ReactNode }) {
       takeDraft,
       restoreDraft,
       useCaptionsIfAvailable,
+      captionsRequired,
       setUseCaptionsIfAvailable,
     }),
     [
@@ -448,6 +451,7 @@ export function SourcesProvider({ children }: { children: ReactNode }) {
       takeDraft,
       restoreDraft,
       useCaptionsIfAvailable,
+      captionsRequired,
     ],
   );
 

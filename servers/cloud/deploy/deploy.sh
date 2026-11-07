@@ -32,8 +32,7 @@ compose pull
 # fails the workflow instead of passing quietly.
 compose up -d --remove-orphans --wait --wait-timeout 300
 
-# The fetcher has no healthcheck, since it serves nothing, so --wait only
-# knows it started. If it fails on boot it exits within seconds and Docker
+# A container can still crash soon after --wait sees it healthy, and Docker
 # restarts it, so give it time to, then fail if anything restarted.
 restarts() {
   # One argument per container id, so the split is the point.

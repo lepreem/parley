@@ -65,9 +65,6 @@ vi.mock("../../src/message-queue/messageQueue", () => {
   const queues = {
     TRANSCRIBE_AUDIO: "transcribe_audio",
     YT_FETCH_CAPTIONS: "yt_fetch_captions",
-    YT_FETCH_AUDIO: "yt_fetch_audio",
-    YT_CANCEL_FETCH: "yt_cancel_fetch",
-    YT_FAIL_JOB: "yt_fail_job",
   } as const;
 
   return {
@@ -110,7 +107,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockFindAudioJob.mockResolvedValue(audioJob);
   mockFindTranscripts.mockResolvedValue(new Map());
-  mockDeleteAudioJob.mockResolvedValue({ fetchMayStillWrite: false });
+  mockDeleteAudioJob.mockResolvedValue(true);
   mockDeleteObjects.mockResolvedValue(undefined);
   mockFindLedgerEntry.mockResolvedValue({
     status: "confirmed",
@@ -369,10 +366,14 @@ describe("DELETE /jobs/transcribe/:audioUploadId", () => {
     ]);
   });
 
-  // The fetcher is another process; deleting the job doesn't stop it, so its
-  // objects stay on record for the sweep rather than being released now.
-  it("releases nothing while a youtube fetch could still write", async () => {
-    mockDeleteAudioJob.mockResolvedValueOnce({ fetchMayStillWrite: true });
+  // Its transcript is the video's captions, so there's nothing in storage.
+  it("touches no storage for a youtube job", async () => {
+    mockFindAudioJob.mockResolvedValueOnce({
+      ...audioJob,
+      source: "youtube",
+      youtubeVideoId: "dQw4w9WgXcQ",
+      status: "queued",
+    });
 
     const res = await (
       await createApp()
@@ -382,24 +383,8 @@ describe("DELETE /jobs/transcribe/:audioUploadId", () => {
     });
 
     expect(res.status).toBe(200);
+    expect(mockDeleteAudioJob).toHaveBeenCalled();
     expect(mockDeleteObjects).not.toHaveBeenCalled();
-  });
-
-  it("tells the fetcher to stop a youtube fetch, and survives that failing", async () => {
-    mockDeleteAudioJob.mockResolvedValueOnce({ fetchMayStillWrite: true });
-    mockPublish.mockRejectedValueOnce(new Error("broker down"));
-
-    const res = await (
-      await createApp()
-    ).request(`http://localhost/jobs/transcribe/${audioUploadId}`, {
-      method: "DELETE",
-      headers: await authedHeaders("user_01OWNER"),
-    });
-
-    expect(res.status).toBe(200);
-    expect(mockPublish).toHaveBeenCalledWith("yt_cancel_fetch", {
-      audioUploadId,
-    });
   });
 
   it("aborts a transcription this process is running", async () => {
@@ -418,7 +403,7 @@ describe("DELETE /jobs/transcribe/:audioUploadId", () => {
   });
 
   it("preserves a source that is linked to a message", async () => {
-    mockDeleteAudioJob.mockResolvedValueOnce(null);
+    mockDeleteAudioJob.mockResolvedValueOnce(false);
 
     const response = await (
       await createApp()

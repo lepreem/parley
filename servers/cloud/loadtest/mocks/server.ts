@@ -1,7 +1,8 @@
 /**
  * Stand-ins for the paid services the backend calls, so a load test costs
- * nothing: OpenRouter (chat and titles), Deepgram (transcription) and WorkOS
- * (the keys session tokens are checked against). Each answers just the calls
+ * nothing: OpenRouter (chat and titles), Deepgram (transcription), Supadata
+ * (only its startup check: YouTube uploads aren't load tested) and WorkOS (the
+ * keys session tokens are checked against). Each answers just the calls
  * the backend makes, in the shape its SDK checks for, after a delay that
  * stands in for the real service's.
  *
@@ -378,6 +379,8 @@ const routes: Record<string, Route> = {
     json(res, 200, { stt: TRANSCRIBE_MODELS, tts: [] }),
   "POST /deepgram/v1/listen": async (req, res, _url, signal) =>
     transcribe(res, await readJson(req), signal),
+
+  "GET /supadata/me": (_req, res) => json(res, 200, { usedCredits: 0 }),
 
   // WorkOS's SDK takes a host but no path, so its routes sit at the root.
   "GET /user_management/users": (_req, res) =>

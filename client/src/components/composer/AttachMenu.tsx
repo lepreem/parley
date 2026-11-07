@@ -7,6 +7,8 @@ type AttachMenuProps = {
   onAddFiles: (files: File[]) => void;
   onBrowseSources: () => void;
   useCaptionsIfAvailable: boolean;
+  /** The server only takes captions, so the box stays ticked. */
+  captionsRequired: boolean;
   onUseCaptionsChange: (use: boolean) => void;
 };
 
@@ -14,6 +16,7 @@ export function AttachMenu({
   onAddFiles,
   onBrowseSources,
   useCaptionsIfAvailable,
+  captionsRequired,
   onUseCaptionsChange,
 }: AttachMenuProps) {
   const [open, setOpen] = useState(false);
@@ -96,13 +99,16 @@ export function AttachMenu({
               <input
                 type="checkbox"
                 checked={useCaptionsIfAvailable}
+                disabled={captionsRequired}
                 onChange={(event) => onUseCaptionsChange(event.target.checked)}
                 className="mt-0.5"
               />
               <span>
                 Use YouTube captions when a video has them
                 <span className="block text-[11px] leading-snug text-faint">
-                  Instant, but rougher than transcribing.
+                  {captionsRequired
+                    ? "Always on for now: Parley can only use a video's captions. For one without captions, upload its audio or video file."
+                    : "Instant, but rougher than transcribing."}
                 </span>
               </span>
             </label>

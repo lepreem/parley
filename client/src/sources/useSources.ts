@@ -25,6 +25,7 @@ export function useSources(draftKey: string) {
     takeDraft,
     restoreDraft,
     useCaptionsIfAvailable,
+    captionsRequired,
     setUseCaptionsIfAvailable,
   } = context;
   const sources = drafts[draftKey] ?? NO_SOURCES;
@@ -33,6 +34,7 @@ export function useSources(draftKey: string) {
     () => ({
       sources,
       useCaptionsIfAvailable,
+      captionsRequired,
       setUseCaptionsIfAvailable,
       addFiles: (files: File[]) => addFiles(draftKey, files),
       addYoutube: (url: string) => addYoutube(draftKey, url),
@@ -53,6 +55,7 @@ export function useSources(draftKey: string) {
       draftKey,
       sources,
       useCaptionsIfAvailable,
+      captionsRequired,
       setUseCaptionsIfAvailable,
       addFiles,
       addYoutube,

@@ -29,6 +29,12 @@ export type Server = {
    */
   toolApprovals: boolean;
   /**
+   * Whether it can transcribe a YouTube video's audio, rather than only use
+   * its captions. The cloud can't for now: YouTube blocks its server's
+   * downloads.
+   */
+  youtubeAudio: boolean;
+  /**
    * The model a new chat starts on, when offered. It may be named by alias.
    */
   defaultChatModelId: string;

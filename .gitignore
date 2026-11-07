@@ -10,10 +10,6 @@ uploads
 /test_data/*
 !/test_data/README.md
 
-# Python (youtube-fetcher)
-.venv/
-__pycache__/
-
 # Package manager lockfiles
 # (We use npm; commit `package-lock.json` in each package directory)
 npm-shrinkwrap.json
