@@ -7,6 +7,7 @@ import type {
   ChatMessage,
   MessageSource,
   MessagesResponse,
+  PermissionMode,
   ReasoningEffort,
   ReplyStreamEvents,
 } from "@parley/contract";
@@ -27,16 +28,13 @@ import {
   chatAI,
   chatImageInput,
   generateTitle,
-  findChatModel,
 } from "../../../core/ai/ai_chat_client";
 import type { ChatImage, ChatTurn } from "../../../core/ai/ai_chat_client";
-import { getApiEnv } from "../../../core/env";
 import { logger, messageOf } from "@parley/server-kit/runtime/logger";
 import { files } from "../../../core/files";
 import type { MessageAttachmentInput } from "../schema/messages.schema";
 import { EVERYONE, eventHub } from "../sse/hub";
 import { memory } from "../memory";
-import { TOOL_APPROVAL_SERVER_PATH } from "../memory/toolApprovals";
 
 const log = logger.child({ controller: "messages" });
 
@@ -68,7 +66,13 @@ async function titleForFirstTurn(content: string, conversationId: string) {
     .slice(0, FALLBACK_CONVERSATION_TITLE_CHARS);
 
   try {
-    return (await generateTitle("conversation", content)) || fallback;
+    return (
+      (await generateTitle(
+        "conversation",
+        content,
+        await memory.chatCatalog.helper(),
+      )) || fallback
+    );
   } catch (error) {
     log.warn("Conversation title generation failed", {
       conversationId,
@@ -263,6 +267,7 @@ type MessageRequest = {
   chosenModelId: string;
   reasoningEffort: ReasoningEffort | undefined;
   webSearch: boolean;
+  permissionMode: PermissionMode | undefined;
   attachmentIds: string[];
   imageUploadIds: string[];
   audioUploadIds: string[];
@@ -279,6 +284,7 @@ function messageRequestFrom(c: Context): MessageRequest {
     chosenModelId: c.get(CTX_KEYS.chosenModelId),
     reasoningEffort: c.get(CTX_KEYS.reasoningEffort),
     webSearch: c.get(CTX_KEYS.webSearch) ?? false,
+    permissionMode: c.get(CTX_KEYS.permissionMode),
     attachmentIds: attachments.map((attachment) =>
       attachment.type === "image"
         ? attachment.imageUploadId
@@ -404,7 +410,7 @@ async function prepareMessageTurn(
   );
   if (
     containsImageInput(turns) &&
-    !(await findChatModel(messageInput.chosenModelId))?.acceptsImages
+    !(await memory.chatCatalog.find(messageInput.chosenModelId))?.acceptsImages
   ) {
     throw new MessageRequestError(400, {
       message: "Invalid model: must accept image input",
@@ -536,6 +542,19 @@ async function writeReply({
   entry: ReplyInProgressEntry;
   sseEvents: SSEEventQueue<ReplyStreamEvents>;
 }) {
+  // A reply has no time limit, so the claims it holds are kept fresh for as
+  // long as it runs; only a process that's gone lets them lapse.
+  const renewal = setInterval(
+    () =>
+      void renewClaims(messageInput.conversationId, claimToken).catch(
+        (error: unknown) =>
+          log.warn("Renewing a reply's claims failed", {
+            conversationId: messageInput.conversationId,
+            error: messageOf(error),
+          }),
+      ),
+    CLAIM_RENEW_MS,
+  );
   try {
     const conversationTitlePromise =
       messageInput.expectedLastMessageId === null
@@ -555,12 +574,10 @@ async function writeReply({
         webSearch: messageInput.webSearch,
         onSource: (url, title) => addSource(sources, url, title),
         signal: entry.signal,
-        approvalServer: {
-          url: `http://127.0.0.1:${getApiEnv().PORT}${TOOL_APPROVAL_SERVER_PATH}`,
-          token: approvals.token,
-          timeoutMs: approvals.timeoutMs,
-          onActivity: approvals.onActivity,
-        },
+        askPermission: approvals.ask,
+        permissionMode: messageInput.permissionMode,
+        // What the person let earlier runs in this chat do for the session.
+        carried: memory.toolApprovals.carried(messageInput.conversationId),
       });
     } catch (error) {
       // A stopped reply is saved with what came before the stop; one
@@ -599,6 +616,7 @@ async function writeReply({
     await releaseClaims(messageInput, claimPromises, claimToken);
     sseEvents.push("error", { message: "Model response failed" });
   } finally {
+    clearInterval(renewal);
     sseEvents.end();
     entry.remove();
     // For a page that was reloaded mid-reply: its stream is gone, and this is
@@ -607,6 +625,16 @@ async function writeReply({
       conversationId: messageInput.conversationId,
     });
   }
+}
+
+/** Often enough that a claim never comes near CLAIM_LEASE_MS old. */
+const CLAIM_RENEW_MS = 60 * 1000; // 1 minute
+
+async function renewClaims(conversationId: string, claimToken: string) {
+  await Promise.all([
+    data.conversations.renewConversationClaim(conversationId, claimToken),
+    data.attachments.renewAttachmentClaims(claimToken),
+  ]);
 }
 
 function createClaimData(messageInput: MessageRequest) {

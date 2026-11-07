@@ -14,7 +14,8 @@ export const CTX_KEYS = {
   conversationId: "conversationId",
   messageId: "messageId",
   toolApprovalId: "toolApprovalId",
-  allow: "allow",
+  toolApprovalAnswer: "answer",
+  permissionMode: "permissionMode",
 
   limit: "limit",
   cursor: "cursor",

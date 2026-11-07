@@ -1,63 +1,51 @@
 import { randomUUID } from "node:crypto";
-import type { ToolApproval } from "@parley/contract";
+import type { ToolApproval, ToolApprovalChoice } from "@parley/contract";
+import type {
+  PermissionAnswer,
+  PermissionRequest,
+} from "../../../core/ai/ai_chat_client";
 import { EVERYONE, eventHub } from "../sse/hub";
-
-/** Where a run reaches this server to ask about a tool call. */
-export const TOOL_APPROVAL_SERVER_PATH = "/tool-approvals/mcp";
-
-/**
- * How long a prompt waits for the person. It stays well under the reply's own
- * time limits, so a turn nobody's watching ends with a refusal the model can
- * explain rather than a run that's cut off.
- */
-const ANSWER_WAIT_MS = 4 * 60 * 1000; // 4 minutes
-/** What Claude Code allows the server to take, past which it gives up. */
-const SERVER_TIMEOUT_MS = ANSWER_WAIT_MS + 30 * 1000;
 
 const DECLINED =
   "The person declined this. Don't try it another way unless they ask.";
-const NO_ANSWER = "The person didn't answer in time, so this wasn't done.";
 const RUN_ENDED = "The reply this was for has ended.";
-/** Claude Code's own question tool needs an answer the app has no screen for. */
-const ASK_IN_REPLY =
-  "This app can't show that tool. Ask in your reply instead, and the person will answer in their next message.";
 
-/** The answer Claude Code expects from a permission prompt tool. */
-type ToolApprovalAnswer =
-  | { behavior: "allow"; updatedInput: Record<string, unknown> }
-  | { behavior: "deny"; message: string };
+/** A reply's run, and whether the person has said to allow it everything. */
+type Run = { conversationId: string; allowAll: boolean };
 
 type Waiting = ToolApproval & {
-  conversationId: string;
-  token: string;
-  input: Record<string, unknown>;
-  timer: NodeJS.Timeout;
-  settle: (answer: ToolApprovalAnswer) => void;
+  run: Run;
+  request: PermissionRequest;
+  settle: (answer: PermissionAnswer) => void;
 };
 
-type Run = { conversationId: string; markProgress: () => void };
-
-/** What the person sees: the command itself, or the tool's input in full. */
-function detailOf(toolName: string, input: Record<string, unknown>) {
-  if (toolName === "Bash" && typeof input.command === "string") {
-    return input.command;
-  }
-  return JSON.stringify(input, null, 2);
-}
-
 /**
- * The tool calls replies are waiting on the person for. Each chat run gets a
- * token, which is how the prompts it sends here are told from anyone else's, and
- * an approval's id is random: only a page that was told about it can answer it.
+ * The tool calls replies are waiting on the person for, from whichever program
+ * runs the chat; each one's adapter has already put its request in the card's
+ * terms. Nothing times out: a prompt waits for an answer for as long as its
+ * reply runs, as in a terminal. An approval's id is random, so only a page
+ * that was told about it can answer it.
  */
 function createToolApprovals() {
-  const runs = new Map<string, Run>();
   const waiting = new Map<string, Waiting>();
+  /**
+   * What each conversation was allowed for as long as it lasts: a terminal
+   * session's "don't ask again", which is the whole conversation there. Each
+   * message here is a run of its own, so it's handed to the conversation's
+   * later runs, for the adapter that made it to read.
+   */
+  const carriedByConversation = new Map<string, unknown[]>();
 
   const pending = (conversationId: string): ToolApproval[] =>
     [...waiting.values()]
-      .filter((entry) => entry.conversationId === conversationId)
-      .map(({ id, toolName, detail }) => ({ id, toolName, detail }));
+      .filter((entry) => entry.run.conversationId === conversationId)
+      .map(({ id, program, toolName, detail, always }) => ({
+        id,
+        program,
+        toolName,
+        detail,
+        always,
+      }));
 
   const announce = (conversationId: string) =>
     eventHub.send(EVERYONE, "toolApprovalsChanged", {
@@ -65,86 +53,92 @@ function createToolApprovals() {
       approvals: pending(conversationId),
     });
 
-  /** Takes it off the list and answers Claude Code. */
-  function finish(entry: Waiting, answer: ToolApprovalAnswer) {
-    clearTimeout(entry.timer);
-    waiting.delete(entry.id);
+  /** Takes it off the list and answers the program. */
+  function finish(entry: Waiting, answer: PermissionAnswer) {
+    if (!waiting.delete(entry.id)) return;
     entry.settle(answer);
-    runs.get(entry.token)?.markProgress();
-    announce(entry.conversationId);
+    announce(entry.run.conversationId);
   }
 
   return {
-    /** Starts a chat run's prompts. `close` refuses any it left unanswered. */
+    /** Starts a reply's prompts. `close` refuses any it left unanswered. */
     open(conversationId: string) {
-      const token = randomUUID();
-      const run: Run = { conversationId, markProgress: () => {} };
-      runs.set(token, run);
+      const run: Run = { conversationId, allowAll: false };
+
       return {
-        token,
-        timeoutMs: SERVER_TIMEOUT_MS,
-        onActivity: (markProgress: () => void) => {
-          run.markProgress = markProgress;
+        /** Asks the person about a tool call, resolving with what they said. */
+        ask(
+          request: PermissionRequest,
+          signal: AbortSignal,
+        ): Promise<PermissionAnswer> {
+          if (run.allowAll) return Promise.resolve({ decision: "allow" });
+          if (signal.aborted) {
+            return Promise.resolve({ decision: "deny", message: RUN_ENDED });
+          }
+
+          return new Promise((settle) => {
+            const entry: Waiting = {
+              id: randomUUID(),
+              program: request.program,
+              toolName: request.toolName,
+              detail: request.detail,
+              always: request.always,
+              run,
+              request,
+              settle,
+            };
+            waiting.set(entry.id, entry);
+            // The program stopped waiting, as when the reply was stopped.
+            signal.addEventListener(
+              "abort",
+              () => finish(entry, { decision: "deny", message: RUN_ENDED }),
+              { once: true },
+            );
+            announce(conversationId);
+          });
         },
+
         close() {
           for (const entry of waiting.values()) {
-            if (entry.token === token) {
-              finish(entry, { behavior: "deny", message: RUN_ENDED });
+            if (entry.run === run) {
+              finish(entry, { decision: "deny", message: RUN_ENDED });
             }
           }
-          runs.delete(token);
         },
       };
     },
 
-    isOpen: (token: string) => runs.has(token),
-
-    /** Asks the person about a tool call, resolving with what they said. */
-    ask(
-      token: string,
-      toolName: string,
-      input: Record<string, unknown>,
-    ): Promise<ToolApprovalAnswer> {
-      const run = runs.get(token);
-      if (!run) {
-        return Promise.resolve({ behavior: "deny", message: RUN_ENDED });
-      }
-      if (toolName === "AskUserQuestion") {
-        return Promise.resolve({ behavior: "deny", message: ASK_IN_REPLY });
-      }
-
-      return new Promise((settle) => {
-        const entry: Waiting = {
-          id: randomUUID(),
-          toolName,
-          detail: detailOf(toolName, input),
-          conversationId: run.conversationId,
-          token,
-          input,
-          settle,
-          timer: setTimeout(
-            () => finish(entry, { behavior: "deny", message: NO_ANSWER }),
-            ANSWER_WAIT_MS,
-          ),
-        };
-        waiting.set(entry.id, entry);
-        run.markProgress();
-        announce(run.conversationId);
-      });
-    },
-
     pending,
 
+    /** What earlier runs in the conversation were told not to ask about again. */
+    carried: (conversationId: string): readonly unknown[] =>
+      carriedByConversation.get(conversationId) ?? [],
+
     /** The person's answer. False when it's no longer waiting. */
-    answer(conversationId: string, id: string, allow: boolean) {
+    answer(conversationId: string, id: string, choice: ToolApprovalChoice) {
       const entry = waiting.get(id);
-      if (entry?.conversationId !== conversationId) return false;
-      finish(
-        entry,
-        allow
-          ? { behavior: "allow", updatedInput: entry.input }
-          : { behavior: "deny", message: DECLINED },
-      );
+      if (entry?.run.conversationId !== conversationId) return false;
+
+      if (choice === "deny") {
+        finish(entry, { decision: "deny", message: DECLINED });
+      } else if (choice === "always") {
+        carriedByConversation.set(conversationId, [
+          ...(carriedByConversation.get(conversationId) ?? []),
+          ...entry.request.carry,
+        ]);
+        finish(entry, { decision: "always" });
+      } else {
+        finish(entry, { decision: "allow" });
+      }
+      // A program won't switch a run it started asking into its own
+      // allow-everything mode, so the rest of this one is allowed here, and
+      // the person's next message starts in that mode.
+      if (choice === "allowAll") {
+        entry.run.allowAll = true;
+        for (const other of waiting.values()) {
+          if (other.run === entry.run) finish(other, { decision: "allow" });
+        }
+      }
       return true;
     },
   };

@@ -5,17 +5,10 @@ const { mockListChatModels } = vi.hoisted(() => ({
   mockListChatModels: vi.fn(),
 }));
 
-vi.mock("../../core/ai/ai_chat_client", async (importActual) => {
-  // importActual is the correct way to get real values inside vi.mock
-  const actual =
-    await importActual<typeof import("../../core/ai/ai_chat_client")>();
-  return {
-    ...actual, // preserves DEFAULT_MODELS and anything else
-    listChatModels: mockListChatModels, // override only what needs mocking
-  };
-});
-
-// Now this import gets the mocked module, with real DEFAULT_MODELS intact
+// The catalog is what the programs listed at startup.
+vi.mock("../../api/src/memory/chatCatalog", () => ({
+  chatCatalog: { list: mockListChatModels },
+}));
 
 import { createApp } from "../../api/app";
 

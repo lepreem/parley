@@ -13,6 +13,7 @@ import {
   type TurnStats,
 } from "../../api/messages";
 import type { ReasoningEffort } from "../../api/models";
+import type { PermissionMode } from "../../api/toolApprovals";
 import { queryKeys } from "../../lib/queryClient";
 import { useServer } from "../../hooks/server/useServer";
 import { useToast } from "../../hooks/toast/useToast";
@@ -213,6 +214,8 @@ type TurnInput = {
   /** Null leaves it to the model. */
   reasoningEffort: ReasoningEffort | null;
   webSearch: boolean;
+  /** Null leaves it to the person's own settings. */
+  permissionMode: PermissionMode | null;
   sources: StagedSource[];
   lastMessageId: string | null;
   /** Puts the message back in the composer when the turn didn't take. */
@@ -343,6 +346,9 @@ export function useChatSend() {
               ? { reasoningEffort: input.reasoningEffort }
               : {}),
             webSearch: input.webSearch,
+            ...(input.permissionMode
+              ? { permissionMode: input.permissionMode }
+              : {}),
             attachments: messageAttachmentsOf(input.sources),
             lastMessageId: input.lastMessageId,
             ...(replaces ? { replacesMessageId: replaces.storedId } : {}),

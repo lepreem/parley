@@ -17,6 +17,21 @@ function isExecutable(file: string, platform: NodeJS.Platform): boolean {
   }
 }
 
+/** The first program called `name` on `searchPath`. */
+export function findOnPath(
+  name: string,
+  searchPath: string,
+  platform: NodeJS.Platform = process.platform,
+): string | undefined {
+  const delimiter = platform === "win32" ? ";" : ":";
+  for (const dir of searchPath.split(delimiter)) {
+    if (!dir) continue;
+    const candidate = path.join(dir, name);
+    if (isExecutable(candidate, platform)) return candidate;
+  }
+  return undefined;
+}
+
 /**
  * The first Claude Code on `searchPath`. On Windows only a real program counts:
  * npm's `claude.cmd` can't be started without a shell, and the server starts
@@ -27,14 +42,11 @@ export function findClaude(
   searchPath: string,
   platform: NodeJS.Platform = process.platform,
 ): string | undefined {
-  const name = platform === "win32" ? "claude.exe" : "claude";
-  const delimiter = platform === "win32" ? ";" : ":";
-  for (const dir of searchPath.split(delimiter)) {
-    if (!dir) continue;
-    const candidate = path.join(dir, name);
-    if (isExecutable(candidate, platform)) return candidate;
-  }
-  return undefined;
+  return findOnPath(
+    platform === "win32" ? "claude.exe" : "claude",
+    searchPath,
+    platform,
+  );
 }
 
 /**

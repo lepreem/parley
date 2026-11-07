@@ -2,18 +2,20 @@
 
 The Electron app people download to use Parley on their own computer. It starts
 the local server (`servers/local/`) and shows its page in a window, so nobody
-installs Node, ffmpeg, Whisper or yt-dlp, or runs a command. Claude Code is the
-one thing it can't carry, because each person signs in to their own: if it's
-missing or signed out, the window offers to install it with Anthropic's
-installer or to sign in.
+installs Node, ffmpeg, Whisper or yt-dlp, or runs a command. The program chat
+runs on is the one thing it can't carry, because each person signs in to their
+own: Claude Code or Codex, either is enough. If neither is ready, the window
+offers to install Claude Code with Anthropic's installer or to sign in; someone
+who uses Codex installs it and runs `codex login` themselves.
 
 It isn't one of the repo's npm workspaces, so Electron stays out of the cloud
 image and out of every other install.
 
 ## How it fits together
 
-- `src/main.ts` runs the app: Claude Code, then the server, then the chat page,
-  stopping at whichever needs the person (`static/setup.*`).
+- `src/main.ts` runs the app: Claude Code or Codex (`src/claudeCode.ts`,
+  `src/codex.ts`), then the server, then the chat page, stopping at whichever
+  needs the person (`static/setup.*`).
 - `src/server.ts` starts the server with the app's own Node (`static/run.mjs`),
   on port 47821 or any free one. Closing the server's stdin stops it, so it
   can't outlive the app.

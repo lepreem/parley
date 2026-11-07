@@ -5,8 +5,8 @@ two parts, sharing one client (`client/`) and a wire contract
 (`packages/contract/`): the hosted app, documented in
 [`servers/cloud/README.md`](servers/cloud/README.md), and a server you run on
 your own machine (`servers/local/`), which this README is about. On your
-machine, chat goes through your own Claude Code and audio is transcribed
-locally with Whisper, so nothing needs an API key.
+machine, chat goes through your own Claude Code or Codex and audio is
+transcribed locally with Whisper, so nothing needs an API key.
 
 To use Parley on your computer, download the
 [desktop app](https://github.com/lepreem/parley/releases/latest) for macOS,
@@ -32,9 +32,12 @@ The two servers never import from each other.
   comes through [mise](https://mise.jdx.dev), which `npm install` brings
   along: the root's npm scripts install those on first run and run the app
   with them.
-- **Claude Code, logged in.** Run `claude` once and sign in. Chat uses your
-  Claude plan, so it counts against your plan's limits; check Anthropic's
-  terms for your use.
+- **Claude Code or Codex, logged in.** For Claude Code, run `claude` once and
+  sign in; for [Codex](https://developers.openai.com/codex), run `codex login`
+  and sign in with ChatGPT. Chat uses your Claude or ChatGPT plan, so it counts
+  against that plan's limits; check Anthropic's or OpenAI's terms for your use.
+  The model picker lists the models of each one that's logged in when the app
+  starts, so restart it after signing in.
 
 ## Run it
 
@@ -45,8 +48,8 @@ npm run start:local # builds the client and the local server, then serves both
 
 Then open <http://127.0.0.1:3002>.
 
-The app refuses to start if it can't run Claude Code, ffmpeg, Whisper or
-yt-dlp, and says which. Whisper (whisper.cpp) and ffmpeg come with
+The app refuses to start if it can't run ffmpeg, Whisper or yt-dlp, or
+neither Claude Code nor Codex, and says which. Whisper (whisper.cpp) and ffmpeg come with
 `npm install`, built for your platform. Start it from the repo root rather
 than running `servers/local/` directly: that's what puts yt-dlp on its PATH.
 The first transcription downloads its Whisper model (`small`, about 470 MB);

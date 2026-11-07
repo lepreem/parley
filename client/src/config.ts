@@ -53,7 +53,10 @@ export const servedByLocalServer =
  */
 export const canReachLocalServer = servedByLocalServer || import.meta.env.DEV;
 
-/** The server on the user's own machine, which chats through their Claude Code. */
+/**
+ * The server on the user's own machine, which chats through their Claude Code
+ * or Codex.
+ */
 export const localServer: Server = {
   id: "local",
   baseUrl: servedByLocalServer ? "" : `http://${DEV_HOST}:${LOCAL_PORT}`,

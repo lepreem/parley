@@ -6,6 +6,7 @@ import { AssistantTurn } from "./AssistantTurn";
 import { ToolApprovals } from "./ToolApprovals";
 import { UserTurn } from "./UserTurn";
 import type { PendingTurn } from "./types";
+import type { PermissionMode } from "../../api/toolApprovals";
 
 const STICK_THRESHOLD_PX = 80;
 
@@ -37,6 +38,7 @@ export function MessageList({
   messages,
   pending,
   conversationId,
+  onPermissionModeChange,
   loading,
   onEdit,
   canEdit,
@@ -45,6 +47,8 @@ export function MessageList({
   messages: ChatMessage[];
   pending: PendingTurn | null;
   conversationId: string | undefined;
+  /** For an answer that also changes how later messages are allowed to act. */
+  onPermissionModeChange: (mode: PermissionMode) => void;
   loading: boolean;
   /** Replaces a user message, and every turn after it, with a new turn. */
   onEdit: (message: ChatMessage, content: string) => void;
@@ -139,6 +143,7 @@ export function MessageList({
                     <ToolApprovals
                       conversationId={conversationId}
                       onShown={followToBottom}
+                      onPermissionModeChange={onPermissionModeChange}
                     />
                   )}
                 </>

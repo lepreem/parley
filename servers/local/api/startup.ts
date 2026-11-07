@@ -1,5 +1,5 @@
 import { verifyServices } from "@parley/server-kit/runtime/preflight";
-import { pingChatAI } from "../core/ai/ai_chat_client";
+import { memory } from "./src/memory";
 import { pingTranscribeAI } from "../core/ai/ai_transcribe_client";
 import { ytDlp } from "./src/ytDlp";
 
@@ -9,7 +9,8 @@ import { ytDlp } from "./src/ytDlp";
  */
 export function verifyApiServices(): Promise<void> {
   return verifyServices([
-    { name: "Claude Code", check: pingChatAI },
+    // Claude Code, Codex or both; it fails only when neither can chat.
+    { name: "Chat", check: async () => void (await memory.chatCatalog.load()) },
     { name: "Whisper", check: pingTranscribeAI },
     { name: "yt-dlp", check: ytDlp.ping },
   ]);

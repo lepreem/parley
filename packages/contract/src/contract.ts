@@ -182,16 +182,47 @@ export type ReplyStreamEvents = {
 /* ---------------------------------------------------------- tool approvals */
 
 /**
- * Something Claude Code wants to do that the person's settings say to ask about
+ * How freely the local server's Claude Code acts on a turn, beyond the person's
+ * own settings: Claude Code's permission modes of those names. Left out, their
+ * settings decide.
+ */
+export type PermissionMode = "acceptEdits" | "bypassPermissions";
+
+/** What the local server takes for a turn, which the cloud doesn't. */
+export type LocalSendMessageBody = SendMessageBody & {
+  permissionMode?: PermissionMode;
+};
+
+/**
+ * Something Claude Code or Codex wants to do that the person's settings say to ask about
  * (local server only). `detail` is exactly what it would run or send.
+ * `always` is Claude Code's own "don't ask again", when it offers one: the
+ * rules it would add to their settings, or the mode it would switch to.
  *
  * GET /conversations/:conversationId/tool-approvals lists a conversation's as
  * ToolApproval[].
  */
-export type ToolApproval = { id: string; toolName: string; detail: string };
+export type ToolApproval = {
+  id: string;
+  /** The program asking: Claude Code or Codex. */
+  program: string;
+  toolName: string;
+  detail: string;
+  always: {
+    label: string;
+    rules: string[];
+    mode: PermissionMode | null;
+  } | null;
+};
+
+/**
+ * Allow once, allow and don't ask again (`always`), allow everything for the
+ * rest of the reply, or refuse.
+ */
+export type ToolApprovalChoice = "allow" | "always" | "allowAll" | "deny";
 
 /** POST /conversations/:conversationId/tool-approvals/:toolApprovalId */
-export type AnswerToolApprovalBody = { allow: boolean };
+export type AnswerToolApprovalBody = { answer: ToolApprovalChoice };
 
 /* ------------------------------------------------------------------ models */
 

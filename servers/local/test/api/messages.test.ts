@@ -133,13 +133,23 @@ vi.mock("../../core/ai/ai_chat_client", async (importActual) => {
     await importActual<typeof import("../../core/ai/ai_chat_client")>();
   return {
     ...actual,
-    findChatModel: mockFindChatModel,
     // The image's file isn't there to read; what matters is where its input goes.
     chatImageInput: async () => IMAGE_INPUT,
     chatAI: mockChatAI,
     generateTitle: mockGenerateTitle,
   };
 });
+
+// The catalog is what the programs listed at startup; here it's whatever a
+// test says the model is.
+vi.mock("../../api/src/memory/chatCatalog", () => ({
+  chatCatalog: {
+    load: async () => ({}),
+    list: async () => [],
+    find: mockFindChatModel,
+    helper: async () => ({ model: "haiku", effort: "none" }),
+  },
+}));
 
 import { createApp } from "../../api/app";
 import { eventHub } from "../../api/src/sse/hub";
@@ -488,6 +498,53 @@ describe("POST /conversations/:conversationId/messages", () => {
         messageContent: "Hi",
         chosenModelId: modelId,
         webSearch: true,
+      });
+
+      expect(res.status).toBe(400);
+      expect(mockChatAI).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("with a permission mode", () => {
+    it("starts Claude Code in the mode the person picked, and lets them answer its prompts", async () => {
+      mockChatAI.mockResolvedValueOnce("Answer");
+
+      const res = await postMessage({
+        messageContent: "Hi",
+        chosenModelId: modelId,
+        permissionMode: "bypassPermissions",
+      });
+      await res.text();
+
+      expect(mockChatAI).toHaveBeenCalledWith(
+        modelId,
+        expect.anything(),
+        expect.objectContaining({
+          permissionMode: "bypassPermissions",
+          askPermission: expect.any(Function),
+        }),
+      );
+    });
+
+    it("leaves it to the person's settings when none is picked", async () => {
+      mockChatAI.mockResolvedValueOnce("Answer");
+
+      await (
+        await postMessage({ messageContent: "Hi", chosenModelId: modelId })
+      ).text();
+
+      expect(mockChatAI).toHaveBeenCalledWith(
+        modelId,
+        expect.anything(),
+        expect.objectContaining({ permissionMode: undefined }),
+      );
+    });
+
+    it("refuses one Claude Code doesn't have", async () => {
+      const res = await postMessage({
+        messageContent: "Hi",
+        chosenModelId: modelId,
+        permissionMode: "yolo",
       });
 
       expect(res.status).toBe(400);
@@ -1020,7 +1077,10 @@ describe("POST /conversations/:conversationId/messages", () => {
         claimToken: requestClaimToken(),
       }),
     );
-    expect(mockGenerateTitle).toHaveBeenCalledWith("conversation", "Hi there");
+    expect(mockGenerateTitle).toHaveBeenCalledWith("conversation", "Hi there", {
+      model: "haiku",
+      effort: "none",
+    });
   });
 
   it("uses the first message as a fallback when title generation fails", async () => {
