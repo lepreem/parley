@@ -331,22 +331,17 @@ describe("chatAI", () => {
     );
   });
 
-  it("asks Claude, and only Claude, to cache the prompt", async () => {
+  it("asks every model to cache the prompt", async () => {
     mockResponsesSend.mockResolvedValue(responseOf("hi"));
     const turn: ChatTurn[] = [{ role: "user", content: "yo" }];
 
-    await chat.complete("anthropic/claude-sonnet-4.5", turn);
     await chat.complete("~anthropic/claude-sonnet-latest", turn);
     await chat.complete(MODEL_ID, turn);
 
     const sent = mockResponsesSend.mock.calls.map(
       ([{ responsesRequest }]) => responsesRequest.cacheControl,
     );
-    expect(sent).toEqual([
-      { type: "ephemeral" },
-      { type: "ephemeral" },
-      undefined,
-    ]);
+    expect(sent).toEqual([{ type: "ephemeral" }, { type: "ephemeral" }]);
   });
 
   it("reports the usage that ends a stream", async () => {
