@@ -35,7 +35,8 @@ async function recordPendingUpload(entry: LedgerEntry) {
 
 /**
  * Records objects that rows will reference from the start, without an
- * upload to confirm: what the youtube-fetcher writes for a job.
+ * upload to confirm, such as a YouTube video's audio if the server ever
+ * downloads it again.
  */
 async function recordConfirmedObjects(
   userId: string,

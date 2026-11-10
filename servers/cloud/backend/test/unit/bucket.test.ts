@@ -43,8 +43,8 @@ beforeEach(() => {
   storage.remove.mockResolvedValue({ data: [], error: null });
 });
 
-// Every key is <userId>/<folder>/<id>. youtube-fetcher/app/bucket.py builds the
-// same keys for audio, and transcription reads them back from here.
+// Every key is <userId>/<folder>/<id>, and transcription reads audio back from
+// here.
 describe("delete", () => {
   it("removes a mix of kinds with one request per bucket", async () => {
     const removed: Record<string, string[]> = {};

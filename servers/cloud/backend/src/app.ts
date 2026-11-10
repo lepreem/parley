@@ -18,9 +18,7 @@ import { speechRouter } from "./routes/speech.router";
 import { handleEvents } from "./controllers/events.controller";
 import { requireAuth } from "./middleware/auth.middleware";
 
-import { AUDIO_BUCKET, MAX_AUDIO_BYTES } from "./storage";
 import { verifyApiServices } from "./startup";
-import { mq } from "./message-queue/messageQueue";
 
 const MAX_REQUEST_BODY_BYTES = 1024 * 1024;
 /** The one route a file comes through; it holds its body to its own limit. */
@@ -71,20 +69,6 @@ export async function createApp() {
 
   app.get("/health", (c) => c.json({ ok: true }));
   app.get("/events", requireAuth, ...handleEvents);
-  // Cross-service contract: non-sensitive shared facts (queue names + bucket
-  // name) the Python youtube-fetcher reads at boot so it never hand-mirrors
-  // them. Public + unauthenticated on purpose — none of this is sensitive and
-  // service callers have no session. Secrets (Supabase key, MQ_URL) are NOT
-  // served here — those belong in a secrets manager / platform env.
-
-  // TODO: rename bucket key to audioBucket.
-  app.get("/contract", (c) =>
-    c.json({
-      queues: mq.queues,
-      bucket: AUDIO_BUCKET,
-      maxAudioBytes: MAX_AUDIO_BYTES,
-    }),
-  );
   app.route("/upload", uploadRouter);
   app.route("/auth", authRouter);
   app.route("/jobs", jobsRouter);

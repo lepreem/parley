@@ -12,7 +12,6 @@
 # against every package's.
 servers/local/*
 !servers/local/package.json
-servers/cloud/youtube-fetcher
 output
 test_data
 senior_project

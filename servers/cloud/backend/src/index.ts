@@ -2,13 +2,13 @@ import { getEnv } from "./env";
 import { eventHub } from "./sse/hub";
 
 import { mq } from "./message-queue/messageQueue";
-import { data } from "./data";
 import { recurring } from "./recurring";
 import { onShutdown } from "@parley/server-kit/runtime/shutdown";
 import {
   getTranscriptionConcurrency,
   handleTranscribeJob,
 } from "./transcription/transcribeJob";
+import { handleYoutubeCaptionsJob } from "./transcription/youtubeCaptionsJob";
 
 import { serve } from "@hono/node-server";
 import { createApp } from "./app";
@@ -46,26 +46,12 @@ await mq.consume(mq.queues.TRANSCRIBE_AUDIO, handleTranscribeJob, {
   attempts: TRANSCRIBE_ATTEMPTS,
   prefetch: await getTranscriptionConcurrency(),
 });
-// Saving captions is nothing but database writes, so one at a time keeps the
-// queue to one of the pool's connections (src/db/pool.ts) and chat turns
-// don't wait behind a burst of them. Each one takes milliseconds; the fetch
-// before it takes seconds.
-await mq.consume(mq.queues.YT_SAVE_CAPTIONS, handleTranscribeJob, {
-  attempts: TRANSCRIBE_ATTEMPTS,
+// One at a time: Supadata's free plan answers one request a second, and each
+// takes a couple of seconds. A second attempt fetches again, spending another
+// credit, so it's only for a failure saving the captions.
+await mq.consume(mq.queues.YT_FETCH_CAPTIONS, handleYoutubeCaptionsJob, {
+  attempts: 2,
 });
-// youtube-fetcher couldn't fetch the captions or the audio: mark the job
-// failed and notify the user. The row was created by POST /upload/youtube.
-await mq.consume(
-  mq.queues.YT_FAIL_JOB,
-  async ({ audioUploadId, userId, error }) => {
-    await data.jobs.failAudioJobById(
-      audioUploadId,
-      error ?? "Failed to fetch YouTube audio",
-    );
-    eventHub.send(userId, "jobUpdated", { audioUploadId });
-  },
-  { attempts: 2 },
-);
 
 // The storage and guest sweeps, every hour (src/recurring/).
 const stopRecurring = recurring.start();

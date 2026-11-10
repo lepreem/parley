@@ -24,6 +24,8 @@ export type SourcesContextValue = {
   restoreDraft: (draftKey: string, sources: StagedSource[]) => void;
   /** Whether a YouTube video added from now on takes its captions when it has them. */
   useCaptionsIfAvailable: boolean;
+  /** Whether the server only takes captions, so the choice is made for the person. */
+  captionsRequired: boolean;
   setUseCaptionsIfAvailable: (use: boolean) => void;
 };
 

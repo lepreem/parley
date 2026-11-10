@@ -47,7 +47,7 @@ Once per server. Steps 1 to 3 happen on your own machine.
    with a credit limit of its own. Without it, the server refuses to dictate.
    For YouTube captions, add `SUPADATA_API_KEY`, from supadata.ai. Its plan's
    monthly credits cap what YouTube costs; leave auto recharge off. Without
-   it, the YouTube fetcher won't start.
+   it, the API won't start.
    Then create a service token for `prd` (Access → Service Tokens) and paste
    it into this, followed by Enter and Ctrl-D:
 
@@ -74,7 +74,7 @@ Once per server. Steps 1 to 3 happen on your own machine.
 ## Day to day
 
 - **Logs:** `ssh deploy@<server-ip> docker logs -f parley-api-1`, or
-  `parley-youtube-fetcher-1`, `parley-rabbitmq-1`.
+  `parley-rabbitmq-1`.
 - **RabbitMQ's UI:** `ssh -L 15672:127.0.0.1:15672 deploy@<server-ip>`, then
   <http://localhost:15672> as `parley` with `RABBITMQ_PASSWORD`. Changing that
   password later takes `rabbitmqctl change_password parley <new>` in the

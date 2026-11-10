@@ -10,8 +10,8 @@ A monolith. Everything under `backend/` is a single npm package
 - transcription, which it takes from a RabbitMQ queue. See
   [Why transcription runs in the API](#why-transcription-runs-in-the-api).
 
-The Python YouTube fetcher (`servers/cloud/youtube-fetcher`) is the other
-process; the two talk only through RabbitMQ.
+- YouTube captions, which it fetches from Supadata (`src/supadata/`), taking
+  each video from a RabbitMQ queue too.
 
 The source is all in `src/`, entry point `src/index.ts`. `scripts/` holds the
 one-shots (migrate, baseline, push-storage) and `test/` the tests.
@@ -22,7 +22,8 @@ A folder under `src/` is named for one of two things:
 
 - **A technology**, which it keeps behind one interface: `db/` and `data/`
   (Postgres through Drizzle), `storage/` (the Supabase bucket),
-  `message-queue/` (RabbitMQ), `ai/` (OpenRouter and Deepgram), `sse/`,
+  `message-queue/` (RabbitMQ), `ai/` (OpenRouter and Deepgram), `supadata/`
+  (YouTube captions), `sse/`,
   `memory/` (state held in this process) and `recurring/` (work on a timer).
   The file names inside say what the app uses it for: `memory/historyText.ts`,
   `recurring/guestSweep.ts`.
@@ -54,7 +55,7 @@ Physical SQL names and API fields such as `imageUploadId` and `audioUploadId` re
 
 ## External dependencies
 
-Each process runs a **fail-fast preflight** on boot (`startup.ts` →
+The API runs a **fail-fast preflight** on boot (`startup.ts` →
 `verifyServices`): if any dependency it needs is down, it aborts instead of
 starting half-alive.
 
@@ -63,18 +64,14 @@ starting half-alive.
 Defined in `src/message-queue/queues.ts`, each named for what its consumer
 does with a message, with `yt_` on the ones only YouTube uploads go through:
 
-| Queue               | Producer → Consumer                     | Payload                             |
-| ------------------- | --------------------------------------- | ----------------------------------- |
-| `yt_fetch_captions` | api → youtube-fetcher                   | `{ audioUploadId, url, userId }`    |
-| `yt_fetch_audio`    | api / youtube-fetcher → youtube-fetcher | `{ audioUploadId, url, userId }`    |
-| `yt_cancel_fetch`   | api → youtube-fetcher                   | `{ audioUploadId }`                 |
-| `yt_save_captions`  | youtube-fetcher → api                   | `{ audioUploadId, segments }`       |
-| `transcribe_audio`  | api / youtube-fetcher → api             | `{ audioUploadId }`                 |
-| `yt_fail_job`       | youtube-fetcher → api                   | `{ audioUploadId, userId, error? }` |
+| Queue               | Producer → Consumer | Payload                          |
+| ------------------- | ------------------- | -------------------------------- |
+| `yt_fetch_captions` | api → api           | `{ audioUploadId, url, userId }` |
+| `transcribe_audio`  | api → api           | `{ audioUploadId }`              |
 
-The API publishes to `transcribe_audio` and consumes it too. The queue is what
-keeps an upload's job across a restart or deploy, and what holds back the
-ones over the concurrency limit until there's room.
+The API publishes to both and consumes them too. A queue is what keeps an
+upload's job across a restart or deploy, and what holds back the ones over
+the concurrency limit until there's room.
 
 Each consumer sets how many messages it works on at once,
 `mq.consume(queue, handler, { attempts, prefetch })`, 1 unless it says
@@ -82,14 +79,8 @@ otherwise. `transcribe_audio` takes `getTranscriptionConcurrency()`
 (`src/transcription/transcribeJob.ts`): 40, under the 50 transcriptions Deepgram runs at
 once for a project. Every API instance together has to stay under that, so
 once there are several, each one's share comes from the load balancer.
-`yt_save_captions` stays at 1: it is only database writes, and one at a time
-keeps it to one of the pool's connections, so chat turns don't wait behind a
-burst of them.
-
-The fetcher sets its own in `youtube-fetcher/app/app.py`: 5 for
-`yt_fetch_captions`, one small request each, and 3 for
-`yt_fetch_audio`, a download of up to 50 MB each in a 1 GB container.
-Captions get their own queue so they never wait behind a download.
+`yt_fetch_captions` stays at 1: Supadata's free plan answers one request a
+second, and each takes a couple of seconds.
 
 Each consumer also sets how many attempts a message gets. A handler fails an attempt by
 throwing, and the next attempt runs 2 seconds later in the same process.
@@ -122,21 +113,18 @@ reconnects in-process; the platform's restart policy brings it back.
     └── GET /events: jobUpdated to the user's streams ──▶ browser
 ```
 
-A YouTube upload takes the same path one step earlier. When captions are
-preferred, the API publishes `yt_fetch_captions`: if the video has a
-caption track, the Python fetcher skips the audio download and publishes
-`yt_save_captions` with the caption segments in the message, which the API stores
-as the transcript; if it has none, the fetcher publishes
-`yt_fetch_audio`. Otherwise the API publishes `yt_fetch_audio`
-itself. For that one, the fetcher stores audio under the job's
-`audioUploadId` and publishes `transcribe_audio`. Either fetch that fails
-publishes `yt_fail_job`.
+A YouTube upload publishes `yt_fetch_captions` instead
+(`src/transcription/youtubeCaptionsJob.ts`): the API fetches the video's
+captions from Supadata, which fetches them from its own IPs because YouTube
+blocks this server's, and saves them as the transcript. A video without
+captions fails, telling the person to upload the file. For now the cloud only
+takes captions: `POST /upload/youtube` refuses a video with captions turned
+off, and the client keeps the option on. A video someone already has a
+transcript for is copied without a fetch.
 
 Deleting an unfinished job cancels it. The transcribing worker checks an abort
-signal before each step and passes it to Deepgram. For a YouTube job the API
-also publishes `yt_cancel_fetch`: the fetcher remembers the id, checks before
-each step, and stops yt-dlp through its progress hook. The caption and storage
-calls offer no way to stop midway, so those run to the end of the call.
+signal before each step and passes it to Deepgram. A captions fetch already
+under way runs to its end, and saving finds no job.
 
 Completed transcripts are immutable. The API has no rerun route, and a source
 linked to a message or reserved for a response cannot be deleted. Trying another

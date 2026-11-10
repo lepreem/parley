@@ -25,6 +25,7 @@
     "@parley/contract": "*",
     "@parley/server-kit": "*",
     "@supabase/supabase-js": "2.103.0",
+    "@supadata/js": "1.4.0",
     "@workos-inc/node": "9.1.0",
     "amqplib": "1.0.3",
     "dotenv": "17.3.1",

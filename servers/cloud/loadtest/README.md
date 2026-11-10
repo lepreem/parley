@@ -115,4 +115,4 @@ speed and rate limits aren't in it, and neither is Supabase's pooler: the API
 talks to Postgres directly. k6 and the stack also share this machine, so
 compare runs with each other rather than with production.
 
-YouTube uploads are left out: the fetcher would download from YouTube itself.
+YouTube uploads are left out: each would spend a real Supadata credit.

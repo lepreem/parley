@@ -4,6 +4,7 @@ import { pingDb } from "./db";
 import { bucket } from "./storage";
 import { chat, transcription } from "./ai";
 import { workos } from "./auth/auth";
+import { youtubeCaptions } from "./supadata";
 import { UPLOAD_CONFIRM_WINDOW_MS } from "./uploads/uploads";
 
 /**
@@ -29,5 +30,6 @@ export function verifyApiServices(): Promise<void> {
     { name: "WorkOS", check: workos.ping },
     { name: "OpenRouter", check: chat.ping },
     { name: "Deepgram", check: transcription.ping },
+    { name: "Supadata", check: youtubeCaptions.ping },
   ]);
 }

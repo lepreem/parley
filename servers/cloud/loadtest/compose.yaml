@@ -34,8 +34,10 @@ x-base-env:
   SUPABASE_SERVICE_ROLE_KEY: *service-role-key
   OPENROUTER_API_KEY: fake-loadtest-key
   DEEPGRAM_API_KEY: fake-loadtest-key
+  SUPADATA_API_KEY: fake-loadtest-key
   OPENROUTER_BASE_URL: http://mocks:4000/openrouter
   DEEPGRAM_BASE_URL: http://mocks:4000/deepgram
+  SUPADATA_BASE_URL: http://mocks:4000/supadata
 
 x-app: &app
   image: parley-loadtest-app

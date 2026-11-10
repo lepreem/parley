@@ -96,6 +96,7 @@ export function Composer({
     removeSource,
     retrySource,
     useCaptionsIfAvailable,
+    captionsRequired,
     setUseCaptionsIfAvailable,
   } = useSources(draftKey);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -216,6 +217,7 @@ export function Composer({
                 onAddFiles={addFiles}
                 onBrowseSources={() => setSourcesOpen(true)}
                 useCaptionsIfAvailable={useCaptionsIfAvailable}
+                captionsRequired={captionsRequired}
                 onUseCaptionsChange={setUseCaptionsIfAvailable}
               />
             )}

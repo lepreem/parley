@@ -93,6 +93,7 @@ export default defineConfig([
             { directory: srcDirectory("memory"), entry: "index" },
             { directory: srcDirectory("recurring"), entry: "index" },
             { directory: srcDirectory("ai"), entry: "index" },
+            { directory: srcDirectory("supadata"), entry: "index" },
             // Each client's catalog rules are its own: what to offer is
             // decided in one place, next to the fetch.
             {
@@ -145,6 +146,11 @@ export default defineConfig([
               name: "@deepgram/sdk",
               owners: [srcDirectory("ai")],
               use: "transcription from src/ai",
+            },
+            {
+              name: "@supadata/js",
+              owners: [srcDirectory("supadata")],
+              use: "youtubeCaptions from src/supadata",
             },
             {
               name: "@workos-inc/node",

@@ -45,6 +45,7 @@ const nodeEnvSchema = z
 const LOADTEST_OVERRIDES = [
   "OPENROUTER_BASE_URL",
   "DEEPGRAM_BASE_URL",
+  "SUPADATA_BASE_URL",
   "WORKOS_API_BASE_URL",
   "RATE_LIMIT_MULTIPLIER",
 ] as const;
@@ -97,6 +98,8 @@ export const envSchema = z
     SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
     OPENROUTER_API_KEY: z.string().min(1),
     DEEPGRAM_API_KEY: z.string().min(1),
+    /** YouTube captions (src/supadata). */
+    SUPADATA_API_KEY: z.string().min(1),
     WORKOS_API_KEY: z.string().min(1),
     WORKOS_CLIENT_ID: z.string().min(1),
     CLIENT_URL: z.string().url(),
@@ -110,6 +113,7 @@ export const envSchema = z
     CLIENT_DIR: z.string().min(1).default("../../../client/dist"),
     OPENROUTER_BASE_URL: z.string().url().optional(),
     DEEPGRAM_BASE_URL: z.string().url().optional(),
+    SUPADATA_BASE_URL: z.string().url().optional(),
     WORKOS_API_BASE_URL: z.string().url().optional(),
     /** Every rate limit's budget is multiplied by this. */
     RATE_LIMIT_MULTIPLIER: z.coerce.number().positive().optional(),

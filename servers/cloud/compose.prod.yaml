@@ -12,7 +12,7 @@
 #   firewall, so the only way in is the shared Caddy proxy (deploy/proxy/),
 #   which reaches the API as parley-api on the external `proxy` network.
 # - The public URLs come from PARLEY_DOMAIN, the one place the domain is set,
-#   so WorkOS's callback and the fetcher's contract can't disagree with it.
+#   so WorkOS's callback can't disagree with it.
 # - Every container has a memory limit, so one runaway process can't starve
 #   the rest of the box, which other projects share.
 
@@ -52,17 +52,6 @@ services:
       resources:
         limits:
           memory: 768m
-
-  youtube-fetcher:
-    build: !reset null
-    image: ghcr.io/lepreem/parley-youtube-fetcher:${IMAGE_TAG:?set IMAGE_TAG}
-    environment:
-      # The API's fixed port, above, whatever PORT the environment carries.
-      - API_BASE_URL=http://api:3001
-    deploy:
-      resources:
-        limits:
-          memory: 1g
 
 networks:
   proxy:
