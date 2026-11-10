@@ -1,13 +1,14 @@
 import { spawn } from "node:child_process";
 import { homedir, tmpdir } from "node:os";
+import { join } from "node:path";
 import { createInterface } from "node:readline";
 import type {
   ChatModel,
-  ModelReasoning,
   PermissionMode,
   ReasoningEffort,
   ToolApproval,
 } from "@parley/contract";
+import { withTimeout } from "@parley/server-kit/runtime/withTimeout";
 import { getBaseEnv } from "../env";
 import {
   CHAT_INSTRUCTIONS,
@@ -520,42 +521,195 @@ function chat(
 
 /* ---------------------------------------------------------------- models */
 
-/** Claude Code's --effort levels, plus turning thinking off. */
-const REASONING: ModelReasoning = {
-  efforts: ["none", "low", "medium", "high", "xhigh", "max"],
-  defaultEffort: null,
+/** The levels the app offers when Claude Code doesn't list a model's own. */
+const EFFORTS: readonly ReasoningEffort[] = [
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+];
+
+/** A model as Claude Code lists it, as far as it's read here. */
+type ListedModel = {
+  /** What --model takes: an alias like "opus", or a full model id. */
+  value: string;
+  /** "Opus 5.5" */
+  displayName?: string;
+  supportedEffortLevels?: string[];
 };
 
-const claudeModel = (id: string, name: string): ChatModel => ({
-  id,
-  name,
-  contextTokens: 200_000,
-  maxOutputTokens: null,
-  acceptsImages: true,
-  released: null,
-  aliases: [],
-  replacedBy: null,
-  retires: null,
-  pricing: null,
-  reasoning: REASONING,
-  searchesWeb: true,
-});
+/** A model as the picker shows it, at the effort Claude Code would use. */
+function chatModelOf(
+  id: string,
+  name: string,
+  efforts: readonly string[] | undefined,
+  defaultEffort: string | undefined,
+): ChatModel {
+  const levels = EFFORTS.filter(
+    (effort) => !efforts || efforts.includes(effort),
+  );
+  return {
+    id,
+    name,
+    provider: "Claude Code",
+    contextTokens: 200_000,
+    maxOutputTokens: null,
+    acceptsImages: true,
+    released: null,
+    aliases: [],
+    replacedBy: null,
+    retires: null,
+    // The person's Claude subscription covers them.
+    pricing: null,
+    reasoning: {
+      // Turning thinking off is an environment variable, for any of them.
+      efforts: ["none", ...levels],
+      defaultEffort: levels.find((effort) => effort === defaultEffort) ?? null,
+    },
+    searchesWeb: true,
+    asksPermission: true,
+  };
+}
 
 /**
- * The models Claude Code runs, by the aliases it resolves to the newest of
- * each family, so the list doesn't go stale as models are released. Whether
- * the user's plan includes one only shows when it's used. None has a price:
- * the user's Claude subscription covers them.
+ * What's offered when Claude Code can't say: the aliases it resolves to each
+ * family's newest model, so they don't go stale.
  */
-const CHAT_MODELS: readonly ChatModel[] = [
-  claudeModel("opus", "Claude Opus"),
-  claudeModel("sonnet", "Claude Sonnet"),
-  claudeModel("haiku", "Claude Haiku"),
+const FALLBACK_MODELS: readonly ChatModel[] = [
+  chatModelOf("opus", "Claude Opus", undefined, undefined),
+  chatModelOf("sonnet", "Claude Sonnet", undefined, undefined),
+  chatModelOf("haiku", "Claude Haiku", undefined, undefined),
 ];
+
+/** The ids `chat` takes: the last list Claude Code gave, or the fallback. */
+let offeredIds = new Set(FALLBACK_MODELS.map((model) => model.id));
+
+/** A reply to one of the app's own control requests. */
+type ControlReply = {
+  subtype: "success" | "error";
+  request_id: string;
+  response?: unknown;
+  error?: string;
+};
+
+/**
+ * Starts a Claude Code that's never given a message, so it costs nothing and
+ * saves no session, and returns a way to ask it things over the same control
+ * protocol the Agent SDK uses. It runs where chats do, so it reads the same
+ * settings.
+ */
+function startControlSession(signal: AbortSignal) {
+  const child = spawn(
+    getBaseEnv().CLAUDE_PATH,
+    STREAM_ARGS.filter((arg) => arg !== "--include-partial-messages"),
+    {
+      windowsHide: true,
+      cwd: homedir(),
+      stdio: ["pipe", "pipe", "pipe"],
+      env: programEnv(),
+      signal,
+    },
+  );
+  const waiting = new Map<
+    string,
+    { resolve: (value: unknown) => void; reject: (error: Error) => void }
+  >();
+  let stderr = "";
+  let ended: Error | undefined;
+  const end = (error: Error) => {
+    ended ??= error;
+    for (const { reject } of waiting.values()) reject(ended);
+    waiting.clear();
+  };
+  child.stderr.setEncoding("utf8").on("data", (chunk) => (stderr += chunk));
+  child.stdin.on("error", () => {});
+  child.on("error", end);
+  child.on("close", (code) =>
+    end(
+      new ClaudeCodeError(stderr.trim() || `claude exited with code ${code}`),
+    ),
+  );
+  createInterface({ input: child.stdout }).on("line", (line) => {
+    const output = parseJsonLine<{ type?: string; response?: ControlReply }>(
+      line,
+    );
+    if (output?.type !== "control_response" || !output.response) return;
+    const { request_id, subtype, response, error } = output.response;
+    const pending = waiting.get(request_id);
+    if (!pending) return;
+    waiting.delete(request_id);
+    if (subtype === "success") pending.resolve(response ?? {});
+    else pending.reject(new ClaudeCodeError(error ?? "Claude Code refused"));
+  });
+
+  let sent = 0;
+  return {
+    ask<T>(request: { subtype: string } & Record<string, unknown>): Promise<T> {
+      if (ended) return Promise.reject(ended);
+      const id = `parley-${++sent}`;
+      return new Promise<T>((resolve, reject) => {
+        waiting.set(id, {
+          resolve: resolve as (value: unknown) => void,
+          reject,
+        });
+        child.stdin.write(
+          `${JSON.stringify({ type: "control_request", request_id: id, request })}\n`,
+        );
+      });
+    },
+    close() {
+      child.stdin.end();
+      if (child.exitCode === null) child.kill();
+    },
+  };
+}
+
+/**
+ * The models Claude Code offers by alias ("opus", "sonnet"), which follow
+ * each family's newest, and the effort each runs at when none is chosen. That
+ * comes from the person's own settings (per model, or for all of them) or
+ * Claude Code's default, so it's asked for rather than worked out: the
+ * picker can then say "High (default)" rather than just "Default".
+ */
+async function listModels(signal: AbortSignal): Promise<ChatModel[]> {
+  const session = startControlSession(signal);
+  try {
+    const { models = [] } = await session.ask<{ models?: ListedModel[] }>({
+      subtype: "initialize",
+    });
+    // "default" is whichever of these their settings pick, and full ids
+    // ("claude-opus-4-8") are older models the aliases have moved on from.
+    const aliases = models.filter(
+      ({ value }) => value !== "default" && !value.startsWith("claude-"),
+    );
+    const listed: ChatModel[] = [];
+    for (const model of aliases) {
+      await session.ask({ subtype: "set_model", model: model.value });
+      const { applied } = await session.ask<{ applied?: { effort?: string } }>({
+        subtype: "get_settings",
+      });
+      listed.push(
+        chatModelOf(
+          model.value,
+          model.displayName ?? model.value,
+          model.supportedEffortLevels,
+          applied?.effort,
+        ),
+      );
+    }
+    return listed;
+  } finally {
+    session.close();
+  }
+}
+
+// Asking takes about two seconds; one that hangs mustn't hold up startup.
+const LIST_TIMEOUT_MS = 30 * 1000; // 30 seconds
 
 export const claudeCode: ChatAdapter = {
   name: "Claude Code",
-  serves: (modelId) => CHAT_MODELS.some((model) => model.id === modelId),
+  serves: (modelId) => offeredIds.has(modelId),
 
   async connect() {
     const status = JSON.parse(await runCommand(["auth", "status"])) as {
@@ -564,12 +718,26 @@ export const claudeCode: ChatAdapter = {
     if (!status.loggedIn) {
       throw new ClaudeCodeError("Claude Code isn't logged in; run `claude`");
     }
-    // At no effort, a short answer like a title takes about two seconds
-    // instead of six.
+    // A Claude Code too old to list its models still chats.
+    const listed = await withTimeout(
+      { timeoutMs: LIST_TIMEOUT_MS },
+      ({ abortSignal }) => listModels(abortSignal),
+    ).catch(() => []);
+    const models = listed.length > 0 ? listed : [...FALLBACK_MODELS];
+    offeredIds = new Set(models.map((model) => model.id));
     return {
-      models: [...CHAT_MODELS],
+      models,
+      defaultModel: "sonnet",
+      // At no effort, a short answer like a title takes about two seconds
+      // instead of six.
       helper: { model: "haiku", effort: "none" },
     };
+  },
+
+  // Chats run in the home folder, so its project settings are the user's own.
+  settingsFiles: () => {
+    const folder = process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude");
+    return [join(folder, "settings.json"), join(folder, "settings.local.json")];
   },
 
   chat,

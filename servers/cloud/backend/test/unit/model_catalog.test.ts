@@ -65,7 +65,9 @@ describe("offeredModels", () => {
     );
     expect(model).toEqual({
       id: "openai/gpt-6-luna",
-      name: "OpenAI: GPT-6 Luna",
+      // OpenRouter's name, split.
+      name: "GPT-6 Luna",
+      provider: "OpenAI",
       contextTokens: 200_000,
       maxOutputTokens: null,
       acceptsImages: true,
@@ -76,7 +78,24 @@ describe("offeredModels", () => {
       retires: "2027-09-22",
       reasoning: null,
       searchesWeb: true,
+      asksPermission: false,
     });
+  });
+
+  it("names the provider from the id when the name doesn't", () => {
+    const [known, unknown] = offeredModels(
+      [
+        listed("meta-llama/llama-5", "2026-09-22", [1, 1], {
+          name: "Llama 5",
+        }),
+        listed("mistral-ai/le-chat", "2026-09-22", [1, 1], {
+          name: "Le Chat",
+        }),
+      ],
+      Date.parse("2026-10-31"),
+    );
+    expect(known).toMatchObject({ name: "Llama 5", provider: "Meta" });
+    expect(unknown).toMatchObject({ name: "Le Chat", provider: "Mistral Ai" });
   });
 
   it("only lets a model that takes tools search the web", () => {

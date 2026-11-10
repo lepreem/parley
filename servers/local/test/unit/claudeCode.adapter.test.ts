@@ -465,12 +465,127 @@ describe("claudeCode.connect", () => {
 });
 
 describe("Claude Code's models", () => {
-  it("lists its model families, by alias", async () => {
+  /**
+   * A Claude Code that's never sent a message, answering the app's control
+   * requests: its models, and the effort its settings give each.
+   */
+  function listingProcess(efforts: Record<string, string>) {
+    return (command: string, args: string[], options: object) => {
+      const child = fakeProcess([], { end: false })(command, args, options);
+      let model = "default";
+      let buffered = "";
+      child.stdin.on("data", (chunk: string) => {
+        buffered += chunk;
+        let end;
+        while ((end = buffered.indexOf("\n")) >= 0) {
+          const { request_id, request } = JSON.parse(
+            buffered.slice(0, end),
+          ) as {
+            request_id: string;
+            request: { subtype: string; model?: string };
+          };
+          buffered = buffered.slice(end + 1);
+          let response: unknown = {};
+          if (request.subtype === "initialize") {
+            response = {
+              models: [
+                { value: "default", displayName: "Default (recommended)" },
+                {
+                  value: "opus",
+                  displayName: "Opus 5.5",
+                  supportedEffortLevels: [
+                    "low",
+                    "medium",
+                    "high",
+                    "xhigh",
+                    "max",
+                  ],
+                },
+                {
+                  value: "haiku",
+                  displayName: "Haiku 5.5",
+                  supportedEffortLevels: ["low", "medium", "high"],
+                },
+                { value: "claude-opus-4-8", displayName: "Opus 4.8" },
+              ],
+            };
+          } else if (request.subtype === "set_model") {
+            model = request.model ?? model;
+          } else if (request.subtype === "get_settings") {
+            response = { applied: { model, effort: efforts[model] } };
+          }
+          child.stdout.write(
+            `${JSON.stringify({
+              type: "control_response",
+              response: { subtype: "success", request_id, response },
+            })}\n`,
+          );
+        }
+      });
+      return child;
+    };
+  }
+
+  it("lists its families by alias, at the effort the person's settings give each", async () => {
+    mockSpawn
+      .mockImplementationOnce(fakeProcess([{ line: { loggedIn: true } }]))
+      .mockImplementationOnce(
+        listingProcess({ opus: "high", haiku: "medium" }),
+      );
+
+    const catalog = await claudeCode.connect();
+
+    expect(
+      catalog.models.map(({ id, name, provider, reasoning }) => ({
+        id,
+        name,
+        provider,
+        reasoning,
+      })),
+    ).toEqual([
+      {
+        id: "opus",
+        name: "Opus 5.5",
+        provider: "Claude Code",
+        reasoning: {
+          efforts: ["none", "low", "medium", "high", "xhigh", "max"],
+          defaultEffort: "high",
+        },
+      },
+      {
+        id: "haiku",
+        name: "Haiku 5.5",
+        provider: "Claude Code",
+        reasoning: {
+          efforts: ["none", "low", "medium", "high"],
+          defaultEffort: "medium",
+        },
+      },
+    ]);
+    expect(catalog.defaultModel).toBe("sonnet");
+    expect(claudeCode.serves("haiku")).toBe(true);
+    expect(claudeCode.serves("sonnet")).toBe(false);
+
+    // Asked where chats run, so it reads the same settings, and never sent a
+    // message, so it costs nothing.
+    const listing = runOf(1);
+    expect(listing.options.cwd).toBe(homedir());
+    const sent = listing.child
+      .input()
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { type: string });
+    expect(sent.every(({ type }) => type === "control_request")).toBe(true);
+    expect(listing.child.kill).toHaveBeenCalled();
+  });
+
+  it("falls back to its model families, by alias, when it can't list them", async () => {
     mockSpawn.mockImplementation(fakeProcess([{ line: { loggedIn: true } }]));
     expect((await claudeCode.connect()).models).toEqual([
       {
         id: "opus",
         name: "Claude Opus",
+        provider: "Claude Code",
         contextTokens: 200_000,
         maxOutputTokens: null,
         acceptsImages: true,
@@ -484,10 +599,12 @@ describe("Claude Code's models", () => {
           defaultEffort: null,
         },
         searchesWeb: true,
+        asksPermission: true,
       },
       {
         id: "sonnet",
         name: "Claude Sonnet",
+        provider: "Claude Code",
         contextTokens: 200_000,
         maxOutputTokens: null,
         acceptsImages: true,
@@ -501,10 +618,12 @@ describe("Claude Code's models", () => {
           defaultEffort: null,
         },
         searchesWeb: true,
+        asksPermission: true,
       },
       {
         id: "haiku",
         name: "Claude Haiku",
+        provider: "Claude Code",
         contextTokens: 200_000,
         maxOutputTokens: null,
         acceptsImages: true,
@@ -518,6 +637,7 @@ describe("Claude Code's models", () => {
           defaultEffort: null,
         },
         searchesWeb: true,
+        asksPermission: true,
       },
     ]);
   });

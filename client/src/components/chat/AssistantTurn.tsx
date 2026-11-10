@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { describeModel } from "../../api/models";
 import { useChatModelsQuery } from "../../hooks/queries/useModelsQuery";
 import { useServerReady } from "../../hooks/server/useServerReady";
 import { Icon } from "../ui/Icon";
@@ -33,7 +32,7 @@ export function AssistantTurn({
   const [statsOpen, setStatsOpen] = useState(false);
   const { models } = useChatModelsQuery(useServerReady());
   const model = models.find((entry) => entry.id === modelId);
-  const modelName = model ? describeModel(model).name : modelId;
+  const modelName = model?.name ?? modelId;
 
   const copy = async () => {
     await navigator.clipboard.writeText(content);

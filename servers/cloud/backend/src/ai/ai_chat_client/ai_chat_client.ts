@@ -366,6 +366,23 @@ async function isGuestModel(id: string): Promise<boolean> {
   return (await listGuestModels()).some((model) => model.id === id);
 }
 
+/**
+ * The model a new chat starts on. OpenRouter's "~…-latest" ids follow each
+ * family's newest model, but only while the provider keeps the family's name:
+ * OpenAI's "GPT Mini" became Luna, and its alias stopped moving.
+ */
+const DEFAULT_CHAT_MODEL = "~openai/gpt-luna-latest";
+
+/** Listed first in the picker, in this order. */
+const RECOMMENDED_CHAT_MODELS = [
+  DEFAULT_CHAT_MODEL,
+  "~anthropic/claude-sonnet-latest",
+  "~anthropic/claude-haiku-latest",
+  "~google/gemini-pro-latest",
+  "~google/gemini-flash-latest",
+  "~deepseek/deepseek-flash-latest",
+];
+
 const MAX_TITLE_INPUT_CHARS = 12_000;
 // The alias follows OpenAI's newest Luna.
 const DEFAULT_TITLE_GENERATION_MODEL = "~openai/gpt-luna-latest";
@@ -397,6 +414,8 @@ async function generateTitle(
 /** Chat completions and the chat model catalog, from OpenRouter. */
 export const chat = {
   complete,
+  defaultModelId: DEFAULT_CHAT_MODEL,
+  recommendedModelIds: RECOMMENDED_CHAT_MODELS,
   listModels,
   listGuestModels,
   findModel,

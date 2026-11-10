@@ -77,6 +77,6 @@ export const persistOptions = {
   maxAge: 24 * 60 * 60 * 1000,
   // Bump when a cached shape changes, or what a catalog lists does, to drop
   // entries written by an older build.
-  buster: "v5",
+  buster: "v6",
   dehydrateOptions: { shouldDehydrateQuery: shouldPersist },
 };

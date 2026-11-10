@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { homedir, tmpdir } from "node:os";
+import { join } from "node:path";
 import { createInterface } from "node:readline";
 import type {
   ChatModel,
@@ -226,15 +227,33 @@ type CodexModel = {
 const asEffort = (effort: string): ReasoningEffort | undefined =>
   EFFORTS.find((known) => known === effort);
 
-function chatModelOf(model: CodexModel): ChatModel {
+/**
+ * The person's config, as far as it's read here: what it says a run uses
+ * when the app doesn't pick.
+ */
+type CodexConfig = {
+  model?: string | null;
+  model_reasoning_effort?: string | null;
+};
+
+/**
+ * `effort` is the effort the person's config sets for every model, which a
+ * model that doesn't take it ignores for its own default.
+ */
+function chatModelOf(
+  model: CodexModel,
+  effort: string | null | undefined,
+): ChatModel {
   const efforts = EFFORTS.filter((effort) =>
     model.supportedReasoningEfforts.some(
       ({ reasoningEffort }) => reasoningEffort === effort,
     ),
   );
+  const configured = efforts.find((known) => known === effort);
   return {
     id: `${PREFIX}${model.id}`,
     name: model.displayName,
+    provider: "Codex",
     contextTokens: null,
     maxOutputTokens: null,
     acceptsImages: model.inputModalities.includes("image"),
@@ -246,9 +265,11 @@ function chatModelOf(model: CodexModel): ChatModel {
     pricing: null,
     reasoning: {
       efforts,
-      defaultEffort: asEffort(model.defaultReasoningEffort) ?? null,
+      defaultEffort:
+        configured ?? asEffort(model.defaultReasoningEffort) ?? null,
     },
     searchesWeb: true,
+    asksPermission: true,
   };
 }
 
@@ -273,6 +294,10 @@ async function listModels(signal: AbortSignal): Promise<ChatCatalog> {
       throw new CodexError("Codex isn't logged in; run `codex login`");
     }
 
+    const { config } = (await server.request("config/read", {
+      cwd: tmpdir(),
+    })) as { config: CodexConfig };
+
     const models: ChatModel[] = [];
     let defaultModel: ChatModel | undefined;
     let cursor: string | null = null;
@@ -283,7 +308,7 @@ async function listModels(signal: AbortSignal): Promise<ChatCatalog> {
       };
       for (const model of page.data) {
         if (model.hidden) continue;
-        const chatModel = chatModelOf(model);
+        const chatModel = chatModelOf(model, config.model_reasoning_effort);
         models.push(chatModel);
         if (model.isDefault) defaultModel = chatModel;
       }
@@ -291,8 +316,13 @@ async function listModels(signal: AbortSignal): Promise<ChatCatalog> {
     } while (cursor);
     const helperModel = defaultModel ?? models[0];
     if (!helperModel) throw new CodexError("Codex lists no models");
+    // The person's own pick, when it's one of these.
+    const configured = models.find(
+      (model) => model.id === `${PREFIX}${config.model}`,
+    );
     return {
       models,
+      defaultModel: (configured ?? helperModel).id,
       // Codex's own default model, at its least effort, when it's the only
       // program there is.
       helper: {
@@ -681,6 +711,10 @@ export const codex: ChatAdapter = {
     withTimeout({ timeoutMs: CONNECT_TIMEOUT_MS }, ({ abortSignal }) =>
       listModels(abortSignal),
     ),
+
+  settingsFiles: () => [
+    join(process.env.CODEX_HOME ?? join(homedir(), ".codex"), "config.toml"),
+  ],
 
   chat,
 

@@ -229,7 +229,13 @@ export type AnswerToolApprovalBody = { answer: ToolApprovalChoice };
 /** A chat model, whichever provider serves it. */
 export type ChatModel = {
   id: string;
+  /** Its own name, without the provider's: "Claude Sonnet 5.5". */
   name: string;
+  /**
+   * Who it comes from, as the picker groups it: the company that makes it
+   * ("Anthropic"), or the program on this computer that runs it ("Codex").
+   */
+  provider: string;
   /** The longest prompt it takes, in tokens, when known. */
   contextTokens: number | null;
   /** The most it can write in one go, thinking included, when known. */
@@ -260,6 +266,12 @@ export type ChatModel = {
   reasoning: ModelReasoning | null;
   /** Whether a turn may let it use the web. */
   searchesWeb: boolean;
+  /**
+   * Whether a reply on it can run tools on the person's computer, stopping to
+   * ask them first where their settings say to, as Claude Code and Codex do.
+   * Such a model takes a permission mode with each message.
+   */
+  asksPermission: boolean;
 };
 
 export type ReasoningEffort =
@@ -268,7 +280,10 @@ export type ReasoningEffort =
 export type ModelReasoning = {
   /** The levels it offers, least thinking first. */
   efforts: ReasoningEffort[];
-  /** The level it uses when none is chosen, when known. */
+  /**
+   * The level it uses when none is chosen, when known: the provider's, or
+   * what the person's own settings for the program that runs it say.
+   */
   defaultEffort: ReasoningEffort | null;
 };
 
@@ -279,7 +294,16 @@ export type ModelPricing = {
 };
 
 /** GET /models/chat */
-export type ModelsResponse<Model> = { models: Model[] };
+export type ChatModelsResponse = {
+  models: ChatModel[];
+  /** The model a new chat starts on, by id or alias, when it's offered. */
+  defaultModelId: string | null;
+  /**
+   * Models the picker lists first, in this order, by id or alias. Ones that
+   * aren't offered are skipped.
+   */
+  recommendedModelIds: string[];
+};
 
 /* -------------------------------------------------------------------- jobs */
 
@@ -367,6 +391,11 @@ export type ServerEvents = {
   replyFinished: { conversationId: string };
   /** What a conversation's reply is waiting for the person to answer, now. */
   toolApprovalsChanged: { conversationId: string; approvals: ToolApproval[] };
+  /**
+   * The chat models changed, as when the person changed a program's
+   * settings; refetch them.
+   */
+  chatModelsChanged: Record<string, never>;
 };
 
 /** POST /speech/transcribe: what was said; empty if nothing was. */

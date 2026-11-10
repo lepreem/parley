@@ -8,7 +8,9 @@ import {
   type ToolApproval,
   type ToolApprovalChoice,
 } from "../../api/toolApprovals";
+import { useChatModelsQuery } from "../../hooks/queries/useModelsQuery";
 import { useServer } from "../../hooks/server/useServer";
+import { useServerReady } from "../../hooks/server/useServerReady";
 import { useToast } from "../../hooks/toast/useToast";
 import { queryKeys } from "../../lib/queryClient";
 import { useEventsConnected } from "../../sse/useEventsConnected";
@@ -114,14 +116,19 @@ export function ToolApprovals({
   const queryKey = queryKeys.toolApprovals(server.id, conversationId);
   const [answering, setAnswering] = useState<string | null>(null);
 
+  // Only a model that runs tools on this computer stops to ask.
+  const asks = useChatModelsQuery(useServerReady()).models.some(
+    (model) => model.asksPermission,
+  );
+
   const { data } = useQuery({
     queryKey,
     queryFn: () => fetchToolApprovals(server, conversationId),
-    enabled: server.toolApprovals,
+    enabled: asks,
     staleTime: 0,
     refetchInterval: pushed ? false : POLL_MS,
   });
-  const approvals = server.toolApprovals ? (data ?? []) : [];
+  const approvals = asks ? (data ?? []) : [];
 
   const count = approvals.length;
   useEffect(() => {

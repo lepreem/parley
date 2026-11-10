@@ -138,9 +138,10 @@ export function ChatView() {
   );
   const eligibleIds = eligible.map((model) => model.id);
   // The default may name a model by alias, to follow its newest.
-  const defaultId =
-    findChatModel(eligible, server.defaultChatModelId)?.id ??
-    server.defaultChatModelId;
+  const defaultId = chatModels.defaultModelId
+    ? (findChatModel(eligible, chatModels.defaultModelId)?.id ??
+      chatModels.defaultModelId)
+    : null;
   const modelId =
     modelPick && eligibleIds.includes(modelPick)
       ? modelPick
@@ -156,7 +157,8 @@ export function ChatView() {
   const canSearchWeb = !guest && !!chosenModel?.searchesWeb;
   const webSearch = canSearchWeb && webSearchOn;
   // Only the programs on this computer have permissions to loosen.
-  const permissionMode = server.toolApprovals ? permissionPick : null;
+  const canChoosePermissions = !!chosenModel?.asksPermission;
+  const permissionMode = canChoosePermissions ? permissionPick : null;
 
   const replyInProgress = messagesQuery.data?.replyInProgress ?? null;
   const pending = conversationId
@@ -280,6 +282,7 @@ export function ChatView() {
         text={text}
         onTextChange={setText}
         models={chatModels.models}
+        recommendedModelIds={chatModels.recommendedModelIds}
         modelId={modelId}
         onModelChange={setModelPick}
         effort={effort}
@@ -287,7 +290,7 @@ export function ChatView() {
         canSearchWeb={canSearchWeb}
         webSearch={webSearch}
         onWebSearchChange={setWebSearchOn}
-        canChoosePermissions={server.toolApprovals}
+        canChoosePermissions={canChoosePermissions}
         permissionMode={permissionMode}
         onPermissionModeChange={setPermissionPick}
         modelsLoading={chatModels.loading}

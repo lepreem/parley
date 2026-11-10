@@ -1,4 +1,4 @@
-import type { ChatModel, ModelsResponse } from "@parley/contract";
+import type { ChatModelsResponse } from "@parley/contract";
 import { chat } from "../ai";
 import { authed } from "../middleware/auth.middleware";
 
@@ -8,5 +8,7 @@ export const handleGetModels = authed.createHandlers(async (c) => {
     models: c.var.isGuest
       ? await chat.listGuestModels()
       : await chat.listModels(),
-  } satisfies ModelsResponse<ChatModel>);
+    defaultModelId: chat.defaultModelId,
+    recommendedModelIds: chat.recommendedModelIds,
+  } satisfies ChatModelsResponse);
 });

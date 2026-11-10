@@ -19,20 +19,7 @@ export const cloudServer: Server = {
   appPath: "/chat",
   alwaysOn: true,
   uploads: "signed",
-  toolApprovals: false,
   youtubeAudio: false,
-  defaultChatModelId: "~openai/gpt-luna-latest",
-  // OpenRouter's "~…-latest" ids follow each family's newest model, but only
-  // while the provider keeps the family's name: OpenAI's "GPT Mini" became
-  // Luna, and its alias stopped moving.
-  recommendedChatModelIds: [
-    "~openai/gpt-luna-latest",
-    "~anthropic/claude-sonnet-latest",
-    "~anthropic/claude-haiku-latest",
-    "~google/gemini-pro-latest",
-    "~google/gemini-flash-latest",
-    "~deepseek/deepseek-flash-latest",
-  ],
 };
 
 const LOCAL_PORT = "3002";
@@ -65,11 +52,7 @@ export const localServer: Server = {
   appPath: "/local",
   alwaysOn: false,
   uploads: "direct",
-  toolApprovals: true,
   youtubeAudio: true,
-  defaultChatModelId: "sonnet",
-  // Its catalog is a handful of Claude models already.
-  recommendedChatModelIds: [],
 };
 
 export function authLoginUrl(): string {
