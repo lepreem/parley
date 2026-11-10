@@ -273,16 +273,6 @@ type ChatOptions = {
   onUnreadPage?: ((url: unknown, error: unknown) => void) | undefined;
 };
 
-/**
- * Claude caches a prompt only when asked. Asking makes the first turn of a chat
- * about a quarter dearer (writing the cache) and each reply within 5 minutes of
- * the last about 15x cheaper (reading it); every read restarts the 5 minutes.
- * Other providers cache on their own, so they're left alone.
- */
-function cachesOnRequest(model: string): boolean {
-  return model.replace(/^~/, "").startsWith("anthropic/");
-}
-
 async function complete(
   model: string,
   messages: ChatTurn[],
@@ -302,7 +292,12 @@ async function complete(
     provider: { sort: "latency" },
     sessionId: opts.sessionId,
     tools: opts.webSearch ? WEB_TOOLS : undefined,
-    cacheControl: cachesOnRequest(model) ? { type: "ephemeral" } : undefined,
+    // Claude caches a prompt only when asked: the first turn of a chat costs
+    // about a quarter more (writing the cache) and each reply within 5 minutes
+    // of the last about 15x less (reading it). Other models cache on their own
+    // and ignore this; measured 2026-11-10 on GPT, Gemini and DeepSeek, it
+    // changed neither their cost nor their cache hits.
+    cacheControl: { type: "ephemeral" },
   };
 
   const timeoutOptions = {
