@@ -16,6 +16,7 @@ function turn(
     content,
     createdAt: new Date(),
     transcripts,
+    pages: [],
     images: [],
   };
 }

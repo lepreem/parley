@@ -3,15 +3,38 @@ import { describeModel } from "../../api/models";
 import { useChatModelsQuery } from "../../hooks/queries/useModelsQuery";
 import { useServerReady } from "../../hooks/server/useServerReady";
 import { Icon } from "../ui/Icon";
-import type { MessageSource, TurnStats } from "../../api/messages";
+import type {
+  MessageSource,
+  ReplyActivity,
+  TurnStats,
+} from "../../api/messages";
 import { Markdown } from "./Markdown";
 import { ReplySources } from "./ReplySources";
 import { TurnStatsPanel } from "./TurnStatsPanel";
+
+const ACTIVITY_LABEL: Record<ReplyActivity, string> = {
+  searching: "Searching the web",
+  reading: "Reading a page",
+};
+
+/** What the reply is doing on the web, until its next words come. */
+function ActivityStatus({ activity }: { activity: ReplyActivity }) {
+  return (
+    <p role="status" className="flex items-center gap-1.5 text-sm text-faint">
+      <Icon
+        name={activity === "searching" ? "search" : "globe"}
+        className="h-3.5 w-3.5 shrink-0 animate-pulse"
+      />
+      {ACTIVITY_LABEL[activity]}…
+    </p>
+  );
+}
 
 export function AssistantTurn({
   content,
   modelId,
   streaming,
+  activity,
   elsewhere,
   stopped,
   sources,
@@ -20,6 +43,8 @@ export function AssistantTurn({
   content: string;
   modelId?: string | null;
   streaming?: boolean;
+  /** What a streaming reply is doing on the web right now. */
+  activity?: ReplyActivity | undefined;
   /** Streaming, but not to this page: `content` is how far it had got. */
   elsewhere?: boolean;
   /** Someone stopped it before it finished. */
@@ -43,7 +68,9 @@ export function AssistantTurn({
 
   return (
     <div className="group/turn">
-      {streaming && content.length === 0 ? (
+      {streaming && content.length === 0 && activity ? (
+        <ActivityStatus activity={activity} />
+      ) : streaming && content.length === 0 ? (
         // Not "Thinking": most models don't, they're just slow to start.
         <span
           className="typing"
@@ -57,6 +84,12 @@ export function AssistantTurn({
       ) : (
         <div className="md">
           <Markdown content={content} />
+        </div>
+      )}
+
+      {streaming && content.length > 0 && activity && (
+        <div className="mt-2">
+          <ActivityStatus activity={activity} />
         </div>
       )}
 

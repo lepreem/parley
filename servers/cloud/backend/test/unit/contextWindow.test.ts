@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   MAX_CONTEXT_CHARS,
   MAX_HISTORY_MESSAGES,
+  PAGE_CUT_SHORT,
   admitHistory,
+  admitPages,
   completionTokenCeiling,
   countMessagesInContextWindow,
 } from "../../src/chat/contextWindow";
@@ -118,5 +120,42 @@ describe("countMessagesInContextWindow", () => {
     expect(
       countMessagesInContextWindow(Array(MAX_HISTORY_MESSAGES + 10).fill(1)),
     ).toBe(MAX_HISTORY_MESSAGES);
+  });
+});
+
+describe("admitPages", () => {
+  const page = (name: string, chars: number) => ({
+    name,
+    content: name.repeat(chars),
+  });
+  // Ten characters around each page, and nothing for none.
+  const blockChars = (pages: readonly { content: string }[]) =>
+    pages.reduce((total, { content }) => total + content.length + 10, 0);
+
+  it("keeps whole pages, newest reply first, while they fit", () => {
+    expect(
+      admitPages(
+        [[page("a", 3_000), page("b", 3_000)], [], [page("c", 3_000)]],
+        6_020,
+        blockChars,
+      ),
+    ).toEqual([[page("a", 3_000), page("b", 3_000)], [], []]);
+  });
+
+  it("cuts the first page that doesn't fit, if enough of it does", () => {
+    const [[first]] = admitPages([[page("a", 10_000)]], 5_000, blockChars);
+    expect(first?.content).toBe(
+      "a".repeat(5_000 - 10 - PAGE_CUT_SHORT.length) + PAGE_CUT_SHORT,
+    );
+  });
+
+  it("skips a page too little of which fits, but still takes smaller ones", () => {
+    expect(
+      admitPages(
+        [[page("a", 3_000), page("b", 10_000)], [page("c", 500)]],
+        4_000,
+        blockChars,
+      ),
+    ).toEqual([[page("a", 3_000)], [page("c", 500)]]);
   });
 });

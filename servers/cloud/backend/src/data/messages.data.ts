@@ -1,4 +1,5 @@
 import type { MessageSource } from "@parley/contract";
+import type { StoredSource } from "@parley/server-kit/webSources";
 import { and, asc, desc, eq, gt, lt, or, sql } from "drizzle-orm";
 import {
   Attachments,
@@ -15,8 +16,22 @@ import { messageAttachmentLinks } from "./messageAttachmentLinks.data";
 import { attachments } from "./attachments.data";
 
 /**
+ * A reply's sources without the text of the pages it read, which can run to
+ * hundreds of thousands of characters and is only ever for the model.
+ */
+const sourcesWithoutPageText = sql<MessageSource[]>`coalesce(
+  (
+    select jsonb_agg(source - 'content' order by position)
+    from jsonb_array_elements(${ChatMessages.sources})
+      with ordinality as page(source, position)
+  ),
+  '[]'::jsonb
+)`;
+
+/**
  * The columns a message is exposed through — every read feeding `toMessageJson`
- * projects exactly these, so `userId` and `updatedAt` never leave the table.
+ * projects exactly these, so `userId` and `updatedAt` never leave the table,
+ * and nor does the text of the pages a reply read.
  */
 const messageColumns = {
   id: ChatMessages.id,
@@ -24,7 +39,7 @@ const messageColumns = {
   content: ChatMessages.content,
   chosenModelId: ChatMessages.chosenModelId,
   stopped: ChatMessages.stopped,
-  sources: ChatMessages.sources,
+  sources: sourcesWithoutPageText.as("sources"),
   conversationId: ChatMessages.conversationId,
   createdAt: ChatMessages.createdAt,
 };
@@ -59,8 +74,8 @@ const messageIsBefore = (cursor: MessageCursor) => messageIsOn(lt, cursor);
 
 export type MessageRow = Pick<
   typeof ChatMessages.$inferSelect,
-  keyof typeof messageColumns
->;
+  Exclude<keyof typeof messageColumns, "sources">
+> & { sources: MessageSource[] };
 
 /** Full history for a conversation, oldest first. */
 async function findConversationMessages(conversationId: string) {
@@ -78,6 +93,16 @@ async function findConversationMessages(conversationId: string) {
 /** A transcript attached to a past turn, by the audio it was made from. */
 export type HistoryTranscript = { audioUploadId: string; content: string };
 
+/** A page the model read for a past reply, with the text it read. */
+export type HistoryPage = { url: string; title: string; content: string };
+
+/**
+ * How far back, in messages, the history read brings the pages replies read.
+ * The prompt only has room for a few pages, after the turns themselves, and a
+ * page can be tens of thousands of characters, so older ones aren't read.
+ */
+const PAGE_HISTORY_MESSAGES = 6;
+
 /**
  * A past turn that may go back into the prompt, with what it was sent with:
  * its transcripts in link order, and its images as stored, so the caller
@@ -89,6 +114,8 @@ export type HistoryCandidate = {
   content: string;
   createdAt: Date;
   transcripts: HistoryTranscript[];
+  /** For a recent reply: the pages it read, in the order it read them. */
+  pages: HistoryPage[];
   images: {
     imageUploadId: string;
     signedUrl: string | null;
@@ -119,6 +146,8 @@ type HistoryRow = {
   transcriptAudioUploadId: string | null;
   /** Null when the caller knows it. */
   transcriptContent: string | null;
+  /** Null for a user message, an older reply, or a reply that read none. */
+  pages: HistoryPage[] | null;
 };
 
 /** A Postgres array literal, sent as one parameter whatever its length. */
@@ -188,6 +217,21 @@ async function findContextHistory(input: {
           when ${ChatMessages.id} = any(${knownMessageIds}::uuid[]) then null
           else ${ChatMessages.content}
         end as content,
+        case
+          when ${ChatMessages.role} = 'assistant'
+            and row_number() over (
+              order by
+                ${ChatMessages.createdAt} desc,
+                ${ChatMessages.role} desc,
+                ${ChatMessages.id} desc
+            ) <= ${PAGE_HISTORY_MESSAGES}
+          then (
+            select jsonb_agg(source order by position)
+            from jsonb_array_elements(${ChatMessages.sources})
+              with ordinality as page(source, position)
+            where source->>'content' is not null
+          )
+        end as pages,
         ${ChatMessages.createdAt} as created_at
       from ${ChatMessages}
       where ${ChatMessages.conversationId} = ${input.conversationId}
@@ -221,6 +265,7 @@ async function findContextHistory(input: {
           order by ${ChatMessageAttachmentLinks.position}
         ) = 1 then recent_messages.content
       end as content,
+      recent_messages.pages as pages,
       recent_messages.created_at as "createdAt",
       ${ChatMessageAttachmentLinks.attachmentId} as "attachmentId",
       ${Attachments.kind} as "attachmentKind",
@@ -263,6 +308,7 @@ async function findContextHistory(input: {
         content: "",
         createdAt: new Date(row.createdAt),
         transcripts: [],
+        pages: row.pages ?? [],
         images: [],
       };
       history.push(message);
@@ -312,7 +358,7 @@ async function createMessage(
     userId: string;
     chosenModelId?: string;
     stopped?: boolean;
-    sources?: MessageSource[];
+    sources?: StoredSource[];
   },
   executor: Executor = db,
 ) {
@@ -473,7 +519,7 @@ async function persistAndUnclaimChatTurn(turn: {
   assistantContent: string;
   /** The reply was stopped partway, so `assistantContent` is what came. */
   stopped?: boolean;
-  sources?: MessageSource[];
+  sources?: StoredSource[];
   conversationTitle?: string;
   contextWindowMessageCount: number;
   claimToken: string;

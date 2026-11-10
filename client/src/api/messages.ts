@@ -4,6 +4,7 @@ import type {
   MessageSource,
   MessagesResponse,
   MessageTranscript,
+  ReplyActivity,
   ReplyInProgress,
   LocalSendMessageBody,
   ReplyStreamEvents,
@@ -19,6 +20,7 @@ export type {
   MessageSource,
   MessagesResponse,
   MessageTranscript,
+  ReplyActivity,
   ReplyInProgress,
   TurnStats,
 };
@@ -67,6 +69,8 @@ type StreamCallbacks = {
   /** The reply has started, so it can be stopped from now on. */
   onOpen: () => void;
   onDelta: (delta: string) => void;
+  /** The model has started a search or opened a page. */
+  onActivity: (activity: ReplyActivity) => void;
   /** `stats` when the server sent them, for the reply's stats panel. */
   onDone: (
     lastMessageId: string,
@@ -86,11 +90,17 @@ function dispatchReplyEvent(
   // or come from a proxy's error page.
   const data = JSON.parse(rawData) as Partial<
     ReplyStreamEvents["delta"] &
+      ReplyStreamEvents["activity"] &
       ReplyStreamEvents["done"] &
       ReplyStreamEvents["error"]
   >;
   if (eventName === "delta" && typeof data.delta === "string") {
     callbacks.onDelta(data.delta);
+  } else if (
+    eventName === "activity" &&
+    (data.activity === "searching" || data.activity === "reading")
+  ) {
+    callbacks.onActivity(data.activity);
   } else if (eventName === "done" && typeof data.lastMessageId === "string") {
     callbacks.onDone(
       data.lastMessageId,

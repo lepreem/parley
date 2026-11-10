@@ -126,6 +126,12 @@ describe.skipIf(!testState.databaseUrl)("context history in PostgreSQL", () => {
         id: answerId,
         role: "assistant",
         content: "They differ",
+        sources: [
+          { url: "https://a.test/", title: "A", content: "Page A" },
+          { url: "https://cited.test/", title: "Cited" },
+          { url: "https://b.test/", title: "b.test", unread: true },
+          { url: "https://c.test/", title: "C", content: "Page C" },
+        ],
         conversationId,
         userId,
         createdAt: at(2),
@@ -183,6 +189,31 @@ describe.skipIf(!testState.databaseUrl)("context history in PostgreSQL", () => {
       { messageId: questionId, attachmentId: imageId, position: 1 },
       { messageId: questionId, attachmentId: secondAudioId, position: 2 },
     ]);
+  });
+
+  it("brings back the text of the pages a recent reply read, in order", async () => {
+    const history = await read();
+
+    expect(history.map((message) => message.pages)).toEqual([
+      [],
+      [
+        { url: "https://a.test/", title: "A", content: "Page A" },
+        { url: "https://c.test/", title: "C", content: "Page C" },
+      ],
+      [],
+    ]);
+  });
+
+  it("never lets the text of a page out with the messages", async () => {
+    const rows = await messages.findConversationMessages(conversationId);
+
+    expect(rows.find((row) => row.id === answerId)?.sources).toEqual([
+      { url: "https://a.test/", title: "A" },
+      { url: "https://cited.test/", title: "Cited" },
+      { url: "https://b.test/", title: "b.test", unread: true },
+      { url: "https://c.test/", title: "C" },
+    ]);
+    expect(rows.find((row) => row.id === questionId)?.sources).toEqual([]);
   });
 
   it("reads the window with each message's text and transcripts once", async () => {

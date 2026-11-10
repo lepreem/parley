@@ -1,4 +1,4 @@
-import type { MessageSource } from "@parley/contract";
+import type { StoredSource } from "@parley/server-kit/webSources";
 import {
   bigint,
   boolean,
@@ -181,8 +181,9 @@ export const ChatMessages = pgTable(
     // An assistant reply someone stopped partway; its content is what came
     // before they did.
     stopped: boolean("stopped").default(false).notNull(),
-    // The web pages a search found for an assistant message.
-    sources: jsonb("sources").$type<MessageSource[]>().default([]).notNull(),
+    // The web pages an assistant message found or read, with the text of the
+    // ones it read for the turns after it, and the ones it couldn't open.
+    sources: jsonb("sources").$type<StoredSource[]>().default([]).notNull(),
 
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()

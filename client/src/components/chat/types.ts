@@ -1,4 +1,4 @@
-import type { MessageTranscript } from "../../api/messages";
+import type { MessageTranscript, ReplyActivity } from "../../api/messages";
 
 export type TurnImage = {
   imageUploadId: string;
@@ -17,6 +17,8 @@ export type PendingTurn = {
   images: TurnImage[];
   transcripts: MessageTranscript[];
   assistantContent: string;
+  /** What the reply is doing on the web, until its next words come. */
+  activity?: ReplyActivity;
   /**
    * The turn didn't take and the chat is being reloaded. Nothing stands in
    * for it, and the turns an edit replaced stay hidden until the reload shows

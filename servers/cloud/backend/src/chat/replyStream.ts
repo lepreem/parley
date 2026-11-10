@@ -21,7 +21,7 @@ import type { TurnClaim } from "./turnClaim";
 
 /**
  * Answers a turn as server-sent events: `delta` ({ delta }) per model chunk,
- * then `done` ({ lastMessageId, stopped, stats }) once the turn is stored, `cancelled`
+ * `activity` ({ activity }) when it starts a search or opens a page, then `done` ({ lastMessageId, stopped, stats }) once the turn is stored, `cancelled`
  * if it was stopped before any reply came, or `error` ({ message }) if the
  * model call fails. A turn rejected before the model is
  * asked gets a plain JSON error instead. The client reads the stream with
@@ -124,6 +124,7 @@ async function writeReply({
         }
         sseEvents.push("delta", { delta });
       },
+      (activity) => sseEvents.push("activity", { activity }),
       () => {
         timings.modelFinishedAfterMs = msSince(metrics.startedAt);
       },

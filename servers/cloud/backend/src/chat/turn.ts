@@ -1,13 +1,23 @@
 import type { z } from "zod";
 import type {
-  MessageSource,
   ReasoningEffort,
+  ReplyActivity,
   TurnStats,
 } from "@parley/contract";
 import type { ReplyInProgressEntry } from "@parley/server-kit/memory/repliesInProgress";
 import { logger, messageOf } from "@parley/server-kit/runtime/logger";
-import { addSource } from "@parley/server-kit/webSources";
-import { data, type HistoryCandidate, type HistoryTranscript } from "../data";
+import {
+  addSource,
+  addUnreadPage,
+  withoutPageText,
+  type StoredSource,
+} from "@parley/server-kit/webSources";
+import {
+  data,
+  type HistoryCandidate,
+  type HistoryPage,
+  type HistoryTranscript,
+} from "../data";
 import { buildUserTurn, chat, type ChatTurn } from "../ai";
 import { measurePreparation } from "../metrics/preparationMetrics";
 import { uploads } from "../uploads/uploads";
@@ -16,16 +26,29 @@ import {
   MAX_CONTEXT_CHARS,
   MAX_HISTORY_MESSAGES,
   admitHistory,
+  admitPages,
   completionTokenCeiling,
   countMessagesInContextWindow,
 } from "./contextWindow";
 import { memory } from "../memory";
-import { buildPrompt, countImageInputs, withTranscripts } from "./prompt";
+import {
+  buildPrompt,
+  countImageInputs,
+  pagesReadBlock,
+  withTranscripts,
+} from "./prompt";
 import type { TurnClaim } from "./turnClaim";
 
 const log = logger.child({ component: "chat-turn" });
 
 const FALLBACK_CONVERSATION_TITLE_CHARS = 80;
+
+/**
+ * The most of one page a reply keeps for the turns after it. The web tools
+ * read at most 8,000 tokens of a page, about 32,000 characters, so this only
+ * stops a page that came back longer than asked.
+ */
+const MAX_PAGE_CHARS = 40_000;
 
 /** One user turn to answer, as the request asked for it. */
 export type TurnRequest = {
@@ -96,6 +119,7 @@ type AdmittedTurn = {
   role: ChatTurn["role"];
   promptContent: string;
   contextCharCount: number;
+  pages: HistoryPage[];
   imageUrls: string[];
 };
 
@@ -122,6 +146,7 @@ function measureHistory(candidates: readonly HistoryCandidate[]) {
       role: candidate.role,
       promptContent,
       contextCharCount: promptContent.length,
+      pages: candidate.pages,
       images: candidate.images,
     };
   });
@@ -153,6 +178,36 @@ async function admitAndSignHistory(
       return url ? [url] : [];
     }),
   }));
+}
+
+/**
+ * The history with the pages past replies read put back, on the message each
+ * answered, in what the turns left of the budget. They don't count towards
+ * the window the next turn reads: they're what's dropped first.
+ */
+function withPagesRead(historyNewestFirst: AdmittedTurn[], roomChars: number) {
+  const pagesNewestFirst = historyNewestFirst.map((turn, index) =>
+    turn.role === "assistant" && historyNewestFirst[index + 1]?.role === "user"
+      ? turn.pages
+      : [],
+  );
+  const admitted = admitPages(
+    pagesNewestFirst,
+    roomChars,
+    (pages) => pagesReadBlock(pages).length,
+  );
+
+  let pageCount = 0;
+  let pageChars = 0;
+  const history = historyNewestFirst.map((turn, index) => {
+    const pages = admitted[index - 1] ?? [];
+    if (turn.role !== "user" || pages.length === 0) return turn;
+    const block = pagesReadBlock(pages);
+    pageCount += pages.length;
+    pageChars += block.length;
+    return { ...turn, promptContent: turn.promptContent + block };
+  });
+  return { history, pageCount, pageChars };
 }
 
 /**
@@ -254,11 +309,17 @@ export async function prepareTurn(
     });
   }
 
-  const history = await admitAndSignHistory(
+  const admittedHistory = await admitAndSignHistory(
     request.userId,
     historyCandidates,
     newTurnContent.length,
     newTurnResolvedImages.length,
+  );
+  const { history, pageCount, pageChars } = withPagesRead(
+    admittedHistory,
+    MAX_CONTEXT_CHARS -
+      newTurnContent.length -
+      admittedHistory.reduce((total, turn) => total + turn.contextCharCount, 0),
   );
   const prompt = buildPrompt(
     history,
@@ -295,6 +356,8 @@ export async function prepareTurn(
       historyMessages: history.length,
       historyChars: historyCharCounts.reduce((total, n) => total + n, 0),
       newTurnChars: newTurnContent.length,
+      pages: pageCount,
+      pageChars,
       maxChars: MAX_CONTEXT_CHARS,
       maxHistoryMessages: MAX_HISTORY_MESSAGES,
     },
@@ -380,6 +443,7 @@ export async function answerTurn(
   prepared: PreparedTurn,
   entry: ReplyInProgressEntry,
   onDelta: (delta: string) => void,
+  onActivity: (activity: ReplyActivity) => void,
   onModelFinished: () => void,
 ) {
   const conversationTitle =
@@ -388,7 +452,7 @@ export async function answerTurn(
       : Promise.resolve(undefined);
 
   const model = await chat.findModel(request.chosenModelId);
-  const sources: MessageSource[] = [];
+  const sources: StoredSource[] = [];
 
   let assistantContent: string;
   let stopped = false;
@@ -420,18 +484,29 @@ export async function answerTurn(
         ...(request.webSearch
           ? {
               webSearch: true,
-              onSource: (url: unknown, title: unknown) =>
-                addSource(sources, url, title),
-              // Only the site: the full address can say what someone is asking
-              // about. Counted by site, this says what's worth building for.
-              onUnreadPage: (url: unknown, error: unknown) =>
+              onSource: (url: unknown, title: unknown, content?: unknown) =>
+                addSource(
+                  sources,
+                  url,
+                  title,
+                  typeof content === "string"
+                    ? content.slice(0, MAX_PAGE_CHARS)
+                    : undefined,
+                ),
+              onUnreadPage: (url: unknown, error: unknown) => {
+                addUnreadPage(sources, url);
+                // Only the site: the full address can say what someone is
+                // asking about. Counted by site, this says what's worth
+                // building for.
                 log.info("Web page unread", {
                   site:
                     typeof url === "string" && URL.canParse(url)
                       ? new URL(url).hostname
                       : undefined,
                   error,
-                }),
+                });
+              },
+              onActivity,
             }
           : {}),
         sessionId: request.conversationId,
@@ -477,5 +552,9 @@ export async function answerTurn(
     assistantMessageId: saved.assistantMessageId,
     assistantContent,
   });
-  return { lastMessageId: saved.assistantMessageId, stopped, sources };
+  return {
+    lastMessageId: saved.assistantMessageId,
+    stopped,
+    sources: withoutPageText(sources),
+  };
 }

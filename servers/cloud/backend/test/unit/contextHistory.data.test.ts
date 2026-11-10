@@ -26,6 +26,7 @@ function historyRow(
     signedUrlExpiresAt: string | null;
     transcriptAudioUploadId: string | null;
     transcriptContent: string | null;
+    pages: { url: string; title: string; content: string }[] | null;
   }> = {},
 ) {
   return {
@@ -37,6 +38,7 @@ function historyRow(
     attachmentKind: null,
     signedUrl: null,
     signedUrlExpiresAt: null,
+    pages: null,
     transcriptAudioUploadId: null,
     transcriptContent: null,
     ...partial,
@@ -48,12 +50,14 @@ beforeEach(() => {
 });
 
 describe("findContextHistory", () => {
-  it("groups each turn with its transcripts and stored images, newest first", async () => {
+  it("groups each turn with its transcripts, stored images and pages read, newest first", async () => {
+    const page = { url: "https://a.test/", title: "A", content: "Page" };
     mockExecute.mockResolvedValueOnce([
       historyRow({
         messageId: "message-2",
         role: "assistant",
         content: "Answer",
+        pages: [page],
       }),
       historyRow({
         attachmentId: "audio-1",
@@ -90,6 +94,7 @@ describe("findContextHistory", () => {
         content: "Answer",
         createdAt,
         transcripts: [],
+        pages: [page],
         images: [],
       },
       {
@@ -101,6 +106,7 @@ describe("findContextHistory", () => {
           { audioUploadId: "audio-1", content: "First transcript" },
           { audioUploadId: "audio-2", content: "Second transcript" },
         ],
+        pages: [],
         images: [
           {
             imageUploadId: "image-1",
