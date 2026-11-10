@@ -1,5 +1,7 @@
 # Parley
 
+[![Powered by Supadata](https://supadata.ai/badge/powered-by-supadata-light.svg)](https://supadata.ai/r/F1BZCP8F)
+
 Chat with Claude about audio, video, YouTube videos and images. It comes in
 two parts, sharing one client (`client/`) and a wire contract
 (`packages/contract/`): the hosted app, documented in
