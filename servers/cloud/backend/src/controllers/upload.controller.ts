@@ -139,6 +139,8 @@ export const handleYoutubeUpload = authed.createHandlers(
       youtubeVideoId,
       { useCaptionsIfAvailable },
     );
+    // Someone has added this video before: the job starts completed, with a
+    // copy of that transcript, and nothing is fetched.
     if (transcript) {
       await data.transcripts.createReusedYoutubeJob(job, transcript);
       eventHub.send(userId, "jobUpdated", { audioUploadId });

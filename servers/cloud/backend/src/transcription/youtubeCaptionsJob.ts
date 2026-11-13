@@ -4,7 +4,7 @@ import type { DeliveryMetadata } from "../message-queue/messageQueue";
 import type { UploadId } from "@parley/server-kit/ids";
 import { eventHub } from "../sse/hub";
 import { youtubeCaptions } from "../supadata";
-import { handleTranscribeJob } from "./transcribeJob";
+import { completeAudioJob } from "./audioJob";
 
 const log = logger.child({ component: "youtube-captions" });
 
@@ -51,7 +51,10 @@ export async function handleYoutubeCaptionsJob(
     return;
   }
 
-  await handleTranscribeJob({ audioUploadId, ...captions }, delivery);
+  await completeAudioJob(audioUploadId, delivery, async () => ({
+    ...captions,
+    fromCaptions: true,
+  }));
 }
 
 async function fail(audioUploadId: UploadId, userId: string, error: string) {

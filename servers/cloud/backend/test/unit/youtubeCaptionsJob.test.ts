@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   findAudioJob: vi.fn(),
   failAudioJobById: vi.fn(),
   fetchCaptions: vi.fn(),
-  handleTranscribeJob: vi.fn(),
+  completeAudioJob: vi.fn(),
   sendEvent: vi.fn(),
 }));
 
@@ -25,8 +25,8 @@ vi.mock("../../src/supadata/youtubeCaptions", async (importOriginal) => ({
   fetchCaptions: mocks.fetchCaptions,
 }));
 
-vi.mock("../../src/transcription/transcribeJob", () => ({
-  handleTranscribeJob: mocks.handleTranscribeJob,
+vi.mock("../../src/transcription/audioJob", () => ({
+  completeAudioJob: mocks.completeAudioJob,
 }));
 
 vi.mock("../../src/sse/hub", () => ({
@@ -58,10 +58,13 @@ describe("handleYoutubeCaptionsJob", () => {
     await handleYoutubeCaptionsJob(message, delivery);
 
     expect(mocks.fetchCaptions).toHaveBeenCalledWith(url);
-    expect(mocks.handleTranscribeJob).toHaveBeenCalledWith(
-      { audioUploadId, ...captions },
+    expect(mocks.completeAudioJob).toHaveBeenCalledWith(
+      audioUploadId,
       delivery,
+      expect.any(Function),
     );
+    const transcriptOf = mocks.completeAudioJob.mock.calls[0]![2];
+    expect(await transcriptOf()).toEqual({ ...captions, fromCaptions: true });
     expect(mocks.failAudioJobById).not.toHaveBeenCalled();
   });
 
@@ -89,7 +92,7 @@ describe("handleYoutubeCaptionsJob", () => {
     expect(mocks.sendEvent).toHaveBeenCalledWith("user_01", "jobUpdated", {
       audioUploadId,
     });
-    expect(mocks.handleTranscribeJob).not.toHaveBeenCalled();
+    expect(mocks.completeAudioJob).not.toHaveBeenCalled();
   });
 
   it("fails the job with what went wrong", async () => {

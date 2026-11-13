@@ -109,7 +109,6 @@ describe("handleTranscribeJob", () => {
 
   describe("storing a transcript", () => {
     const transcribed = [{ start: 0, end: 2, text: "the audio, transcribed" }];
-    const captions = [{ start: 0, end: 2, text: "the captions" }];
 
     beforeEach(() => {
       mocks.transcribeAI.mockResolvedValue({
@@ -119,35 +118,7 @@ describe("handleTranscribeJob", () => {
       mocks.saveCompletedTranscript.mockResolvedValue(true);
     });
 
-    it("stores the captions the message carries, without transcribing audio", async () => {
-      await handleTranscribeJob(
-        { audioUploadId, segments: captions, language: "ar" },
-        firstAttempt,
-      );
-
-      expect(mocks.signUrl).not.toHaveBeenCalled();
-      expect(mocks.transcribeAI).not.toHaveBeenCalled();
-      expect(mocks.saveCompletedTranscript).toHaveBeenCalledWith(
-        audioUploadId,
-        { segments: captions, language: "ar", fromCaptions: true },
-        claimToken,
-      );
-    });
-
-    it("stores captions from a message without a language as in none", async () => {
-      await handleTranscribeJob(
-        { audioUploadId, segments: captions },
-        firstAttempt,
-      );
-
-      expect(mocks.saveCompletedTranscript).toHaveBeenCalledWith(
-        audioUploadId,
-        { segments: captions, language: null, fromCaptions: true },
-        claimToken,
-      );
-    });
-
-    it("transcribes the audio when the message carries no captions", async () => {
+    it("stores the audio, transcribed", async () => {
       await handleTranscribeJob(audioInput, firstAttempt);
 
       expect(mocks.signUrl).toHaveBeenCalledWith("user_01", {
