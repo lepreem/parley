@@ -76,8 +76,8 @@ describe("POST /auth/guest", () => {
     });
 
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { userId: string; isGuest: boolean };
-    expect(body).toMatchObject({ isGuest: true });
+    const body = (await res.json()) as { userId: string; tier: string };
+    expect(body).toMatchObject({ tier: "guest" });
     expect(body.userId).toMatch(/^guest_[0-9a-f-]{36}$/);
     expect(mockEnsureUser).toHaveBeenCalledWith(body.userId);
 
@@ -90,7 +90,7 @@ describe("POST /auth/guest", () => {
     });
     expect(await me.json()).toMatchObject({
       userId: body.userId,
-      isGuest: true,
+      tier: "guest",
     });
   });
 
@@ -102,7 +102,7 @@ describe("POST /auth/guest", () => {
       headers: { Origin: origin, Cookie: await guestCookieHeader(guestId) },
     });
 
-    expect(await res.json()).toMatchObject({ userId: guestId, isGuest: true });
+    expect(await res.json()).toMatchObject({ userId: guestId, tier: "guest" });
     expect(mockEnsureUser).not.toHaveBeenCalled();
     expect(sessionCookieOf(res)).toBeUndefined();
   });
@@ -120,7 +120,7 @@ describe("POST /auth/guest", () => {
 
     expect(await res.json()).toMatchObject({
       userId: "user_01SIGNEDIN",
-      isGuest: false,
+      tier: "signedIn",
     });
     expect(mockEnsureUser).not.toHaveBeenCalled();
   });

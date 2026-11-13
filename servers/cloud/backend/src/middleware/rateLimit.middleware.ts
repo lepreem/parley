@@ -9,6 +9,7 @@ import {
   type RateLimitName,
 } from "../rateLimit/policies";
 import type { AuthEnv } from "./auth.middleware";
+import type { Tier } from "@parley/contract/tiers";
 import { getEnv } from "../env";
 
 const rateLimitMessage = {
@@ -66,11 +67,12 @@ const keyOf: Record<RateLimitKey, (c: Context) => string> = {
 function createLimiter(
   name: RateLimitName,
   {
-    onlyGuests = false,
+    onlyTier,
     message = rateLimitMessage,
     skipFailedRequests = false,
   }: {
-    onlyGuests?: boolean;
+    /** Count this tier's requests only; anyone else passes. */
+    onlyTier?: Tier;
     /** What a refused request is told, in place of the generic message. */
     message?: { message: string };
     /** Don't count requests that fail, such as a 400 for a bad body. */
@@ -89,8 +91,8 @@ function createLimiter(
     store: memory.rateLimitCounts.createStore(),
     message,
     skipFailedRequests,
-    // Behind requireAuth, which says who's a guest.
-    ...(onlyGuests ? { skip: (c: Context) => c.get("isGuest") !== true } : {}),
+    // Behind requireAuth, which says whose tier it is.
+    ...(onlyTier ? { skip: (c: Context) => c.get("tier") !== onlyTier } : {}),
   });
 }
 
@@ -106,7 +108,7 @@ export const conversationRateLimiter = createLimiter("conversation");
 export const chatTurnRateLimiter = createLimiter("chatTurn");
 /** Counts guests' turns only; anyone else passes. */
 export const guestChatTurnRateLimiter = createLimiter("guestChatTurn", {
-  onlyGuests: true,
+  onlyTier: "guest",
 });
 export const modelRateLimiter = createLimiter("model");
 export const imageReadRateLimiter = createLimiter("imageRead");

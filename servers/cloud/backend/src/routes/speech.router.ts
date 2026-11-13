@@ -6,7 +6,7 @@ import {
   dictationRateLimiter,
 } from "../middleware/rateLimit.middleware";
 import {
-  refuseGuests,
+  requireFeature,
   requireAuth,
   type AuthEnv,
 } from "../middleware/auth.middleware";
@@ -18,7 +18,7 @@ export const speechRouter = new Hono<AuthEnv>();
 speechRouter.post(
   "/transcribe",
   requireAuth,
-  refuseGuests,
+  requireFeature("dictation"),
   dictationRateLimiter,
   dictationDailyRateLimiter,
   audioClipLimit,

@@ -27,17 +27,6 @@ const SAME_LAUNCH_DAYS = 14;
  */
 const RENAMED_TIER_PRICE_RATIO = 0.7;
 
-/**
- * Guests get models that cost no more than this, for input and output both:
- * GPT-6 Luna's price. A price rather than a model, so guest chat doesn't end
- * when one model leaves the catalog. A model without a fixed price (a
- * router's) isn't one of them.
- */
-const GUEST_PRICE_CEILING: ModelPricing = {
-  inputPerMillionTokens: 0.1,
-  outputPerMillionTokens: 0.5,
-};
-
 /* ------------------------------------------------------------------ prices */
 
 /**
@@ -159,18 +148,6 @@ export function offeredModels(
     ...model,
     replacedBy: replacements.get(model.id)?.id ?? null,
   }));
-}
-
-/** The models a guest can chat with. */
-export function guestModelsOf(models: readonly ChatModel[]): ChatModel[] {
-  return models.filter(
-    ({ pricing }) =>
-      pricing !== null &&
-      pricing.inputPerMillionTokens <=
-        GUEST_PRICE_CEILING.inputPerMillionTokens &&
-      pricing.outputPerMillionTokens <=
-        GUEST_PRICE_CEILING.outputPerMillionTokens,
-  );
 }
 
 /* ------------------------------------------------------------------- names */

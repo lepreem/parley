@@ -200,13 +200,14 @@ describe("listGuestModels", () => {
       { ...sampleModel, id: "openrouter/auto", pricing: null },
     ]);
 
-    expect((await chat.listGuestModels()).map((model) => model.id)).toEqual([
-      "at-ceiling/model",
-      "cheap/model",
-      "free/model:free",
-    ]);
-    expect(await chat.isGuestModel("cheap/model")).toBe(true);
-    expect(await chat.isGuestModel("dear-output/model")).toBe(false);
+    expect(
+      (await chat.listModelsFor("guest")).map((model) => model.id),
+    ).toEqual(["at-ceiling/model", "cheap/model", "free/model:free"]);
+    expect(await chat.offersModelTo("guest", "cheap/model")).toBe(true);
+    expect(await chat.offersModelTo("guest", "dear-output/model")).toBe(false);
+    expect(await chat.offersModelTo("signedIn", "dear-output/model")).toBe(
+      true,
+    );
   });
 });
 
@@ -260,10 +261,12 @@ describe("chatAI", () => {
     mockResponsesSend.mockResolvedValue(responseOf("hi"));
 
     await chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
-      guest: true,
+      tier: "guest",
     });
-    await chat.complete(MODEL_ID, [{ role: "user", content: "yo" }]);
-    await chat.generateTitle("conversation", "yo", { guest: true });
+    await chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
+      tier: "signedIn",
+    });
+    await chat.generateTitle("conversation", "yo", { tier: "guest" });
 
     expect(sentWithKeys).toEqual([
       process.env.OPENROUTER_GUEST_API_KEY,
@@ -276,9 +279,11 @@ describe("chatAI", () => {
     mockResponsesSend.mockResolvedValue((async function* () {})());
 
     await chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
+      tier: "signedIn",
       onDelta: () => {},
     });
     await chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
+      tier: "signedIn",
       onDelta: () => {},
       webSearch: true,
       onSource: () => {},
@@ -320,6 +325,7 @@ describe("chatAI", () => {
       {
         maxOutputTokens: 100,
         sessionId: "conversation-1",
+        tier: "signedIn",
       },
     );
 
@@ -341,8 +347,10 @@ describe("chatAI", () => {
     mockResponsesSend.mockResolvedValue(responseOf("hi"));
     const turn: ChatTurn[] = [{ role: "user", content: "yo" }];
 
-    await chat.complete("~anthropic/claude-sonnet-latest", turn);
-    await chat.complete(MODEL_ID, turn);
+    await chat.complete("~anthropic/claude-sonnet-latest", turn, {
+      tier: "signedIn",
+    });
+    await chat.complete(MODEL_ID, turn, { tier: "signedIn" });
 
     const sent = mockResponsesSend.mock.calls.map(
       ([{ responsesRequest }]) => responsesRequest.cacheControl,
@@ -367,7 +375,7 @@ describe("chatAI", () => {
     const reply = await chat.complete(
       MODEL_ID,
       [{ role: "user", content: "yo" }],
-      { onDelta: () => {}, onUsage },
+      { onDelta: () => {}, onUsage, tier: "signedIn" },
     );
 
     expect(reply).toBe("hi");
@@ -432,6 +440,7 @@ describe("chatAI", () => {
     const onUnreadPage = vi.fn();
 
     await chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
+      tier: "signedIn",
       onDelta: () => {},
       webSearch: true,
       onSource,
@@ -460,6 +469,7 @@ describe("chatAI", () => {
 
     await expect(
       chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
+        tier: "signedIn",
         onDelta: () => {},
       }),
     ).rejects.toThrow("It broke");
@@ -534,6 +544,7 @@ describe("chatAI timeouts", () => {
 
   const streamChat = () =>
     chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
+      tier: "signedIn",
       onDelta: () => {},
     });
 
@@ -565,6 +576,7 @@ describe("chatAI timeouts", () => {
     );
     const outcome = track(
       chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
+        tier: "signedIn",
         onDelta: () => {},
         webSearch: true,
         onSource: () => {},
@@ -631,6 +643,7 @@ describe("chatAI timeouts", () => {
     );
     const outcome = track(
       chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
+        tier: "signedIn",
         onDelta: (delta) => {
           deltas.push(delta);
         },
@@ -667,7 +680,9 @@ describe("chatAI timeouts", () => {
     mockResponsesSend.mockImplementationOnce(
       (_request: unknown, { signal }: SendOptions) => abortableWait(signal),
     );
-    const outcome = track(chat.generateTitle("conversation", "hello"));
+    const outcome = track(
+      chat.generateTitle("conversation", "hello", { tier: "signedIn" }),
+    );
 
     await vi.advanceTimersByTimeAsync(TITLE_TIMEOUT_MS - 1);
     expect(outcome.settled).toBe(false);
@@ -691,6 +706,7 @@ describe("generateTitle", () => {
     const title = await chat.generateTitle(
       "conversation",
       "How should we organize the next quarter?",
+      { tier: "signedIn" },
     );
 
     expect(title).toBe("Quarterly planning");

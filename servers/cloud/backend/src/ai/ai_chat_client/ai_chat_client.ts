@@ -13,7 +13,12 @@ import type {
 } from "@openrouter/sdk/models";
 import { withTimeout } from "@parley/server-kit/runtime/withTimeout";
 import type { ChatModel } from "@parley/contract";
-import { guestModelsOf, offeredModels } from "./model_catalog";
+import {
+  allowsModelPrice,
+  CAPABILITIES,
+  type Tier,
+} from "@parley/contract/tiers";
+import { offeredModels } from "./model_catalog";
 
 const client = new OpenRouter({
   apiKey: getEnv().OPENROUTER_API_KEY,
@@ -35,8 +40,14 @@ const guestClient =
         serverURL: getEnv().OPENROUTER_BASE_URL,
       });
 
-function clientFor(guest: boolean) {
-  if (!guest) return client;
+/** The OpenRouter key each tier's turns are billed to. */
+const KEY_OF_TIER: Record<Tier, "main" | "guest"> = {
+  guest: "guest",
+  signedIn: "main",
+};
+
+function clientFor(tier: Tier) {
+  if (KEY_OF_TIER[tier] === "main") return client;
   if (!guestClient) throw new Error("Guest chat isn't enabled");
   return guestClient;
 }
@@ -263,8 +274,8 @@ type ChatOptions = {
   timeoutMs?: number | undefined;
   /** Ends the call early: the stop button, through the reply registry. */
   signal?: AbortSignal | undefined;
-  /** Bills the call to the guest key. */
-  guest?: boolean | undefined;
+  /** Whose call it is, which picks the key it's billed to. */
+  tier: Tier;
   /** Lets the model search the web and open pages, if it decides it needs to. */
   webSearch?: boolean | undefined;
   /** Each page the model found or read, as OpenRouter describes it. */
@@ -276,7 +287,7 @@ type ChatOptions = {
 async function complete(
   model: string,
   messages: ChatTurn[],
-  opts: ChatOptions = {},
+  opts: ChatOptions,
 ): Promise<string> {
   const responsesRequest: ResponsesRequest = {
     model,
@@ -313,7 +324,7 @@ async function complete(
     signal: opts.signal,
   };
 
-  const sender = clientFor(opts.guest ?? false);
+  const sender = clientFor(opts.tier);
   return withTimeout(timeoutOptions, (ctx) =>
     opts.onDelta
       ? streamChatAI(sender, responsesRequest, opts.onDelta, opts, ctx)
@@ -352,13 +363,16 @@ async function findModel(id: string): Promise<ChatModel | undefined> {
   return (await listModels()).find((model) => model.id === id);
 }
 
-/** The models a guest can chat with. */
-async function listGuestModels(): Promise<ChatModel[]> {
-  return guestModelsOf(await listModels());
+/** The models this tier can chat with. */
+async function listModelsFor(tier: Tier): Promise<ChatModel[]> {
+  const capabilities = CAPABILITIES[tier];
+  return (await listModels()).filter((model) =>
+    allowsModelPrice(capabilities, model.pricing),
+  );
 }
 
-async function isGuestModel(id: string): Promise<boolean> {
-  return (await listGuestModels()).some((model) => model.id === id);
+async function offersModelTo(tier: Tier, id: string): Promise<boolean> {
+  return (await listModelsFor(tier)).some((model) => model.id === id);
 }
 
 /**
@@ -385,7 +399,7 @@ const DEFAULT_TITLE_GENERATION_MODEL = "~openai/gpt-luna-latest";
 async function generateTitle(
   kind: "conversation" | "transcript",
   content: string,
-  { guest = false }: { guest?: boolean } = {},
+  { tier }: { tier: Tier },
 ): Promise<string> {
   const title = await complete(
     DEFAULT_TITLE_GENERATION_MODEL,
@@ -399,7 +413,7 @@ async function generateTitle(
       maxOutputTokens: 24,
       reasoningEffort: "none",
       timeoutMs: TITLE_TIMEOUT_MS,
-      guest,
+      tier,
     },
   );
 
@@ -412,9 +426,9 @@ export const chat = {
   defaultModelId: DEFAULT_CHAT_MODEL,
   recommendedModelIds: RECOMMENDED_CHAT_MODELS,
   listModels,
-  listGuestModels,
+  listModelsFor,
   findModel,
-  isGuestModel,
+  offersModelTo,
   generateTitle,
   ping,
 };
