@@ -6,7 +6,7 @@ import {
   youtubeDailyRateLimiter,
 } from "../middleware/rateLimit.middleware";
 import {
-  refuseGuests,
+  requireFeature,
   requireAuth,
   type AuthEnv,
 } from "../middleware/auth.middleware";
@@ -20,7 +20,7 @@ uploadRouter.route("/image", imagesRouter);
 
 // Budgets are per route: one upload is a mint and a confirm, and only the
 // mint stands for the upload.
-uploadRouter.use("*", requireAuth, refuseGuests);
+uploadRouter.use("*", requireAuth, requireFeature("attachments"));
 
 uploadRouter.post(
   "/audio",

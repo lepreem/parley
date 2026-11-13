@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/contract.ts",
     "./limits": "./src/limits.ts",
-    "./youtube": "./src/youtube.ts"
+    "./youtube": "./src/youtube.ts",
+    "./tiers": "./src/tiers.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

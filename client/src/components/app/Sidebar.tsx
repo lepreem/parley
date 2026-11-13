@@ -6,7 +6,7 @@ import {
   useRenameConversationMutation,
 } from "../../hooks/queries/useConversationQueries";
 import { useAuth } from "../../hooks/auth/useAuth";
-import { useIsGuest } from "../../hooks/auth/useIsGuest";
+import { useCapabilities, useTier } from "../../hooks/auth/useCapabilities";
 import { useServer } from "../../hooks/server/useServer";
 import { useServerReady } from "../../hooks/server/useServerReady";
 import {
@@ -98,7 +98,8 @@ export function Sidebar() {
   const server = useServer();
   const { user, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const guest = useIsGuest();
+  const can = useCapabilities();
+  const guest = useTier() === "guest";
   const { sidebarOpen, setSidebarOpen, setSourcesOpen } = useShell();
   const ready = useServerReady();
   const conversationsQuery = useConversationsQuery(ready);
@@ -165,8 +166,8 @@ export function Sidebar() {
             <Icon name="plus" className="h-4 w-4" />
             New chat
           </Link>
-          {/* Guests chat in text only, so have no sources. */}
-          {!guest && (
+          {/* Without attachments there are no sources. */}
+          {can.attachments && (
             <button
               type="button"
               onClick={() => {

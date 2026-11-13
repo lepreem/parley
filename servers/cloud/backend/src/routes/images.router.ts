@@ -6,7 +6,7 @@ import {
   uploadRateLimiter,
 } from "../middleware/rateLimit.middleware";
 import {
-  refuseGuests,
+  requireFeature,
   requireAuth,
   type AuthEnv,
 } from "../middleware/auth.middleware";
@@ -20,7 +20,7 @@ import {
  */
 export const imagesRouter = new Hono<AuthEnv>();
 
-imagesRouter.use("*", requireAuth, refuseGuests);
+imagesRouter.use("*", requireAuth, requireFeature("attachments"));
 
 imagesRouter.post(
   "/",

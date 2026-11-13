@@ -13,7 +13,7 @@ vi.mock("../../src/ai/ai_chat_client/ai_chat_client", async (importActual) => {
     >();
   return {
     ...actual,
-    chat: { ...actual.chat, listModels: mockListChatModels },
+    chat: { ...actual.chat, listModelsFor: mockListChatModels },
   };
 });
 
@@ -65,6 +65,7 @@ describe("GET /models/chat", () => {
       ]) as unknown,
     });
     expect(mockListChatModels).toHaveBeenCalledTimes(1);
+    expect(mockListChatModels).toHaveBeenCalledWith("signedIn");
   });
 
   it("gzips the catalog when the client accepts it", async () => {

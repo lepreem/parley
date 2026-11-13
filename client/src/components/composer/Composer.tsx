@@ -11,7 +11,7 @@ import type {
   ReasoningEffort,
 } from "../../api/models";
 import { useShell } from "../app/shellContext";
-import { useIsGuest } from "../../hooks/auth/useIsGuest";
+import { useCapabilities } from "../../hooks/auth/useCapabilities";
 import { findYoutubeUrl } from "../../media/youtube";
 import { useSources } from "../../sources/useSources";
 import { Icon } from "../ui/Icon";
@@ -90,8 +90,8 @@ export function Composer({
   onSend,
 }: ComposerProps) {
   const { setSourcesOpen } = useShell();
-  // Guests chat in text only; the server refuses their uploads.
-  const guest = useIsGuest();
+  // What the server would refuse isn't offered.
+  const can = useCapabilities();
   const {
     sources,
     addFiles,
@@ -144,7 +144,7 @@ export function Composer({
 
   const candidateUrl = findYoutubeUrl(text);
   const offeredUrl =
-    !guest &&
+    can.attachments &&
     candidateUrl &&
     !dismissedUrls.includes(candidateUrl) &&
     !sources.some((source) => source.youtubeUrl === candidateUrl)
@@ -160,7 +160,7 @@ export function Composer({
 
   const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
     const files = Array.from(event.clipboardData.files);
-    if (guest || files.length === 0) return;
+    if (!can.attachments || files.length === 0) return;
     event.preventDefault();
     addFiles(files);
   };
@@ -210,12 +210,14 @@ export function Composer({
             onChange={(event) => onTextChange(event.target.value)}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
-            placeholder={guest ? "Ask anything…" : "Ask about your sources…"}
+            placeholder={
+              can.attachments ? "Ask about your sources…" : "Ask anything…"
+            }
             className="block max-h-60 w-full resize-none bg-transparent px-4 pt-3.5 text-[15px] leading-relaxed outline-none placeholder:text-faint"
           />
 
           <div className="flex items-center gap-1 px-2.5 pb-2.5 pt-1">
-            {!guest && (
+            {can.attachments && (
               <AttachMenu
                 onAddFiles={addFiles}
                 onBrowseSources={() => setSourcesOpen(true)}
@@ -233,7 +235,7 @@ export function Composer({
               loading={modelsLoading}
               error={modelsError}
             />
-            {!guest && (
+            {can.chooseEffort && (
               <EffortPicker
                 reasoning={
                   models.find((model) => model.id === modelId)?.reasoning ??
@@ -285,7 +287,7 @@ export function Composer({
                 </button>
               </>
             )}
-            {!guest && canDictate() && (
+            {can.dictation && canDictate() && (
               <button
                 type="button"
                 onClick={

@@ -1,6 +1,7 @@
 import { QueryClient, type Query } from "@tanstack/react-query";
 import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persister";
 import type { Server } from "../api/server";
+import type { Tier } from "@parley/contract/tiers";
 
 export const queryClient = new QueryClient({
   defaultOptions: {
@@ -21,8 +22,8 @@ type ServerId = Server["id"];
  */
 export const queryKeys = {
   /** A guest is offered fewer models, so their catalog is kept apart. */
-  chatModels: (server: ServerId, guest: boolean) =>
-    [server, "models", "chat", guest ? "guest" : "member"] as const,
+  chatModels: (server: ServerId, tier: Tier | null) =>
+    [server, "models", "chat", tier ?? "local"] as const,
   jobLists: (server: ServerId) => [server, "jobs"] as const,
   everyJob: (server: ServerId) => [server, "job"] as const,
   job: (server: ServerId, audioUploadId: string) =>
