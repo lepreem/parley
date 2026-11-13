@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Model } from "@openrouter/sdk/models";
 import { allowsModelPrice, CAPABILITIES } from "@parley/contract/tiers";
-import { offeredModels } from "../../src/ai/ai_chat_client/model_catalog";
+import { offeredModels } from "../../src/ai/chat/model_catalog";
 
 const DAY = 24 * 60 * 60;
 

@@ -15,6 +15,30 @@ function isInsideDirectory(filePath, directory) {
   );
 }
 
+/**
+ * The modules that keep their files separate and hold the importer as one of
+ * those files, not the entry: it may import nothing else in the module.
+ */
+function siblingImportRules(modules, importerPath) {
+  return modules
+    .filter(({ separateFiles }) => separateFiles)
+    .map(({ directory, entry }) => {
+      const moduleDirectory = path.resolve(directory);
+      return {
+        moduleDirectory,
+        entry,
+        publicEntry: withoutTypeScriptExtension(
+          path.join(moduleDirectory, entry),
+        ),
+      };
+    })
+    .filter(
+      ({ moduleDirectory, publicEntry }) =>
+        isInsideDirectory(importerPath, moduleDirectory) &&
+        importerPath !== publicEntry,
+    );
+}
+
 export default {
   meta: {
     type: "problem",
@@ -34,6 +58,11 @@ export default {
               properties: {
                 directory: { type: "string" },
                 entry: { type: "string" },
+                /**
+                 * The files beside the entry don't import each other either:
+                 * whatever needs two of them is put together in the entry.
+                 */
+                separateFiles: { type: "boolean" },
               },
               required: ["directory", "entry"],
               additionalProperties: false,
@@ -47,14 +76,17 @@ export default {
     messages: {
       privateModule:
         "Only {{entry}}.ts is public outside {{directory}}. Import from that entry point instead.",
+      siblingImport:
+        "Files in {{directory}} don't import each other. Put what needs both together in {{entry}}.ts.",
     },
   },
 
   create(context) {
     const [options] = context.options;
     const importerPath = withoutTypeScriptExtension(context.filename);
-    // A module's own files import each other freely; only outsiders are held
-    // to the entry.
+    const siblingRules = siblingImportRules(options.modules, importerPath);
+    // A module's own files import each other freely, unless it keeps them
+    // separate; only outsiders are held to the entry.
     const modules = options.modules
       .map(({ directory, entry }) => {
         const moduleDirectory = path.resolve(directory);
@@ -71,7 +103,7 @@ export default {
           !isInsideDirectory(importerPath, moduleDirectory),
       );
 
-    if (modules.length === 0) return {};
+    if (modules.length === 0 && siblingRules.length === 0) return {};
 
     function checkImportSource(sourceNode) {
       if (
@@ -84,6 +116,21 @@ export default {
       const importedPath = withoutTypeScriptExtension(
         path.resolve(path.dirname(importerPath), sourceNode.value),
       );
+
+      const sibling = siblingRules.find(({ moduleDirectory }) =>
+        isInsideDirectory(importedPath, moduleDirectory),
+      );
+      if (sibling) {
+        context.report({
+          node: sourceNode,
+          messageId: "siblingImport",
+          data: {
+            directory: path.basename(sibling.moduleDirectory),
+            entry: sibling.entry,
+          },
+        });
+        return;
+      }
       const module = modules.find(({ moduleDirectory }) =>
         isInsideDirectory(importedPath, moduleDirectory),
       );

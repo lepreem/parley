@@ -25,8 +25,8 @@ vi.mock("../../src/memory/modelLists", async (importOriginal) => ({
 /** Caching itself is covered in modelLists.test.ts; here the fetch always runs. */
 const runFetch = <T>(_name: unknown, fetch: () => Promise<T>) => fetch();
 
-import * as transcription from "../../src/ai/ai_transcribe_client/ai_transcribe_client";
-import { getTranscribeModelData } from "../../src/ai/ai_transcribe_client/ai_transcribe_client";
+import * as transcription from "../../src/ai/transcription";
+import { getTranscribeModelData } from "../../src/ai/transcription";
 
 const sttResponse = {
   stt: [

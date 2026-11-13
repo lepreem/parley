@@ -69,7 +69,7 @@ audio itself, from the person's own connection.
 ## Move transcription to OpenRouter Whisper
 
 Uploaded files and YouTube videos without captions run on Deepgram
-(`src/ai/ai_transcribe_client/ai_transcribe_client.ts`). When the prepaid
+(`src/ai/transcription/deepgram.ts`). When the prepaid
 credit gets low ($190.07 on 2026-11-03, about 737 hours), move them to
 `openai/whisper-large-v3-turbo` through OpenRouter: $0.0002 to $0.00067 a
 minute against Deepgram's $0.0043. Don't run Whisper on the VPS, as the local

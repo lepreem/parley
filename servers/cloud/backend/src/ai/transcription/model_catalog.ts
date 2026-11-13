@@ -1,6 +1,7 @@
 /**
  * Which of Deepgram's speech-to-text models the app transcribes with.
- * Everything that decides it is here, private to ai_transcribe_client.ts.
+ * Everything that decides it is here; it reaches the rest of the app through
+ * ./index.ts.
  */
 
 /** One of Deepgram's speech-to-text models, as of its newest version. */

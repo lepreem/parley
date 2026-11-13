@@ -3,7 +3,7 @@ import {
   currentModel,
   newestVersions,
   type DeepgramModel,
-} from "../../src/ai/ai_transcribe_client/model_catalog";
+} from "../../src/ai/transcription/model_catalog";
 
 /** A model as Deepgram lists it: only what the catalog reads. */
 function listed(

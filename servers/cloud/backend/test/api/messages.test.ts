@@ -123,11 +123,8 @@ vi.mock("../../src/storage/sign", () => ({
 
 // buildUserTurn is the real one: what the model is handed for an image turn is
 // exactly what these tests are checking.
-vi.mock("../../src/ai/ai_chat_client/ai_chat_client", async (importActual) => {
-  const actual =
-    await importActual<
-      typeof import("../../src/ai/ai_chat_client/ai_chat_client")
-    >();
+vi.mock("../../src/ai/chat", async (importActual) => {
+  const actual = await importActual<typeof import("../../src/ai/chat")>();
   return {
     ...actual,
     findModel: mockFindChatModel,
@@ -155,7 +152,7 @@ import {
   MAX_HISTORY_MESSAGES,
 } from "../../src/chat/contextWindow";
 import { MAX_TRANSCRIPTS } from "../../src/schema/messages.schema";
-import { NoRoomToReply } from "../../src/ai/ai_chat_client/ai_chat_client";
+import { NoRoomToReply } from "../../src/ai/chat";
 import {
   authedHeaders,
   guestCookieHeader,

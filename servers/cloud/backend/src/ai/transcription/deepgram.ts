@@ -1,16 +1,8 @@
-/** Speech-to-text, from Deepgram. */
+/** A file's speech-to-text, from Deepgram, and Deepgram's list of models. */
 
 import { DeepgramClient } from "@deepgram/sdk";
 import type { TranscriptSegment } from "@parley/server-kit/transcription/transcript";
 import { getEnv } from "../../env";
-import * as memory from "../../memory";
-import {
-  currentModel,
-  newestVersions,
-  type TranscribeModelData,
-} from "./model_catalog";
-
-export { transcribeDictation } from "./dictation";
 
 const deepgram = new DeepgramClient({
   apiKey: getEnv().DEEPGRAM_API_KEY,
@@ -81,45 +73,28 @@ export async function transcribe(
   };
 }
 
-async function fetchTranscribeModelData(): Promise<TranscribeModelData> {
+/**
+ * Every speech-to-text model Deepgram lists, once per version, language set
+ * and mode.
+ */
+export async function listModels() {
   const response = await deepgram.manage.v1.models.list();
 
-  return newestVersions(
-    (response.stt ?? []).flatMap((model) => {
-      const id = model.canonical_name ?? model.name;
-      if (!id) return [];
-      return [
-        {
-          name: model.name ?? id,
-          canonicalName: id,
-          architecture: model.architecture,
-          languages: model.languages,
-          version: model.version,
-          uuid: model.uuid,
-          batch: model.batch,
-          streaming: model.streaming,
-          formattedOutput: model.formatted_output,
-        },
-      ];
-    }),
-  );
-}
-
-/** Exported for tests that seed the catalog; callers use the namespace. */
-export function getTranscribeModelData(): Promise<TranscribeModelData> {
-  // Served stale while it refreshes, like the chat catalog, so no request
-  // waits on Deepgram once a process has loaded it.
-  return memory.modelLists.getOrSet(
-    memory.modelLists.CACHE_KEYS.deepgramTranscribeModels,
-    fetchTranscribeModelData,
-    { serveStale: true },
-  );
-}
-
-/**
- * The model a file is transcribed with: Deepgram's current general model.
- * Undefined only while Deepgram's catalog has none.
- */
-export async function model(): Promise<string | undefined> {
-  return currentModel(await getTranscribeModelData());
+  return (response.stt ?? []).flatMap((model) => {
+    const id = model.canonical_name ?? model.name;
+    if (!id) return [];
+    return [
+      {
+        name: model.name ?? id,
+        canonicalName: id,
+        architecture: model.architecture,
+        languages: model.languages,
+        version: model.version,
+        uuid: model.uuid,
+        batch: model.batch,
+        streaming: model.streaming,
+        formattedOutput: model.formatted_output,
+      },
+    ];
+  });
 }

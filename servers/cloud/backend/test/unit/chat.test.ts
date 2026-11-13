@@ -34,11 +34,8 @@ vi.mock("@openrouter/sdk", () => ({
   },
 }));
 
-import * as chat from "../../src/ai/ai_chat_client/ai_chat_client";
-import {
-  buildUserTurn,
-  NoRoomToReply,
-} from "../../src/ai/ai_chat_client/ai_chat_client";
+import * as chat from "../../src/ai/chat";
+import { buildUserTurn, NoRoomToReply } from "../../src/ai/chat";
 
 const MODEL_ID = "openai/gpt-4o-mini";
 

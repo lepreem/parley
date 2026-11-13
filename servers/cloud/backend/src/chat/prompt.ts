@@ -1,4 +1,4 @@
-import { chat, type ChatTurn } from "../ai";
+import { chat } from "../ai";
 
 const TRANSCRIPT_SEPARATOR = "\n\n";
 
@@ -16,10 +16,10 @@ export function withTranscripts(
  * so a turn without them keeps whichever role it had.
  */
 function toHistoryTurn(
-  role: ChatTurn["role"],
+  role: chat.ChatTurn["role"],
   content: string,
   imageUrls: readonly string[],
-): ChatTurn {
+): chat.ChatTurn {
   return imageUrls.length > 0
     ? chat.buildUserTurn(content, imageUrls)
     : { role, content };
@@ -28,12 +28,12 @@ function toHistoryTurn(
 /** The whole prompt, oldest turn first, ending on the new one. */
 export function buildPrompt(
   historyNewestFirst: readonly {
-    role: ChatTurn["role"];
+    role: chat.ChatTurn["role"];
     promptContent: string;
     imageUrls: readonly string[];
   }[],
-  newTurn: ChatTurn,
-): ChatTurn[] {
+  newTurn: chat.ChatTurn,
+): chat.ChatTurn[] {
   return [
     ...historyNewestFirst
       .map((turn) =>
@@ -44,7 +44,7 @@ export function buildPrompt(
   ];
 }
 
-export function countImageInputs(turns: readonly ChatTurn[]) {
+export function countImageInputs(turns: readonly chat.ChatTurn[]) {
   return turns.reduce(
     (count, turn) =>
       Array.isArray(turn.content)

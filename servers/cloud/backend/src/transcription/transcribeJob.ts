@@ -1,4 +1,4 @@
-import { transcription, type Transcription } from "../ai";
+import { transcription } from "../ai";
 import { sign } from "../storage";
 import * as data from "../data";
 import { logger } from "@parley/server-kit/runtime/logger";
@@ -59,7 +59,7 @@ type ClaimedJob = NonNullable<
 async function transcribeAudio(
   job: ClaimedJob,
   cancelled: AbortSignal,
-): Promise<Transcription> {
+): Promise<transcription.Transcription> {
   cancelled.throwIfAborted();
   const model = await transcription.model();
   if (!model) {

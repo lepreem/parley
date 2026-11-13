@@ -5,12 +5,9 @@ const { mockListChatModels } = vi.hoisted(() => ({
   mockListChatModels: vi.fn(),
 }));
 
-vi.mock("../../src/ai/ai_chat_client/ai_chat_client", async (importActual) => {
+vi.mock("../../src/ai/chat", async (importActual) => {
   // importActual is the correct way to get real values inside vi.mock
-  const actual =
-    await importActual<
-      typeof import("../../src/ai/ai_chat_client/ai_chat_client")
-    >();
+  const actual = await importActual<typeof import("../../src/ai/chat")>();
   return {
     ...actual,
     listModelsFor: mockListChatModels,

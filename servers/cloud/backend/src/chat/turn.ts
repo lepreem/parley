@@ -8,7 +8,7 @@ import type { ReplyInProgressEntry } from "@parley/server-kit/memory/repliesInPr
 import { logger, messageOf } from "@parley/server-kit/runtime/logger";
 import { addSource } from "@parley/server-kit/webSources";
 import * as data from "../data";
-import { chat, type ChatTurn } from "../ai";
+import { chat } from "../ai";
 import { measurePreparation } from "../metrics/preparationMetrics";
 import * as uploads from "../uploads/uploads";
 import type { messageCreateBodySchema } from "../schema/messages.schema";
@@ -95,7 +95,7 @@ export class TurnRejected extends Error {
 }
 
 type AdmittedTurn = {
-  role: ChatTurn["role"];
+  role: chat.ChatTurn["role"];
   promptContent: string;
   contextCharCount: number;
   imageUrls: string[];
@@ -103,7 +103,7 @@ type AdmittedTurn = {
 
 export type PreparedTurn = {
   /** The prompt, oldest turn first. */
-  prompt: ChatTurn[];
+  prompt: chat.ChatTurn[];
   /** Each replayed turn's length, newest first, for the next turn's window. */
   historyCharCounts: number[];
   newTurnCharCount: number;

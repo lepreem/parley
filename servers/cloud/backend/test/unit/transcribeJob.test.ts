@@ -22,7 +22,7 @@ vi.mock("../../src/data", () => ({
   transcripts: { saveCompletedTranscript: mocks.saveCompletedTranscript },
 }));
 
-vi.mock("../../src/ai/ai_transcribe_client/ai_transcribe_client", () => ({
+vi.mock("../../src/ai/transcription", () => ({
   transcribe: mocks.transcribeAI,
   model: async () => "nova-3-general",
 }));

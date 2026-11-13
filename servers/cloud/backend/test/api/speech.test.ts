@@ -19,7 +19,7 @@ vi.mock("../../src/db", async () => ({
   ...(await import("../helpers/dbTableStubs")).tableStubs,
 }));
 
-vi.mock("../../src/ai/ai_transcribe_client/dictation", () => ({
+vi.mock("../../src/ai/transcription/dictation", () => ({
   transcribeDictation: mockTranscribeDictation,
 }));
 

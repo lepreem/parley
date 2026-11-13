@@ -50,7 +50,7 @@ vi.mock("../../src/data/storageLedger.data", () => ({
   findLedgerEntry: mockFindLedgerEntry,
 }));
 
-vi.mock("../../src/ai/ai_transcribe_client/ai_transcribe_client", () => ({
+vi.mock("../../src/ai/transcription", () => ({
   getTranscribeModelData: vi.fn(),
   model: async () => "nova-3-general",
 }));

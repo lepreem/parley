@@ -3,12 +3,35 @@ import type { ChatModel, ModelPricing } from "@parley/contract";
 import { REASONING_EFFORTS } from "@parley/server-kit/reasoningEfforts";
 
 /**
- * Which of OpenRouter's models the app offers, and which of those it archives.
- * Everything that decides what reaches the model picker is here, private to
- * ai_chat_client.ts.
+ * Which of OpenRouter's models the app offers, which of those it archives,
+ * and which it puts first. Everything that decides what reaches the model
+ * picker is here; it reaches the rest of the app through ./index.ts.
  */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * The model a new chat starts on. OpenRouter's "~…-latest" ids follow each
+ * family's newest model, but only while the provider keeps the family's name:
+ * OpenAI's "GPT Mini" became Luna, and its alias stopped moving.
+ */
+export const defaultModelId = "~openai/gpt-luna-latest";
+
+/** Listed first in the picker, in this order. */
+export const recommendedModelIds = [
+  ...new Set([
+    defaultModelId,
+
+    "~anthropic/claude-sonnet-latest",
+    "~anthropic/claude-opus-latest",
+
+    "~openai/gpt-sol-latest",
+    "~openai/gpt-terra-latest",
+    "~openai/gpt-luna-latest",
+
+    "~deepseek/deepseek-flash-latest",
+  ]),
+];
 
 /**
  * Models listed longer ago than this are left out. Intelligence keeps getting

@@ -116,7 +116,7 @@ function catalogModel(id: string, name: string, inputModalities: string[]) {
 
 /**
  * Includes the model titles are generated with, and the alias they name it by
- * (ai_chat_client/ai_chat_client.ts).
+ * (src/ai/chat/index.ts).
  */
 const CHAT_MODELS = [
   catalogModel("openai/gpt-6-luna", "GPT-6 Luna", ["text", "image"]),

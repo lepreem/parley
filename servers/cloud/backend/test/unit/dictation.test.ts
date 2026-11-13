@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { transcribeDictation } from "../../src/ai/ai_transcribe_client/dictation";
+import { transcribeDictation } from "../../src/ai/transcription/dictation";
 
 const clip = new Uint8Array([1, 2, 3]);
 

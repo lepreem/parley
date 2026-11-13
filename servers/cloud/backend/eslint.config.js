@@ -24,11 +24,8 @@ const modulesIn = (folder, suffix) =>
  * `bucket.delete()`. An index stands for its whole folder: `data.jobs.…`.
  */
 const namespaceModules = [
-  { file: srcDirectory("ai/ai_chat_client/ai_chat_client"), name: "chat" },
-  {
-    file: srcDirectory("ai/ai_transcribe_client/ai_transcribe_client"),
-    name: "transcription",
-  },
+  { file: srcDirectory("ai/chat/index"), name: "chat" },
+  { file: srcDirectory("ai/transcription/index"), name: "transcription" },
   { file: srcDirectory("auth/auth"), name: "workos" },
   { file: srcDirectory("data/index"), name: "data" },
   ...modulesIn("data", ".data.ts"),
@@ -141,14 +138,17 @@ export default defineConfig([
             { directory: srcDirectory("ai"), entry: "index" },
             { directory: srcDirectory("supadata"), entry: "index" },
             // Each client's catalog rules are its own: what to offer is
-            // decided in one place, next to the fetch.
+            // decided in one place, next to the fetch. The files beside the
+            // index don't import each other: the index puts them together.
             {
-              directory: srcDirectory("ai/ai_chat_client"),
-              entry: "ai_chat_client",
+              directory: srcDirectory("ai/chat"),
+              entry: "index",
+              separateFiles: true,
             },
             {
-              directory: srcDirectory("ai/ai_transcribe_client"),
-              entry: "ai_transcribe_client",
+              directory: srcDirectory("ai/transcription"),
+              entry: "index",
+              separateFiles: true,
             },
           ],
         },

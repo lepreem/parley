@@ -1,9 +1,6 @@
-/** Chat completions and the chat model catalog, from OpenRouter. */
+/** One chat call to OpenRouter: the request, streamed or not, under time limits. */
 
-import { getEnv } from "../../env";
-import { OpenRouter } from "@openrouter/sdk";
-
-import * as memory from "../../memory";
+import type { OpenRouter } from "@openrouter/sdk";
 import type {
   InputImage,
   InputText,
@@ -14,50 +11,6 @@ import type {
   Usage,
 } from "@openrouter/sdk/models";
 import { withTimeout } from "@parley/server-kit/runtime/withTimeout";
-import type { ChatModel } from "@parley/contract";
-import {
-  allowsModelPrice,
-  CAPABILITIES,
-  type Tier,
-} from "@parley/contract/tiers";
-import { offeredModels } from "./model_catalog";
-
-const client = new OpenRouter({
-  apiKey: getEnv().OPENROUTER_API_KEY,
-  // The load test's stand-in; unset, the SDK uses OpenRouter itself.
-  serverURL: getEnv().OPENROUTER_BASE_URL,
-});
-
-/**
- * Guests' turns go through a key of their own, whose credit limit is the cap
- * on what guests can spend. There is no guest client without that key, so a
- * guest turn can never fall back to the main one.
- */
-const guestApiKey = getEnv().OPENROUTER_GUEST_API_KEY;
-const guestClient =
-  guestApiKey === undefined
-    ? undefined
-    : new OpenRouter({
-        apiKey: guestApiKey,
-        serverURL: getEnv().OPENROUTER_BASE_URL,
-      });
-
-/** The OpenRouter key each tier's turns are billed to. */
-const KEY_OF_TIER: Record<Tier, "main" | "guest"> = {
-  guest: "guest",
-  signedIn: "main",
-};
-
-function clientFor(tier: Tier) {
-  if (KEY_OF_TIER[tier] === "main") return client;
-  if (!guestClient) throw new Error("Guest chat isn't enabled");
-  return guestClient;
-}
-
-/** Startup health check: fails if OpenRouter is unreachable or rejects the API key. */
-export async function ping(): Promise<void> {
-  await client.models.list();
-}
 
 export type ChatTurn = {
   role: "user" | "assistant";
@@ -100,7 +53,6 @@ const CHAT_FIRST_TOKEN_TIMEOUT_MS = 6 * 60 * 1000; // 6 minutes
 const CHAT_BETWEEN_CHUNKS_TIMEOUT_MS = 30 * 1000; // 30 seconds
 // A model can stop partway through a reply to search and read what it finds.
 const CHAT_BETWEEN_CHUNKS_ON_THE_WEB_TIMEOUT_MS = 2 * 60 * 1000; // 2 minutes
-const TITLE_TIMEOUT_MS = 15 * 1000; // 15 seconds
 
 /**
  * The most one turn can spend on the web, whichever model runs it. Exa charges
@@ -252,7 +204,7 @@ async function streamChatAI(
   return full;
 }
 
-type ChatOptions = {
+export type ChatOptions = {
   onDelta?: ((delta: string) => void | Promise<void>) | undefined;
   /**
    * What a streamed call spent, as the provider reports it. The report comes
@@ -276,8 +228,6 @@ type ChatOptions = {
   timeoutMs?: number | undefined;
   /** Ends the call early: the stop button, through the reply registry. */
   signal?: AbortSignal | undefined;
-  /** Whose call it is, which picks the key it's billed to. */
-  tier: Tier;
   /** Lets the model search the web and open pages, if it decides it needs to. */
   webSearch?: boolean | undefined;
   /** Each page the model found or read, as OpenRouter describes it. */
@@ -286,7 +236,9 @@ type ChatOptions = {
   onUnreadPage?: ((url: unknown, error: unknown) => void) | undefined;
 };
 
+/** The reply, sent through `sender`: streamed to onDelta when it's given. */
 export async function complete(
+  sender: OpenRouter,
   model: string,
   messages: ChatTurn[],
   opts: ChatOptions,
@@ -326,104 +278,9 @@ export async function complete(
     signal: opts.signal,
   };
 
-  const sender = clientFor(opts.tier);
   return withTimeout(timeoutOptions, (ctx) =>
     opts.onDelta
       ? streamChatAI(sender, responsesRequest, opts.onDelta, opts, ctx)
       : nonStreamChatAI(sender, responsesRequest, ctx.abortSignal),
   );
-}
-
-async function fetchChatModels(): Promise<ChatModel[]> {
-  // Only models that answer in text: every one listed is a chat model.
-  // Transcription is served by Deepgram.
-  const { data } = (await client.models.list({ outputModalities: "text" }))
-    .result;
-  return offeredModels(data);
-}
-
-// Every send looks up the chosen model here, so the cache keeps that lookup
-// off the network. Serving it stale while it refreshes means no send waits on
-// the catalog once a process has loaded it.
-export function listModels(): Promise<ChatModel[]> {
-  return memory.modelLists.getOrSet(
-    memory.modelLists.CACHE_KEYS.openRouterModels,
-    fetchChatModels,
-    {
-      serveStale: true,
-    },
-  );
-}
-
-/**
- * The model with this id, or undefined when it isn't one the app can chat
- * with. Checked up front, so an unknown model or images for a text-only one
- * is a 400 on the request rather than a provider rejection mid-stream, where
- * the only channel left is an SSE error event.
- */
-export async function findModel(id: string): Promise<ChatModel | undefined> {
-  return (await listModels()).find((model) => model.id === id);
-}
-
-/** The models this tier can chat with. */
-export async function listModelsFor(tier: Tier): Promise<ChatModel[]> {
-  const capabilities = CAPABILITIES[tier];
-  return (await listModels()).filter((model) =>
-    allowsModelPrice(capabilities, model.pricing),
-  );
-}
-
-export async function offersModelTo(tier: Tier, id: string): Promise<boolean> {
-  return (await listModelsFor(tier)).some((model) => model.id === id);
-}
-
-/**
- * The model a new chat starts on. OpenRouter's "~…-latest" ids follow each
- * family's newest model, but only while the provider keeps the family's name:
- * OpenAI's "GPT Mini" became Luna, and its alias stopped moving.
- */
-export const defaultModelId = "~openai/gpt-luna-latest";
-
-/** Listed first in the picker, in this order. */
-export const recommendedModelIds = [
-  ...new Set([
-    defaultModelId,
-
-    "~anthropic/claude-sonnet-latest",
-    "~anthropic/claude-opus-latest",
-
-    "~openai/gpt-sol-latest",
-    "~openai/gpt-terra-latest",
-    "~openai/gpt-luna-latest",
-
-    "~deepseek/deepseek-flash-latest",
-  ]),
-];
-
-const MAX_TITLE_INPUT_CHARS = 12_000;
-// The alias follows OpenAI's newest Luna.
-const DEFAULT_TITLE_GENERATION_MODEL = "~openai/gpt-luna-latest";
-
-export async function generateTitle(
-  kind: "conversation" | "transcript",
-  content: string,
-  { tier }: { tier: Tier },
-): Promise<string> {
-  const title = await complete(
-    DEFAULT_TITLE_GENERATION_MODEL,
-    [
-      {
-        role: "user",
-        content: `Generate a concise, descriptive title of at most eight words for this ${kind}. Return only the title.\n\n${content.slice(0, MAX_TITLE_INPUT_CHARS)}`,
-      },
-    ],
-    {
-      maxOutputTokens: 24,
-      reasoningEffort: "none",
-      timeoutMs: TITLE_TIMEOUT_MS,
-      tier,
-    },
-  );
-
-  return title.trim();
 }
