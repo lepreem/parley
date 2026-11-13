@@ -2,7 +2,7 @@ import { isIP } from "node:net";
 import type { Context } from "hono";
 import { rateLimiter } from "hono-rate-limiter";
 import { getConnInfo } from "@hono/node-server/conninfo";
-import { memory } from "../memory";
+import * as memory from "../memory";
 import {
   RATE_LIMIT_POLICIES,
   type RateLimitKey,

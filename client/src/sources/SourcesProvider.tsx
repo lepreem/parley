@@ -13,7 +13,7 @@ import {
   uploadImage,
 } from "../api/uploads";
 import { errorMessage } from "../api/http";
-import { audioCopies } from "../media/audioCopies";
+import * as audioCopies from "../media/audioCopies";
 import { prepareSpeech } from "../media/speech";
 import {
   classifyFile,

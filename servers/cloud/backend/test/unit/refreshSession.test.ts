@@ -5,7 +5,7 @@ const { mockRefreshAuthSession } = vi.hoisted(() => ({
 }));
 
 vi.mock("../../src/auth/auth", () => ({
-  workos: { refreshAuthSession: mockRefreshAuthSession },
+  refreshAuthSession: mockRefreshAuthSession,
 }));
 
 import { refreshSession } from "../../src/auth/refreshSession";

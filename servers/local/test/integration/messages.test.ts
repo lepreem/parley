@@ -15,7 +15,7 @@ import {
 } from "../../core/db";
 import { deleteAllRows } from "../helpers/inMemoryDb";
 import { CLAIM_LEASE_MS } from "../../core/data/conversations.data";
-import { messages } from "../../core/data/messages.data";
+import * as messages from "../../core/data/messages.data";
 
 const conversationId = randomUUID();
 

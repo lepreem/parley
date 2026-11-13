@@ -25,10 +25,7 @@ vi.mock("../../src/auth/auth", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../src/auth/auth")>();
   return {
     ...actual,
-    workos: {
-      ...actual.workos,
-      getAuthSessionFromCode: mockGetAuthSessionFromCode,
-    },
+    getAuthSessionFromCode: mockGetAuthSessionFromCode,
   };
 });
 

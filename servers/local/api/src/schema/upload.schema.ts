@@ -3,7 +3,7 @@ import type { QueueYoutubeBody } from "@parley/contract";
 import { takesBody } from "@parley/server-kit/http/takesBody";
 import { youtubeVideoId } from "@parley/contract/youtube";
 import { CTX_KEYS, FORM_KEYS } from "../../../core/keys";
-import { MAX_AUDIO_BYTES } from "../../../core/files";
+import * as files from "../../../core/files";
 
 /** Treat a blank ("" or null) optional field as unset. */
 const blankToUndefined = (v: unknown) =>
@@ -45,7 +45,7 @@ export const audioUploadSchema = z
   .object({
     [FORM_KEYS.file]: uploadedFileField({
       typePrefix: "audio/",
-      maxBytes: MAX_AUDIO_BYTES,
+      maxBytes: files.MAX_AUDIO_BYTES,
       wrongType: (type) => `Expected an audio file, got: ${type || "unknown"}`,
       tooLarge: "Audio file is too large",
     }),

@@ -8,14 +8,14 @@ import {
   type Executor,
 } from "../db";
 
-import { jobs } from "./jobs.data";
+import * as jobs from "./jobs.data";
 import type { JobSource } from "@parley/contract";
 import {
   transcriptText,
   type TranscriptSegment,
 } from "@parley/server-kit/transcription/transcript";
 import type { UploadId } from "@parley/server-kit/ids";
-import { attachments } from "./attachments.data";
+import * as attachments from "./attachments.data";
 
 /**
  * The transcript a completed job produced. Lives here, not in the job row
@@ -54,7 +54,7 @@ async function insertTranscript(
  * crash can't leave a job stuck `processing` with a transcript already written
  * (or a completed job with none).
  */
-async function saveCompletedTranscript(
+export async function saveCompletedTranscript(
   audioUploadId: UploadId,
   transcript: TranscriptToSave,
   claimToken: string,
@@ -76,7 +76,7 @@ async function saveCompletedTranscript(
  *
  * The video's captions are only for a request that takes them.
  */
-async function findYoutubeTranscript(
+export async function findYoutubeTranscript(
   youtubeVideoId: string,
   { useCaptionsIfAvailable }: { useCaptionsIfAvailable: boolean },
 ) {
@@ -119,7 +119,7 @@ type ReusableTranscript = NonNullable<
  * video already has, in one transaction. Nothing is fetched or transcribed
  * for it, so no audio is recorded for it either.
  */
-async function createReusedYoutubeJob(
+export async function createReusedYoutubeJob(
   job: Omit<Parameters<typeof jobs.createAudioJob>[0], "status">,
   transcript: ReusableTranscript,
 ) {
@@ -133,7 +133,7 @@ async function createReusedYoutubeJob(
 }
 
 /** Bodies for a set of turns at once, keyed by audioUploadId — the batched context read. */
-async function findTranscripts(
+export async function findTranscripts(
   userId: string,
   audioUploadIds: readonly string[],
 ): Promise<Map<string, string>> {
@@ -167,7 +167,7 @@ export type StoredTranscriptAttachment = {
 };
 
 /** Ordered transcription attachments grouped by chat message. */
-async function findMessageTranscriptAttachments(
+export async function findMessageTranscriptAttachments(
   userId: string,
   messageIds: readonly string[],
 ): Promise<Map<string, StoredTranscriptAttachment[]>> {
@@ -223,11 +223,3 @@ async function findMessageTranscriptAttachments(
 
   return transcriptionsByMessageId;
 }
-
-export const transcripts = {
-  saveCompletedTranscript,
-  findYoutubeTranscript,
-  createReusedYoutubeJob,
-  findTranscripts,
-  findMessageTranscriptAttachments,
-};

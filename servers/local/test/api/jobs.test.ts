@@ -28,12 +28,9 @@ vi.mock("../../core/data/jobs.data", async (importActual) => {
     await importActual<typeof import("../../core/data/jobs.data")>();
   return {
     ...actual,
-    jobs: {
-      ...actual.jobs,
-      findAudioJob: mockFindAudioJob,
-      findJobsPage: mockFindJobsPage,
-      deleteAudioJob: mockDeleteAudioJob,
-    },
+    findAudioJob: mockFindAudioJob,
+    findJobsPage: mockFindJobsPage,
+    deleteAudioJob: mockDeleteAudioJob,
   };
 });
 
@@ -42,10 +39,7 @@ vi.mock("../../core/data/transcripts.data", async (importActual) => {
     await importActual<typeof import("../../core/data/transcripts.data")>();
   return {
     ...actual,
-    transcripts: {
-      ...actual.transcripts,
-      findTranscripts: mockFindTranscripts,
-    },
+    findTranscripts: mockFindTranscripts,
   };
 });
 
@@ -59,7 +53,8 @@ vi.mock("../../core/message-queue/messageQueue", () => {
 
   return {
     QUEUES: queues,
-    mq: { queues, publish: vi.fn() },
+    queues,
+    publish: vi.fn(),
   };
 });
 
@@ -67,12 +62,9 @@ vi.mock("../../core/files", async (importActual) => {
   const actual = await importActual<typeof import("../../core/files")>();
   return {
     ...actual,
-    files: {
-      ...actual.files,
-      delete: mockDeleteFiles,
-      exists: mockFileExists,
-      read: mockReadFile,
-    },
+    delete: mockDeleteFiles,
+    exists: mockFileExists,
+    read: mockReadFile,
   };
 });
 

@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type { Context } from "hono";
 import type { QueuedYoutube, UploadedAudio } from "@parley/contract";
-import { data } from "../../../core/data";
+import * as data from "../../../core/data";
 import { queueAudioTranscription } from "../../../core/audioTranscription";
-import { files } from "../../../core/files";
-import { mq } from "../../../core/message-queue/messageQueue";
+import * as files from "../../../core/files";
+import * as mq from "../../../core/message-queue/messageQueue";
 import { CTX_KEYS } from "../../../core/keys";
 import type { UploadId } from "@parley/server-kit/ids";
 import { youtubeWatchUrl } from "@parley/contract/youtube";

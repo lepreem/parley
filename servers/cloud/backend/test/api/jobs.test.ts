@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { jobCancellation } from "@parley/server-kit/transcription/jobCancellation";
+import * as jobCancellation from "@parley/server-kit/transcription/jobCancellation";
 
 const {
   mockFindAudioJob,
@@ -31,12 +31,9 @@ vi.mock("../../src/data/jobs.data", async (importActual) => {
     await importActual<typeof import("../../src/data/jobs.data")>();
   return {
     ...actual,
-    jobs: {
-      ...actual.jobs,
-      findAudioJob: mockFindAudioJob,
-      findUserJobsPage: mockFindUserJobsPage,
-      deleteAudioJob: mockDeleteAudioJob,
-    },
+    findAudioJob: mockFindAudioJob,
+    findUserJobsPage: mockFindUserJobsPage,
+    deleteAudioJob: mockDeleteAudioJob,
   };
 });
 
@@ -45,20 +42,17 @@ vi.mock("../../src/data/transcripts.data", async (importActual) => {
     await importActual<typeof import("../../src/data/transcripts.data")>();
   return {
     ...actual,
-    transcripts: {
-      ...actual.transcripts,
-      findTranscripts: mockFindTranscripts,
-    },
+    findTranscripts: mockFindTranscripts,
   };
 });
 
 vi.mock("../../src/data/storageLedger.data", () => ({
-  storageLedger: { findLedgerEntry: mockFindLedgerEntry },
+  findLedgerEntry: mockFindLedgerEntry,
 }));
 
 vi.mock("../../src/ai/ai_transcribe_client/ai_transcribe_client", () => ({
   getTranscribeModelData: vi.fn(),
-  transcription: { model: async () => "nova-3-general" },
+  model: async () => "nova-3-general",
 }));
 
 vi.mock("../../src/message-queue/messageQueue", () => {
@@ -69,24 +63,21 @@ vi.mock("../../src/message-queue/messageQueue", () => {
 
   return {
     QUEUES: queues,
-    mq: { queues, publish: mockPublish },
+    queues,
+    publish: mockPublish,
   };
 });
 
 vi.mock("../../src/uploads/uploads", () => ({
-  uploads: { deleteObjects: mockDeleteObjects },
+  deleteObjects: mockDeleteObjects,
 }));
 
-vi.mock("../../src/storage/bucket", () => ({
-  bucket: {},
-}));
+vi.mock("../../src/storage/bucket", () => ({}));
 
 vi.mock("../../src/storage/sign", () => ({
   IMAGE_URL_TTL_SECONDS: 7 * 24 * 60 * 60,
-  sign: {
-    urls: vi.fn(),
-    urlIfStored: mockSignUrlIfStored,
-  },
+  urls: vi.fn(),
+  urlIfStored: mockSignUrlIfStored,
 }));
 
 import { createApp } from "../../src/app";

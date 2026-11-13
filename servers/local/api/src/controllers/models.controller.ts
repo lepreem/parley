@@ -1,6 +1,6 @@
 import type { Context } from "hono";
 import type { ChatModelsResponse } from "@parley/contract";
-import { memory } from "../memory";
+import * as memory from "../memory";
 
 export async function handleGetModels(c: Context) {
   return c.json({

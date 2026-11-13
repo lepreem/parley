@@ -1,10 +1,12 @@
 import type { Context } from "hono";
 import type { Conversation, ConversationsResponse } from "@parley/contract";
 import { CTX_KEYS } from "../../../core/keys";
-import { files } from "../../../core/files";
-import { data, type ConversationRow } from "../../../core/data";
+import * as files from "../../../core/files";
+import * as data from "../../../core/data";
 
-function toConversationJson(row: ConversationRow): Conversation {
+function toConversationJson(
+  row: data.conversations.ConversationRow,
+): Conversation {
   return {
     id: row.id,
     title: row.title,

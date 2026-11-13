@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   CACHE_KEYS,
-  getOrSetCache,
+  getOrSet,
   resetCacheMemo,
 } from "../../src/memory/modelLists";
 
@@ -11,14 +11,14 @@ beforeEach(() => {
   resetCacheMemo();
 });
 
-describe("getOrSetCache", () => {
+describe("getOrSet", () => {
   it("fetches on the first read and serves the memo after", async () => {
     const fetch = vi.fn(async () => ({ some: "catalog" }));
 
-    expect(await getOrSetCache(CACHE_KEYS.openRouterModels, fetch)).toEqual({
+    expect(await getOrSet(CACHE_KEYS.openRouterModels, fetch)).toEqual({
       some: "catalog",
     });
-    expect(await getOrSetCache(CACHE_KEYS.openRouterModels, fetch)).toEqual({
+    expect(await getOrSet(CACHE_KEYS.openRouterModels, fetch)).toEqual({
       some: "catalog",
     });
     expect(fetch).toHaveBeenCalledTimes(1);
@@ -28,8 +28,8 @@ describe("getOrSetCache", () => {
     const fetch = vi.fn(async () => ({ some: "catalog" }));
 
     const [first, second] = await Promise.all([
-      getOrSetCache(CACHE_KEYS.openRouterModels, fetch),
-      getOrSetCache(CACHE_KEYS.openRouterModels, fetch),
+      getOrSet(CACHE_KEYS.openRouterModels, fetch),
+      getOrSet(CACHE_KEYS.openRouterModels, fetch),
     ]);
 
     expect(fetch).toHaveBeenCalledTimes(1);
@@ -38,8 +38,8 @@ describe("getOrSetCache", () => {
 
   it("keeps each key's fetch separate", async () => {
     const [models, transcribeModels] = await Promise.all([
-      getOrSetCache(CACHE_KEYS.openRouterModels, async () => "models"),
-      getOrSetCache(
+      getOrSet(CACHE_KEYS.openRouterModels, async () => "models"),
+      getOrSet(
         CACHE_KEYS.deepgramTranscribeModels,
         async () => "transcribe-models",
       ),
@@ -56,27 +56,27 @@ describe("getOrSetCache", () => {
       .mockResolvedValueOnce({ some: "catalog" });
 
     const [first, second] = await Promise.allSettled([
-      getOrSetCache(CACHE_KEYS.openRouterModels, fetch),
-      getOrSetCache(CACHE_KEYS.openRouterModels, fetch),
+      getOrSet(CACHE_KEYS.openRouterModels, fetch),
+      getOrSet(CACHE_KEYS.openRouterModels, fetch),
     ]);
 
     expect(first).toMatchObject({ reason: new Error("upstream is down") });
     expect(second).toMatchObject({ reason: new Error("upstream is down") });
     expect(fetch).toHaveBeenCalledTimes(1);
 
-    expect(await getOrSetCache(CACHE_KEYS.openRouterModels, fetch)).toEqual({
+    expect(await getOrSet(CACHE_KEYS.openRouterModels, fetch)).toEqual({
       some: "catalog",
     });
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 });
 
-describe("getOrSetCache once the memo has expired", () => {
+describe("getOrSet once the memo has expired", () => {
   const STALE = { serveStale: true };
 
   beforeEach(async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
-    await getOrSetCache(
+    await getOrSet(
       CACHE_KEYS.openRouterModels,
       async () => "old catalog",
       STALE,
@@ -90,10 +90,7 @@ describe("getOrSetCache once the memo has expired", () => {
 
   it("waits for the refresh without serveStale", async () => {
     expect(
-      await getOrSetCache(
-        CACHE_KEYS.openRouterModels,
-        async () => "new catalog",
-      ),
+      await getOrSet(CACHE_KEYS.openRouterModels, async () => "new catalog"),
     ).toBe("new catalog");
   });
 
@@ -101,15 +98,15 @@ describe("getOrSetCache once the memo has expired", () => {
     const refreshed = Promise.withResolvers<string>();
     const fetch = vi.fn(() => refreshed.promise);
 
-    expect(await getOrSetCache(CACHE_KEYS.openRouterModels, fetch, STALE)).toBe(
+    expect(await getOrSet(CACHE_KEYS.openRouterModels, fetch, STALE)).toBe(
       "old catalog",
     );
 
     refreshed.resolve("new catalog");
     await vi.waitFor(async () =>
-      expect(
-        await getOrSetCache(CACHE_KEYS.openRouterModels, fetch, STALE),
-      ).toBe("new catalog"),
+      expect(await getOrSet(CACHE_KEYS.openRouterModels, fetch, STALE)).toBe(
+        "new catalog",
+      ),
     );
   });
 
@@ -119,19 +116,19 @@ describe("getOrSetCache once the memo has expired", () => {
       .mockRejectedValueOnce(new Error("upstream is down"))
       .mockResolvedValueOnce("new catalog");
 
-    expect(await getOrSetCache(CACHE_KEYS.openRouterModels, fetch, STALE)).toBe(
+    expect(await getOrSet(CACHE_KEYS.openRouterModels, fetch, STALE)).toBe(
       "old catalog",
     );
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
 
-    expect(await getOrSetCache(CACHE_KEYS.openRouterModels, fetch, STALE)).toBe(
+    expect(await getOrSet(CACHE_KEYS.openRouterModels, fetch, STALE)).toBe(
       "old catalog",
     );
     await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
     await vi.waitFor(async () =>
-      expect(
-        await getOrSetCache(CACHE_KEYS.openRouterModels, fetch, STALE),
-      ).toBe("new catalog"),
+      expect(await getOrSet(CACHE_KEYS.openRouterModels, fetch, STALE)).toBe(
+        "new catalog",
+      ),
     );
   });
 
@@ -140,8 +137,8 @@ describe("getOrSetCache once the memo has expired", () => {
     const fetch = vi.fn(() => refreshed.promise);
 
     await Promise.all([
-      getOrSetCache(CACHE_KEYS.openRouterModels, fetch, STALE),
-      getOrSetCache(CACHE_KEYS.openRouterModels, fetch, STALE),
+      getOrSet(CACHE_KEYS.openRouterModels, fetch, STALE),
+      getOrSet(CACHE_KEYS.openRouterModels, fetch, STALE),
     ]);
     refreshed.resolve("new catalog");
 

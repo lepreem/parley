@@ -20,7 +20,7 @@ vi.mock("@supabase/supabase-js", () => ({
   createClient: () => ({ storage: { from, ...buckets } }),
 }));
 
-import { bucket } from "../../src/storage/bucket";
+import * as bucket from "../../src/storage/bucket";
 import {
   AUDIO_BUCKET,
   BUCKET_SETTINGS,

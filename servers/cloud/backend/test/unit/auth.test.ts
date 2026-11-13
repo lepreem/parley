@@ -22,7 +22,7 @@ vi.mock("@workos-inc/node", () => ({
   },
 }));
 
-import { workos } from "../../src/auth/auth";
+import * as workos from "../../src/auth/auth";
 
 const userId = "user_01AUTH";
 const sessionId = "session_01AUTH";

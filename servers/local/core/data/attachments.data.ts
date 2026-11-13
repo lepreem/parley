@@ -6,8 +6,8 @@ import {
   db,
   type Executor,
 } from "../db";
-import { CLAIM_LEASE_MS } from "./conversations.data";
-import { messageAttachmentLinks } from "./messageAttachmentLinks.data";
+import * as conversations from "./conversations.data";
+import * as messageAttachmentLinks from "./messageAttachmentLinks.data";
 
 type AttachmentValues = Pick<
   typeof Attachments.$inferInsert,
@@ -29,7 +29,7 @@ type AttachmentsOfKind = {
   kind: AttachmentValues["kind"];
 };
 
-function attachmentsOfKind(input: AttachmentsOfKind) {
+export function attachmentsOfKind(input: AttachmentsOfKind) {
   return and(
     eq(Attachments.kind, input.kind),
     input.attachmentIds === undefined
@@ -65,7 +65,7 @@ function attachmentIsUnreserved() {
  * Reserves every one of the attachments for the turn, or none of them: false
  * when any is gone.
  */
-async function claimAttachments(
+export async function claimAttachments(
   attachmentIds: readonly string[],
   claimToken: string,
 ) {
@@ -79,7 +79,7 @@ async function claimAttachments(
       .where(inArray(Attachments.attachmentId, uniqueAttachmentIds));
     if (existing.length !== uniqueAttachmentIds.length) return false;
 
-    const expiresAt = new Date(Date.now() + CLAIM_LEASE_MS);
+    const expiresAt = new Date(Date.now() + conversations.CLAIM_LEASE_MS);
     await tx.insert(AttachmentTurnReservations).values(
       existing.map(({ attachmentId }) => ({
         attachmentId,
@@ -92,27 +92,30 @@ async function claimAttachments(
 }
 
 /** Pushes back the expiry of the reservations a turn holds. */
-async function renewAttachmentClaims(claimToken: string) {
+export async function renewAttachmentClaims(claimToken: string) {
   await db
     .update(AttachmentTurnReservations)
-    .set({ expiresAt: new Date(Date.now() + CLAIM_LEASE_MS) })
+    .set({ expiresAt: new Date(Date.now() + conversations.CLAIM_LEASE_MS) })
     .where(eq(AttachmentTurnReservations.claimToken, claimToken));
 }
 
-async function unclaimAttachments(claimToken: string, executor: Executor = db) {
+export async function unclaimAttachments(
+  claimToken: string,
+  executor: Executor = db,
+) {
   await executor
     .delete(AttachmentTurnReservations)
     .where(eq(AttachmentTurnReservations.claimToken, claimToken));
 }
 
-async function createAttachment(
+export async function createAttachment(
   values: AttachmentValues,
   executor: Executor = db,
 ) {
   await executor.insert(Attachments).values(values);
 }
 
-async function deleteUnlinkedUnreservedAttachment(
+export async function deleteUnlinkedUnreservedAttachment(
   input: DeleteAttachmentInput,
   executor: Executor = db,
 ) {
@@ -124,7 +127,7 @@ async function deleteUnlinkedUnreservedAttachment(
   return deletedAttachmentId ?? null;
 }
 
-async function deleteUnlinkedUnreservedAttachments(
+export async function deleteUnlinkedUnreservedAttachments(
   input: DeleteAttachmentsInput,
   executor: Executor = db,
 ): Promise<string[]> {
@@ -147,20 +150,9 @@ async function deleteUnlinkedUnreservedAttachments(
 }
 
 /** Every attachment's id: the files that are in use. */
-async function findAttachmentIds() {
+export async function findAttachmentIds() {
   const rows = await db
     .select({ attachmentId: Attachments.attachmentId })
     .from(Attachments);
   return new Set(rows.map((row) => row.attachmentId));
 }
-
-export const attachments = {
-  findAttachmentIds,
-  attachmentsOfKind,
-  claimAttachments,
-  unclaimAttachments,
-  renewAttachmentClaims,
-  createAttachment,
-  deleteUnlinkedUnreservedAttachment,
-  deleteUnlinkedUnreservedAttachments,
-};

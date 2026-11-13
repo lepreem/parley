@@ -43,8 +43,8 @@ import {
   db,
   users,
 } from "../../src/db";
-import { jobs } from "../../src/data/jobs.data";
-import { transcripts } from "../../src/data/transcripts.data";
+import * as jobs from "../../src/data/jobs.data";
+import * as transcripts from "../../src/data/transcripts.data";
 
 const userId = "jobs-owner";
 const otherUserId = "jobs-other-owner";

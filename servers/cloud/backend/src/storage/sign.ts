@@ -1,3 +1,8 @@
+/**
+ * The only storage calls a data module may make: signing read URLs, which
+ * changes nothing in storage.
+ */
+
 import { isNotFound, objectPath, storage } from "./core";
 import { KINDS, type UploadableKind, type UploadableObject } from "./schema";
 
@@ -14,7 +19,7 @@ function requestSignedUrl(userId: string, object: UploadableObject) {
  * (client thumbnails and the chat model's vision input), an hour for audio
  * (which the transcription provider fetches for itself, and the client plays).
  */
-async function createSignedUrl(userId: string, object: UploadableObject) {
+export async function url(userId: string, object: UploadableObject) {
   const { data, error } = await requestSignedUrl(userId, object);
 
   if (error) throw error;
@@ -22,14 +27,11 @@ async function createSignedUrl(userId: string, object: UploadableObject) {
 }
 
 /**
- * A read URL as createSignedUrl signs it, or null when there's no such
+ * A read URL as url signs it, or null when there's no such
  * object: a YouTube job's audio is recorded before it lands, and a video with
  * captions never sends any.
  */
-async function createSignedUrlIfStored(
-  userId: string,
-  object: UploadableObject,
-) {
+export async function urlIfStored(userId: string, object: UploadableObject) {
   const { data, error } = await requestSignedUrl(userId, object);
 
   if (error) {
@@ -44,7 +46,7 @@ async function createSignedUrlIfStored(
  * TTL, all in parallel. Returns uploadId → url, omitting any the storage API
  * couldn't sign. Entries may span owners; the path carries the owner.
  */
-async function createSignedUrls(
+export async function urls(
   entries: readonly (UploadableObject & { userId: string })[],
 ): Promise<Map<string, string>> {
   const byKind = Map.groupBy(entries, (entry) => entry.kind);
@@ -69,17 +71,7 @@ async function signGroup(
     data.filter((d) => d.path && d.signedUrl).map((d) => [d.path, d.signedUrl]),
   );
   return entries.flatMap((entry, i) => {
-    const url = byPath.get(paths[i]);
-    return url ? [[entry.uploadId, url] as const] : [];
+    const signedUrl = byPath.get(paths[i]);
+    return signedUrl ? [[entry.uploadId, signedUrl] as const] : [];
   });
 }
-
-/**
- * The only storage calls a data module may make: signing read URLs, which
- * changes nothing in storage.
- */
-export const sign = {
-  url: createSignedUrl,
-  urlIfStored: createSignedUrlIfStored,
-  urls: createSignedUrls,
-};

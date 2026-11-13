@@ -1,12 +1,56 @@
 import tseslint from "typescript-eslint";
 import { defineConfig, globalIgnores } from "eslint/config";
+import { readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import namespaceImport from "../../../eslint-rules/namespaceImport.mjs";
 import helperImportOwner from "./eslint-rules/helperImportOwner.js";
 import libraryOwner from "./eslint-rules/libraryOwner.js";
 import publicModuleEntry from "./eslint-rules/publicModuleEntry.js";
 
 const srcDirectory = (name) =>
   fileURLToPath(new URL(`./src/${name}`, import.meta.url));
+
+/** Each module in a folder, named for its file: data/jobs.data.ts is `jobs`. */
+const modulesIn = (folder, suffix) =>
+  readdirSync(srcDirectory(folder))
+    .filter((file) => file.endsWith(suffix) && file !== "index.ts")
+    .map((file) => ({
+      file: srcDirectory(`${folder}/${file.slice(0, -3)}`),
+      name: file.slice(0, -suffix.length),
+    }));
+
+/**
+ * The modules callers read through their name: `import * as bucket`, then
+ * `bucket.delete()`. An index stands for its whole folder: `data.jobs.…`.
+ */
+const namespaceModules = [
+  { file: srcDirectory("ai/ai_chat_client/ai_chat_client"), name: "chat" },
+  {
+    file: srcDirectory("ai/ai_transcribe_client/ai_transcribe_client"),
+    name: "transcription",
+  },
+  { file: srcDirectory("auth/auth"), name: "workos" },
+  { file: srcDirectory("data/index"), name: "data" },
+  ...modulesIn("data", ".data.ts"),
+  { file: srcDirectory("memory/index"), name: "memory" },
+  ...modulesIn("memory", ".ts"),
+  { file: srcDirectory("message-queue/messageQueue"), name: "mq" },
+  { file: srcDirectory("recurring/index"), name: "recurring" },
+  { file: srcDirectory("recurring/guestSweep"), name: "guestSweep" },
+  { file: srcDirectory("recurring/storageSweep"), name: "storageSweep" },
+  { file: srcDirectory("storage/bucket"), name: "bucket" },
+  { file: srcDirectory("storage/sign"), name: "sign" },
+  { file: srcDirectory("supadata/youtubeCaptions"), name: "youtubeCaptions" },
+  {
+    file: srcDirectory("transcription/audioTranscription"),
+    name: "audioTranscription",
+  },
+  { file: srcDirectory("uploads/uploads"), name: "uploads" },
+  {
+    specifier: "@parley/server-kit/transcription/jobCancellation",
+    name: "jobCancellation",
+  },
+];
 
 /**
  * State this process holds, which a second instance wouldn't share. Only the
@@ -52,7 +96,7 @@ const dbClientRestriction = {
     {
       group: ["**/data/*.data"],
       message:
-        "Import { data } from src/data and call data.<table>.<operation>(), so the call reads as a database operation.",
+        "Import * as data from src/data and call data.<table>.<operation>(), so the call reads as a database operation.",
     },
   ],
 };
@@ -67,6 +111,7 @@ export default defineConfig([
         rules: {
           "helper-import-owner": helperImportOwner,
           "library-owner": libraryOwner,
+          "namespace-import": namespaceImport,
           "public-module-entry": publicModuleEntry,
         },
       },
@@ -79,7 +124,8 @@ export default defineConfig([
     rules: {
       "no-restricted-imports": ["error", dbClientRestriction],
       "local/helper-import-owner": "error",
-      // A module that does I/O is one namespace object (`mq`, `bucket`,
+      "local/namespace-import": ["error", { modules: namespaceModules }],
+      // A module that does I/O is one namespace (`mq`, `bucket`,
       // `memory`, `chat`…) behind one entry file; nothing outside reaches past it.
       "local/public-module-entry": [
         "error",

@@ -2,7 +2,7 @@ import type { Context } from "hono";
 import { getCookie } from "hono/cookie";
 
 import { getEnv, guestChatEnabled } from "../env";
-import { workos } from "../auth/auth";
+import * as workos from "../auth/auth";
 import { readAccessTokenExpiry, verifyAccessToken } from "../auth/accessToken";
 import {
   GUEST_SESSION_SECONDS,
@@ -20,7 +20,7 @@ import {
 import { authed, verifySessionToken } from "../middleware/auth.middleware";
 
 import { COOKIE_KEYS } from "../cookies/session";
-import { data } from "../data";
+import * as data from "../data";
 import { logger } from "@parley/server-kit/runtime/logger";
 
 const log = logger.child({ controller: "auth" });

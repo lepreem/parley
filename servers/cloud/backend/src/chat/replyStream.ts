@@ -8,9 +8,9 @@ import {
   stepsInOrder,
   type RecordedStep,
 } from "../metrics/preparationMetrics";
-import { NoRoomToReply } from "../ai";
+import { chat } from "../ai";
 import { eventHub } from "../sse/hub";
-import { memory } from "../memory";
+import * as memory from "../memory";
 import {
   answerTurn,
   TurnRejected,
@@ -147,7 +147,7 @@ async function writeReply({
     await claim.release();
     sseEvents.push("error", {
       message:
-        error instanceof NoRoomToReply
+        error instanceof chat.NoRoomToReply
           ? error.message
           : "Model response failed",
     });

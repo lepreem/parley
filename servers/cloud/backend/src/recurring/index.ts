@@ -1,6 +1,6 @@
 import { every } from "./every";
-import { guestSweep } from "./guestSweep";
-import { storageSweep } from "./storageSweep";
+import * as guestSweep from "./guestSweep";
+import * as storageSweep from "./storageSweep";
 
 /**
  * Everything the API runs over and over on a timer, each on its own interval.
@@ -8,7 +8,7 @@ import { storageSweep } from "./storageSweep";
  * own lock (the storage sweep does). The returned function stops them all and
  * waits for runs in progress.
  */
-function start() {
+export function start() {
   const stops = [
     every("storageSweep", storageSweep.intervalMs, storageSweep.run),
     every("guestSweep", guestSweep.intervalMs, guestSweep.run),
@@ -18,5 +18,3 @@ function start() {
     await Promise.all(stops.map((stop) => stop()));
   };
 }
-
-export const recurring = { start };

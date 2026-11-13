@@ -1,7 +1,9 @@
+/** Speech-to-text, from Deepgram. */
+
 import { DeepgramClient } from "@deepgram/sdk";
 import type { TranscriptSegment } from "@parley/server-kit/transcription/transcript";
 import { getEnv } from "../../env";
-import { CACHE_KEYS, memory } from "../../memory";
+import * as memory from "../../memory";
 import {
   currentModel,
   newestVersions,
@@ -25,7 +27,7 @@ const TRANSCRIBE_TIMEOUT_SECONDS = 20 * 60;
 const TRANSCRIBE_MAX_RETRIES = 1;
 
 /** Startup health check: fails if Deepgram is unreachable or rejects the API key. */
-async function ping(): Promise<void> {
+export async function ping(): Promise<void> {
   await deepgram.auth.v1.tokens.grant();
 }
 
@@ -42,7 +44,7 @@ export type Transcription = {
  * Deepgram detects the language first: without that it assumes English and
  * turns anything else into English that was never said.
  */
-async function transcribe(
+export async function transcribe(
   model: string,
   audioUrl: string,
   abortSignal: AbortSignal,
@@ -108,7 +110,7 @@ export function getTranscribeModelData(): Promise<TranscribeModelData> {
   // Served stale while it refreshes, like the chat catalog, so no request
   // waits on Deepgram once a process has loaded it.
   return memory.modelLists.getOrSet(
-    CACHE_KEYS.deepgramTranscribeModels,
+    memory.modelLists.CACHE_KEYS.deepgramTranscribeModels,
     fetchTranscribeModelData,
     { serveStale: true },
   );
@@ -118,13 +120,6 @@ export function getTranscribeModelData(): Promise<TranscribeModelData> {
  * The model a file is transcribed with: Deepgram's current general model.
  * Undefined only while Deepgram's catalog has none.
  */
-async function model(): Promise<string | undefined> {
+export async function model(): Promise<string | undefined> {
   return currentModel(await getTranscribeModelData());
 }
-
-/** Speech-to-text, from Deepgram. */
-export const transcription = {
-  transcribe,
-  model,
-  ping,
-};

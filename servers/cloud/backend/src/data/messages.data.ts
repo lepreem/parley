@@ -9,10 +9,10 @@ import {
   db,
   type Executor,
 } from "../db";
-import { images } from "./images.data";
-import { conversations } from "./conversations.data";
-import { messageAttachmentLinks } from "./messageAttachmentLinks.data";
-import { attachments } from "./attachments.data";
+import * as images from "./images.data";
+import * as conversations from "./conversations.data";
+import * as messageAttachmentLinks from "./messageAttachmentLinks.data";
+import * as attachments from "./attachments.data";
 
 /**
  * The columns a message is exposed through — every read feeding `toMessageJson`
@@ -63,7 +63,7 @@ export type MessageRow = Pick<
 >;
 
 /** Full history for a conversation, oldest first. */
-async function findConversationMessages(conversationId: string) {
+export async function findConversationMessages(conversationId: string) {
   return db
     .select(messageColumns)
     .from(ChatMessages)
@@ -149,7 +149,7 @@ function knownOrThrow(
  * content crosses the wire once however many attachments it has. Sending the
  * text is most of what this read costs.
  */
-async function findContextHistory(input: {
+export async function findContextHistory(input: {
   userId: string;
   conversationId: string;
   maximumMessageCount: number;
@@ -332,7 +332,7 @@ async function createMessage(
  * Scoped by conversation as well as owner; null when nothing matched, which
  * the caller reports as a 404.
  */
-async function deleteOwnedMessage(
+export async function deleteOwnedMessage(
   userId: string,
   conversationId: string,
   messageId: string,
@@ -464,7 +464,7 @@ async function deleteOwnedMessage(
  * until the lease runs out, and the claim check refuses the write if this
  * turn's lease was lost to another.
  */
-async function persistAndUnclaimChatTurn(turn: {
+export async function persistAndUnclaimChatTurn(turn: {
   userId: string;
   conversationId: string;
   content: string;
@@ -526,10 +526,3 @@ async function persistAndUnclaimChatTurn(turn: {
     };
   });
 }
-
-export const messages = {
-  findConversationMessages,
-  findContextHistory,
-  deleteOwnedMessage,
-  persistAndUnclaimChatTurn,
-};

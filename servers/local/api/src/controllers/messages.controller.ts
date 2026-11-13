@@ -14,14 +14,7 @@ import type {
 import { addSource } from "@parley/server-kit/webSources";
 import { SSEEventQueue } from "@parley/server-kit/sse/eventQueue";
 import type { ReplyInProgressEntry } from "@parley/server-kit/memory/repliesInProgress";
-import {
-  data,
-  type CreateMessageHistory,
-  type HistoryImage,
-  type MessageRow,
-  type ResolvedImage,
-  type StoredTranscriptAttachment,
-} from "../../../core/data";
+import * as data from "../../../core/data";
 import { CTX_KEYS } from "../../../core/keys";
 import {
   buildUserTurn,
@@ -31,10 +24,10 @@ import {
 } from "../../../core/ai/ai_chat_client";
 import type { ChatImage, ChatTurn } from "../../../core/ai/ai_chat_client";
 import { logger, messageOf } from "@parley/server-kit/runtime/logger";
-import { files } from "../../../core/files";
+import * as files from "../../../core/files";
 import type { MessageAttachmentInput } from "../schema/messages.schema";
 import { EVERYONE, eventHub } from "../sse/hub";
-import { memory } from "../memory";
+import * as memory from "../memory";
 
 const log = logger.child({ controller: "messages" });
 
@@ -83,9 +76,9 @@ async function titleForFirstTurn(content: string, conversationId: string) {
 }
 
 function toMessageJson(
-  row: MessageRow,
-  images: ResolvedImage[] = [],
-  transcripts: StoredTranscriptAttachment[] = [],
+  row: data.messages.MessageRow,
+  images: data.images.ResolvedImage[] = [],
+  transcripts: data.transcripts.StoredTranscriptAttachment[] = [],
 ): ChatMessage {
   return {
     id: row.id,
@@ -110,7 +103,7 @@ function withTranscripts(content: string, transcripts: readonly string[]) {
 
 /** Assistant turns never carry images, so they're not worth looking up. */
 function userMessageIds(
-  rows: readonly { id: string; role: MessageRow["role"] }[],
+  rows: readonly { id: string; role: data.messages.MessageRow["role"] }[],
 ) {
   return rows.filter((row) => row.role === "user").map((row) => row.id);
 }
@@ -136,14 +129,14 @@ function toHistoryTurn(
 }
 
 /** Each image as the model takes it, by id. */
-async function imageInputsById(images: readonly HistoryImage[]) {
+async function imageInputsById(images: readonly data.messages.HistoryImage[]) {
   const inputs = await Promise.all(
     images.map(
       async ({ imageUploadId, mimeType }) =>
         [
           imageUploadId,
           await chatImageInput(
-            files.path({ kind: "image", uploadId: imageUploadId }),
+            files.pathOf({ kind: "image", uploadId: imageUploadId }),
             mimeType,
           ),
         ] as const,
@@ -153,7 +146,7 @@ async function imageInputsById(images: readonly HistoryImage[]) {
 }
 
 function assembleCreateMessageContext(
-  history: readonly CreateMessageHistory[],
+  history: readonly data.messages.CreateMessageHistory[],
   newTurn: ChatTurn,
   imageInputs: ReadonlyMap<string, ChatImage>,
 ): ChatTurn[] {
@@ -322,7 +315,7 @@ function mergeTranscriptsIntoContent(
 
 type PreparedTurn = {
   turns: ChatTurn[];
-  history: CreateMessageHistory[];
+  history: data.messages.CreateMessageHistory[];
   newMessageContextCharCount: number;
 };
 

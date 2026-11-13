@@ -1,11 +1,11 @@
 import { verifyServices } from "@parley/server-kit/runtime/preflight";
-import { mq } from "./message-queue/messageQueue";
+import * as mq from "./message-queue/messageQueue";
 import { pingDb } from "./db";
 import { bucket } from "./storage";
 import { chat, transcription } from "./ai";
-import { workos } from "./auth/auth";
+import * as workos from "./auth/auth";
 import { youtubeCaptions } from "./supadata";
-import { UPLOAD_CONFIRM_WINDOW_MS } from "./uploads/uploads";
+import * as uploads from "./uploads/uploads";
 
 /**
  * Fail-fast preflight for the API: aborts startup if any third-party
@@ -25,7 +25,8 @@ export function verifyApiServices(): Promise<void> {
     // confirmed in.
     {
       name: "Supabase Storage upload URLs",
-      check: () => bucket.verifyUploadUrlLifetime(UPLOAD_CONFIRM_WINDOW_MS),
+      check: () =>
+        bucket.verifyUploadUrlLifetime(uploads.UPLOAD_CONFIRM_WINDOW_MS),
     },
     { name: "WorkOS", check: workos.ping },
     { name: "OpenRouter", check: chat.ping },

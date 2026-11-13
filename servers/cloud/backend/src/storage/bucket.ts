@@ -11,7 +11,7 @@ import {
 } from "./schema";
 
 /** Startup health check: fails if Supabase is unreachable or a bucket is missing. */
-async function ping(): Promise<void> {
+export async function ping(): Promise<void> {
   await Promise.all(
     Object.keys(BUCKET_SETTINGS).map(async (name) => {
       const { error } = await supabase.storage.getBucket(name);
@@ -24,7 +24,9 @@ async function ping(): Promise<void> {
  * A bucket's settings as Supabase has them, or null when there's no such
  * bucket. A limit Supabase doesn't enforce reads as null.
  */
-async function readSettings(name: string): Promise<LiveBucketSettings | null> {
+export async function readSettings(
+  name: string,
+): Promise<LiveBucketSettings | null> {
   const { data, error } = await supabase.storage.getBucket(name);
   if (error) {
     if (isNotFound(error)) return null;
@@ -43,7 +45,7 @@ async function readSettings(name: string): Promise<LiveBucketSettings | null> {
  * confirm step would still reject what the bucket lets through, but only
  * after the bytes had landed. `npm run storage:push` puts the settings back.
  */
-async function verifySettings(): Promise<void> {
+export async function verifySettings(): Promise<void> {
   await Promise.all(
     Object.entries(BUCKET_SETTINGS).map(([name, declared]) =>
       verifyBucketSettings(name, declared),
@@ -67,13 +69,16 @@ async function verifyBucketSettings(name: string, declared: BucketSettings) {
 }
 
 /** Creates the named bucket with these settings. */
-async function create(name: string, settings: BucketSettings): Promise<void> {
+export async function create(
+  name: string,
+  settings: BucketSettings,
+): Promise<void> {
   const { error } = await supabase.storage.createBucket(name, settings);
   if (error) throw error;
 }
 
 /** Changes the named bucket's settings to these. */
-async function updateSettings(
+export async function updateSettings(
   name: string,
   settings: BucketSettings,
 ): Promise<void> {
@@ -91,7 +96,10 @@ async function updateSettings(
  * client's to set. The kind's bucket caps both at the kind's own limits
  * (BUCKET_SETTINGS), and inspectUploadedObject checks them again at confirm.
  */
-async function createUploadUrl(userId: string, object: UploadableObject) {
+export async function createUploadUrl(
+  userId: string,
+  object: UploadableObject,
+) {
   const { data, error } = await storage(object.kind).createSignedUploadUrl(
     objectPath(userId, object),
   );
@@ -112,7 +120,9 @@ async function createUploadUrl(userId: string, object: UploadableObject) {
  *
  * Minting a URL creates no object, so the probe leaves nothing behind.
  */
-async function verifyUploadUrlLifetime(maxLifetimeMs: number): Promise<void> {
+export async function verifyUploadUrlLifetime(
+  maxLifetimeMs: number,
+): Promise<void> {
   const probe = { kind: "image", uploadId: randomUUID() } as const;
   const { data, error } = await storage(probe.kind).createSignedUploadUrl(
     objectPath("preflight", probe),
@@ -147,7 +157,10 @@ function tokenLifetimeMs(token: string) {
  * are read back rather than taken from the client. Only reads: an object this
  * rejects is left for the sweep.
  */
-async function inspectUploadedObject(userId: string, object: UploadableObject) {
+export async function inspectUploadedObject(
+  userId: string,
+  object: UploadableObject,
+) {
   const { contentTypePrefix, maxBytes } = KINDS[object.kind].upload;
   const { data, error } = await storage(object.kind).info(
     objectPath(userId, object),
@@ -194,14 +207,4 @@ async function removeGroup(userId: string, objects: readonly StoredObject[]) {
   return data;
 }
 
-export const bucket = {
-  ping,
-  readSettings,
-  verifySettings,
-  create,
-  updateSettings,
-  createUploadUrl,
-  verifyUploadUrlLifetime,
-  inspectUploadedObject,
-  delete: deleteObjects,
-};
+export { deleteObjects as delete };

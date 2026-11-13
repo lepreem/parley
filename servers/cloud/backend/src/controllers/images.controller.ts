@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { UploadedImage } from "@parley/contract";
 import { sign } from "../storage";
-import { uploads } from "../uploads/uploads";
-import { data } from "../data";
+import * as uploads from "../uploads/uploads";
+import * as data from "../data";
 import { authed } from "../middleware/auth.middleware";
 import { validate } from "../middleware/validate.middleware";
 import {

@@ -4,7 +4,7 @@ import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { Attachments, AudioTranscriptionJobs, db, type Executor } from "../db";
 import type { jobStatusEnum } from "../db";
 import type { UploadId } from "@parley/server-kit/ids";
-import { attachments } from "./attachments.data";
+import * as attachments from "./attachments.data";
 
 /**
  * The API reads and writes this table both on the request path and as
@@ -19,7 +19,7 @@ type AudioJobRow = typeof AudioTranscriptionJobs.$inferSelect;
 
 /* ---------------------------------------------------------------- API reads */
 
-async function findAudioJob(userId: string, audioUploadId: string) {
+export async function findAudioJob(userId: string, audioUploadId: string) {
   const [row] = await db
     .select({
       audioUploadId: AudioTranscriptionJobs.audioUploadId,
@@ -103,7 +103,7 @@ type JobsPageFilters = {
  * encoding. The audioUploadId tiebreak in the ordering is what makes the keyset
  * cursor deterministic.
  */
-async function findUserJobsPage(
+export async function findUserJobsPage(
   filters: JobsPageFilters,
 ): Promise<JobSummary[]> {
   const { userId, status, searchQuery, cursor, fetchCount } = filters;
@@ -143,7 +143,7 @@ async function findUserJobsPage(
  * The attachment row and the job row, together. `executor` lets a direct
  * upload's confirm write them in the transaction that confirms the upload.
  */
-async function createAudioJob(
+export async function createAudioJob(
   job: {
     audioUploadId: UploadId;
     userId: string;
@@ -194,7 +194,7 @@ async function createAudioJob(
  * a message or reserved for a response. Marks the audio as deleted in the same
  * transaction. Returns whether anything was deleted.
  */
-async function deleteAudioJob(userId: string, audioUploadId: string) {
+export async function deleteAudioJob(userId: string, audioUploadId: string) {
   return db.transaction(async (tx) => {
     const deletedAudioUploadId =
       await attachments.deleteOwnedUnlinkedUnreservedAttachment(
@@ -213,7 +213,7 @@ async function deleteAudioJob(userId: string, audioUploadId: string) {
  * job completed — a redelivered fetch that fails the second time — and must
  * not turn a job with a transcript into a failed one.
  */
-async function failAudioJobById(audioUploadId: string, error: string) {
+export async function failAudioJobById(audioUploadId: string, error: string) {
   await db
     .update(AudioTranscriptionJobs)
     .set({ status: "failed", error })
@@ -233,7 +233,7 @@ async function failAudioJobById(audioUploadId: string, error: string) {
  * but does not prove the old process stopped. Replacing claimToken fences that
  * worker out of every terminal write if it later finishes.
  */
-async function claimAudioJob(
+export async function claimAudioJob(
   audioUploadId: UploadId,
   allowProcessingRecovery = false,
 ) {
@@ -269,7 +269,7 @@ async function claimAudioJob(
  * A terminal transition belongs only to the latest claimant. Returns false when
  * this worker lost ownership, so its caller can discard the stale result.
  */
-async function completeAudioJob(
+export async function completeAudioJob(
   audioUploadId: UploadId,
   claimToken: string,
   executor: Executor = db,
@@ -294,7 +294,7 @@ async function completeAudioJob(
  * claims it as any queued job rather than taking over a claim. Only the
  * current claimant can, and only while the job is processing; false otherwise.
  */
-async function unclaimAndResetAudioJob(
+export async function unclaimAndResetAudioJob(
   audioUploadId: UploadId,
   claimToken: string,
 ) {
@@ -317,7 +317,7 @@ async function unclaimAndResetAudioJob(
  * `error` is shown to the user, so it says what happened, not how. Returns
  * false when this worker lost ownership, as completeAudioJob does.
  */
-async function failAudioJob(
+export async function failAudioJob(
   audioUploadId: UploadId,
   claimToken: string,
   error: string,
@@ -336,15 +336,3 @@ async function failAudioJob(
 
   return Boolean(row);
 }
-
-export const jobs = {
-  findAudioJob,
-  findUserJobsPage,
-  createAudioJob,
-  deleteAudioJob,
-  failAudioJobById,
-  claimAudioJob,
-  completeAudioJob,
-  unclaimAndResetAudioJob,
-  failAudioJob,
-};

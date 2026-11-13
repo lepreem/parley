@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import * as imagesController from "../controllers/images.controller";
 import { CTX_KEYS } from "../../../core/keys";
-import { MAX_IMAGE_BYTES } from "../../../core/files";
+import * as files from "../../../core/files";
 import {
   validateReqForm,
   validateReqParams,
@@ -17,7 +17,7 @@ export const imagesRouter = new Hono();
 
 imagesRouter.post(
   "/",
-  uploadLimit(MAX_IMAGE_BYTES, "Image is too large"),
+  uploadLimit(files.MAX_IMAGE_BYTES, "Image is too large"),
   validateReqForm(imageUploadSchema),
   imagesController.handleImageUpload,
 );

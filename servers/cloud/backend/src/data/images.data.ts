@@ -10,7 +10,7 @@ import {
 } from "../db";
 import { IMAGE_URL_TTL_SECONDS, sign } from "../storage";
 import type { UploadId } from "@parley/server-kit/ids";
-import { attachments } from "./attachments.data";
+import * as attachments from "./attachments.data";
 
 /**
  * What resolving an image needs: the signature cache to decide whether to
@@ -58,7 +58,7 @@ function getSignedUrlExpiryDate() {
  * instead of reading it out again. `executor` lets a direct upload's confirm
  * write it in the transaction that confirms the upload.
  */
-async function createImageAttachment(
+export async function createImageAttachment(
   input: {
     userId: string;
     imageUploadId: UploadId;
@@ -127,7 +127,7 @@ async function findImageAttachments(
  * signature on) only those whose stored url has expired. Takes just the fields
  * it reads, so a projection from a join can be passed straight in.
  */
-async function resolveImageAttachmentUrls(
+export async function resolveImageAttachmentUrls(
   userId: string,
   rows: readonly SignableImageRow[],
 ): Promise<Map<string, string>> {
@@ -234,7 +234,7 @@ async function resolveImagesWhere(
 }
 
 /** The user's images by id, whether or not they've been sent on a message. */
-async function resolveImages(
+export async function resolveImages(
   userId: string,
   imageUploadIds: readonly string[],
 ) {
@@ -246,7 +246,7 @@ async function resolveImages(
  * a whole page of history rather than one per turn. Messages with no images are
  * absent from the map.
  */
-async function resolveMessageImages(
+export async function resolveMessageImages(
   userId: string,
   messageIds: readonly string[],
 ): Promise<Map<string, ResolvedImage[]>> {
@@ -308,7 +308,7 @@ async function findLinkedImageAttachmentIdsWhere(
 }
 
 /** Same, for every message in a conversation about to be deleted. */
-async function findConversationImageAttachmentIds(
+export async function findConversationImageAttachmentIds(
   userId: string,
   conversationId: string,
 ) {
@@ -329,7 +329,7 @@ async function findConversationImageAttachmentIds(
  * caller removes the object from storage; if that fails, the sweep does.
  * Null when no owned, unlinked, unreserved image matched.
  */
-async function deleteOwnedUnlinkedUnreservedImageAttachment(
+export async function deleteOwnedUnlinkedUnreservedImageAttachment(
   userId: string,
   imageUploadId: string,
 ) {
@@ -340,7 +340,7 @@ async function deleteOwnedUnlinkedUnreservedImageAttachment(
   });
 }
 
-async function deleteOwnedUnlinkedUnreservedImageAttachments(
+export async function deleteOwnedUnlinkedUnreservedImageAttachments(
   userId: string,
   candidateAttachmentIds: readonly string[],
   executor: Executor = db,
@@ -354,13 +354,3 @@ async function deleteOwnedUnlinkedUnreservedImageAttachments(
     executor,
   );
 }
-
-export const images = {
-  createImageAttachment,
-  resolveImageAttachmentUrls,
-  resolveImages,
-  resolveMessageImages,
-  findConversationImageAttachmentIds,
-  deleteOwnedUnlinkedUnreservedImageAttachment,
-  deleteOwnedUnlinkedUnreservedImageAttachments,
-};

@@ -8,14 +8,14 @@ import {
   type Executor,
 } from "../db";
 
-import { jobs } from "./jobs.data";
+import * as jobs from "./jobs.data";
 import type { JobSource } from "@parley/contract";
 import {
   transcriptText,
   type TranscriptSegment,
 } from "@parley/server-kit/transcription/transcript";
 import type { UploadId } from "@parley/server-kit/ids";
-import { attachments } from "./attachments.data";
+import * as attachments from "./attachments.data";
 
 /**
  * The transcript a completed job produced. Lives here, not in the job row
@@ -43,7 +43,7 @@ async function insertTranscript(
  * crash can't leave a job stuck `processing` with a transcript already written
  * (or a completed job with none).
  */
-async function saveCompletedTranscript(
+export async function saveCompletedTranscript(
   audioUploadId: UploadId,
   segments: readonly TranscriptSegment[],
   claimToken: string,
@@ -58,7 +58,7 @@ async function saveCompletedTranscript(
 }
 
 /** Bodies for a set of turns at once, keyed by audioUploadId — the batched context read. */
-async function findTranscripts(
+export async function findTranscripts(
   audioUploadIds: readonly string[],
 ): Promise<Map<string, string>> {
   if (audioUploadIds.length === 0) return new Map<string, string>();
@@ -82,7 +82,7 @@ export type StoredTranscriptAttachment = {
 };
 
 /** Ordered transcription attachments grouped by chat message. */
-async function findMessageTranscriptAttachments(
+export async function findMessageTranscriptAttachments(
   messageIds: readonly string[],
 ): Promise<Map<string, StoredTranscriptAttachment[]>> {
   const transcriptionsByMessageId = new Map<
@@ -137,9 +137,3 @@ async function findMessageTranscriptAttachments(
 
   return transcriptionsByMessageId;
 }
-
-export const transcripts = {
-  saveCompletedTranscript,
-  findTranscripts,
-  findMessageTranscriptAttachments,
-};

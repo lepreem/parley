@@ -1,3 +1,5 @@
+/** An in-process memo of the model lists each provider serves. */
+
 import { logger } from "@parley/server-kit/runtime/logger";
 
 /** The model lists each provider serves, held in this process's memory. */
@@ -12,7 +14,7 @@ type CacheKey = (typeof CACHE_KEYS)[keyof typeof CACHE_KEYS];
  * How long a process serves each entry before fetching it again. Each process
  * holds its own copy, so a restart fetches once more. An hour keeps a newly
  * listed model from waiting long, and costs the provider one catalog call an
- * hour, made in the background once a value is held (see getOrSetCache).
+ * hour, made in the background once a value is held (see getOrSet).
  */
 const CACHE_TTL_MS = {
   [CACHE_KEYS.openRouterModels]: 60 * 60 * 1000,
@@ -32,7 +34,7 @@ const inFlight = new Map<CacheKey, Promise<unknown>>();
  * the old value in place, and the next read starts another. Without it, a
  * read that finds the memo expired waits for the refresh.
  */
-export async function getOrSetCache<T>(
+export async function getOrSet<T>(
   name: CacheKey,
   fetch: () => Promise<T>,
   { serveStale = false }: { serveStale?: boolean } = {},
@@ -76,8 +78,3 @@ export function resetCacheMemo() {
   memo.clear();
   inFlight.clear();
 }
-
-/** An in-process memo; resetCacheMemo stays out of it, being for tests. */
-export const modelLists = {
-  getOrSet: getOrSetCache,
-};

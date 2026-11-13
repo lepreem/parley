@@ -1,6 +1,6 @@
-import { data } from "../data";
+import * as data from "../data";
 import { logger } from "@parley/server-kit/runtime/logger";
-import { UPLOAD_CONFIRM_WINDOW_MS, uploads } from "../uploads/uploads";
+import * as uploads from "../uploads/uploads";
 
 const log = logger.child({ component: "storageSweep" });
 
@@ -9,7 +9,7 @@ const log = logger.child({ component: "storageSweep" });
  * plus half again, so a confirm that checked its upload just inside the
  * window has long finished before the sweep can act on the same object.
  */
-const GRACE_MS = UPLOAD_CONFIRM_WINDOW_MS * 1.5;
+const GRACE_MS = uploads.UPLOAD_CONFIRM_WINDOW_MS * 1.5;
 /**
  * How long a finished job's uploaded audio stays on the server, for playing it
  * back from another device. The client keeps its own copy for after that.
@@ -28,7 +28,7 @@ const LOCK_NAME = "storage-sweep";
  * Returns how many were removed, or undefined when another process holds the
  * lock. Anything beyond the batch is next run's.
  */
-async function sweepUnusedObjects() {
+export async function run() {
   return data.advisoryLock.withAdvisoryLock(LOCK_NAME, async () => {
     const expired = await data.storageLedger.markFinishedAudioDeleted(
       new Date(Date.now() - AUDIO_RETENTION_MS),
@@ -71,7 +71,4 @@ async function sweepUnusedObjects() {
 }
 
 /** Runs every hour, one batch a run. */
-export const storageSweep = {
-  intervalMs: 60 * 60 * 1000,
-  run: sweepUnusedObjects,
-};
+export const intervalMs = 60 * 60 * 1000;

@@ -14,31 +14,29 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../../src/data", () => ({
-  data: {
-    jobs: {
-      claimAudioJob: mocks.claimAudioJob,
-      unclaimAndResetAudioJob: mocks.unclaimAndResetAudioJob,
-      failAudioJob: mocks.failAudioJob,
-    },
-    transcripts: { saveCompletedTranscript: mocks.saveCompletedTranscript },
+  jobs: {
+    claimAudioJob: mocks.claimAudioJob,
+    unclaimAndResetAudioJob: mocks.unclaimAndResetAudioJob,
+    failAudioJob: mocks.failAudioJob,
   },
+  transcripts: { saveCompletedTranscript: mocks.saveCompletedTranscript },
 }));
 
 vi.mock("../../src/ai/ai_transcribe_client/ai_transcribe_client", () => ({
-  transcription: {
-    transcribe: mocks.transcribeAI,
-    model: async () => "nova-3-general",
-  },
+  transcribe: mocks.transcribeAI,
+  model: async () => "nova-3-general",
 }));
 
-vi.mock("../../src/storage/sign", () => ({ sign: { url: mocks.signUrl } }));
+vi.mock("../../src/storage/sign", () => ({
+  url: mocks.signUrl,
+}));
 
 vi.mock("../../src/sse/hub", () => ({
   eventHub: { send: mocks.sendEvent },
 }));
 
 import { handleTranscribeJob } from "../../src/transcription/transcribeJob";
-import { jobCancellation } from "@parley/server-kit/transcription/jobCancellation";
+import * as jobCancellation from "@parley/server-kit/transcription/jobCancellation";
 import { DeadLetterError } from "../../src/message-queue/messageQueue";
 
 const audioInput = { audioUploadId } as const;

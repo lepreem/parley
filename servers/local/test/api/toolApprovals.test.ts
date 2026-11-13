@@ -6,7 +6,7 @@ vi.mock("../../core/db", async () =>
 );
 
 import { createApp } from "../../api/app";
-import { memory } from "../../api/src/memory";
+import * as memory from "../../api/src/memory";
 
 const CONVERSATION = randomUUID();
 const app = await createApp();

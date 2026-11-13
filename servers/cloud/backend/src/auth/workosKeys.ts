@@ -1,5 +1,5 @@
 import { createRemoteJWKSet } from "jose";
-import { workos } from "./auth";
+import * as workos from "./auth";
 
 /**
  * How long the fetched keys are trusted before they're fetched again. A token

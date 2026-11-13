@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { jobCancellation } from "./jobCancellation";
+import * as jobCancellation from "./jobCancellation";
 
 describe("jobCancellation", () => {
   it("aborts the signal of the job being worked on", () => {

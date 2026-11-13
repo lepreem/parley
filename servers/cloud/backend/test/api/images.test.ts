@@ -35,19 +35,17 @@ vi.mock("../../src/db", async () => ({
 // The ledger's SQL is covered by the integration tests. A confirm that goes
 // through runs its write against the insert mock.
 vi.mock("../../src/data/storageLedger.data", () => ({
-  storageLedger: {
-    recordPendingUpload: ledger.recordPendingUpload,
-    findLedgerEntry: ledger.findLedgerEntry,
-    forgetObjects: ledger.forgetObjects,
-    confirmUpload: async (
-      entry: unknown,
-      withinMs: number,
-      write: (executor: unknown) => Promise<unknown>,
-    ) => {
-      if (!(await ledger.claim(entry, withinMs))) return false;
-      await write({ insert: mockInsert });
-      return true;
-    },
+  recordPendingUpload: ledger.recordPendingUpload,
+  findLedgerEntry: ledger.findLedgerEntry,
+  forgetObjects: ledger.forgetObjects,
+  confirmUpload: async (
+    entry: unknown,
+    withinMs: number,
+    write: (executor: unknown) => Promise<unknown>,
+  ) => {
+    if (!(await ledger.claim(entry, withinMs))) return false;
+    await write({ insert: mockInsert });
+    return true;
   },
 }));
 
@@ -55,19 +53,15 @@ vi.mock("../../src/storage/bucket", () => ({
   // Literals: vi.mock factories run before this module's own bindings exist.
   AUDIO_BUCKET: "Audio",
   MAX_AUDIO_BYTES: 50 * 1024 * 1024,
-  bucket: {
-    createUploadUrl: mockCreateUploadUrl,
-    inspectUploadedObject: mockInspectUploadedObject,
-    delete: mockDeleteFromBucket,
-  },
+  createUploadUrl: mockCreateUploadUrl,
+  inspectUploadedObject: mockInspectUploadedObject,
+  delete: mockDeleteFromBucket,
 }));
 
 vi.mock("../../src/storage/sign", () => ({
   IMAGE_URL_TTL_SECONDS: 7 * 24 * 60 * 60,
-  sign: {
-    url: mockCreateSignedUrl,
-    urls: vi.fn(),
-  },
+  url: mockCreateSignedUrl,
+  urls: vi.fn(),
 }));
 
 vi.mock("../../src/data/images.data", async (importActual) => {
@@ -75,12 +69,9 @@ vi.mock("../../src/data/images.data", async (importActual) => {
     await importActual<typeof import("../../src/data/images.data")>();
   return {
     ...actual,
-    images: {
-      ...actual.images,
-      deleteOwnedUnlinkedUnreservedImageAttachment:
-        mockDeleteOwnedUnlinkedUnreservedImageAttachment,
-      resolveImages: mockResolveImages,
-    },
+    deleteOwnedUnlinkedUnreservedImageAttachment:
+      mockDeleteOwnedUnlinkedUnreservedImageAttachment,
+    resolveImages: mockResolveImages,
   };
 });
 

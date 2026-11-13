@@ -47,11 +47,8 @@ vi.mock("../../src/data/attachments.data", async (importActual) => {
     await importActual<typeof import("../../src/data/attachments.data")>();
   return {
     ...actual,
-    attachments: {
-      ...actual.attachments,
-      claimAttachments: mockClaimAttachments,
-      unclaimAttachments: mockUnclaimAttachments,
-    },
+    claimAttachments: mockClaimAttachments,
+    unclaimAttachments: mockUnclaimAttachments,
   };
 });
 
@@ -70,12 +67,9 @@ vi.mock("../../src/data/conversations.data", async (importActual) => {
     await importActual<typeof import("../../src/data/conversations.data")>();
   return {
     ...actual,
-    conversations: {
-      ...actual.conversations,
-      findOwnedConversation: mockFindOwnedConversation,
-      claimConversationTurn: mockClaimConversationTurn,
-      unclaimConversationTurn: mockUnclaimConversationTurn,
-    },
+    findOwnedConversation: mockFindOwnedConversation,
+    claimConversationTurn: mockClaimConversationTurn,
+    unclaimConversationTurn: mockUnclaimConversationTurn,
   };
 });
 
@@ -84,13 +78,10 @@ vi.mock("../../src/data/messages.data", async (importActual) => {
     await importActual<typeof import("../../src/data/messages.data")>();
   return {
     ...actual,
-    messages: {
-      ...actual.messages,
-      findContextHistory: mockFindContextHistory,
-      persistAndUnclaimChatTurn: mockPersistAndUnclaimChatTurn,
-      findConversationMessages: mockFindConversationMessages,
-      deleteOwnedMessage: mockDeleteOwnedMessage,
-    },
+    findContextHistory: mockFindContextHistory,
+    persistAndUnclaimChatTurn: mockPersistAndUnclaimChatTurn,
+    findConversationMessages: mockFindConversationMessages,
+    deleteOwnedMessage: mockDeleteOwnedMessage,
   };
 });
 
@@ -99,12 +90,9 @@ vi.mock("../../src/data/images.data", async (importActual) => {
     await importActual<typeof import("../../src/data/images.data")>();
   return {
     ...actual,
-    images: {
-      ...actual.images,
-      resolveImages: mockResolveImages,
-      resolveMessageImages: mockResolveMessageImages,
-      resolveImageAttachmentUrls: mockResolveImageAttachmentUrls,
-    },
+    resolveImages: mockResolveImages,
+    resolveMessageImages: mockResolveMessageImages,
+    resolveImageAttachmentUrls: mockResolveImageAttachmentUrls,
   };
 });
 
@@ -113,31 +101,24 @@ vi.mock("../../src/data/transcripts.data", async (importActual) => {
     await importActual<typeof import("../../src/data/transcripts.data")>();
   return {
     ...actual,
-    transcripts: {
-      ...actual.transcripts,
-      findMessageTranscriptAttachments: mockFindMessageTranscriptAttachments,
-      findTranscripts: mockFindTranscripts,
-      linkTranscriptionsToMessage: vi.fn(),
-    },
+    findMessageTranscriptAttachments: mockFindMessageTranscriptAttachments,
+    findTranscripts: mockFindTranscripts,
+    linkTranscriptionsToMessage: vi.fn(),
   };
 });
 
 // Controllers release deleted objects through the upload module.
 vi.mock("../../src/uploads/uploads", () => ({
-  uploads: { deleteObjects: mockDeleteObjects },
+  deleteObjects: mockDeleteObjects,
 }));
 
 vi.mock("../../src/storage/bucket", () => ({
-  bucket: {
-    delete: vi.fn(),
-  },
+  delete: vi.fn(),
 }));
 
 vi.mock("../../src/storage/sign", () => ({
   IMAGE_URL_TTL_SECONDS: 7 * 24 * 60 * 60,
-  sign: {
-    urls: vi.fn(),
-  },
+  urls: vi.fn(),
 }));
 
 // buildUserTurn is the real one: what the model is handed for an image turn is
@@ -149,13 +130,10 @@ vi.mock("../../src/ai/ai_chat_client/ai_chat_client", async (importActual) => {
     >();
   return {
     ...actual,
-    chat: {
-      ...actual.chat,
-      findModel: mockFindChatModel,
-      complete: mockChatAI,
-      generateTitle: mockGenerateTitle,
-      isGuestModel: mockIsGuestModel,
-    },
+    findModel: mockFindChatModel,
+    complete: mockChatAI,
+    generateTitle: mockGenerateTitle,
+    isGuestModel: mockIsGuestModel,
   };
 });
 
@@ -177,7 +155,7 @@ import {
   MAX_HISTORY_MESSAGES,
 } from "../../src/chat/contextWindow";
 import { MAX_TRANSCRIPTS } from "../../src/schema/messages.schema";
-import { NoRoomToReply } from "../../src/ai";
+import { NoRoomToReply } from "../../src/ai/ai_chat_client/ai_chat_client";
 import {
   authedHeaders,
   guestCookieHeader,

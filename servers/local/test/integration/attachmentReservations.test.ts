@@ -13,9 +13,9 @@ import {
   Conversations,
   db,
 } from "../../core/db";
-import { attachments } from "../../core/data/attachments.data";
-import { images } from "../../core/data/images.data";
-import { messages } from "../../core/data/messages.data";
+import * as attachments from "../../core/data/attachments.data";
+import * as images from "../../core/data/images.data";
+import * as messages from "../../core/data/messages.data";
 import { deleteAllRows } from "../helpers/inMemoryDb";
 
 const imageUploadId = randomUUID();

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { CTX_KEYS, FORM_KEYS } from "../../../core/keys";
-import { MAX_IMAGE_BYTES } from "../../../core/files";
+import * as files from "../../../core/files";
 import { displayName, uploadedFileField } from "./upload.schema";
 
 /** POST /upload/image — an image to store, for a message to carry. */
@@ -8,7 +8,7 @@ export const imageUploadSchema = z
   .object({
     [FORM_KEYS.file]: uploadedFileField({
       typePrefix: "image/",
-      maxBytes: MAX_IMAGE_BYTES,
+      maxBytes: files.MAX_IMAGE_BYTES,
       wrongType: () => "File must be an image",
       tooLarge: "Image is too large",
     }),

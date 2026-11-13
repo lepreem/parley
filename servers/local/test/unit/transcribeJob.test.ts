@@ -14,34 +14,32 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../../core/data", () => ({
-  data: {
-    jobs: {
-      claimAudioJob: mocks.claimAudioJob,
-      unclaimAndResetAudioJob: mocks.unclaimAndResetAudioJob,
-      failAudioJob: mocks.failAudioJob,
-    },
-    transcripts: { saveCompletedTranscript: mocks.saveCompletedTranscript },
+  jobs: {
+    claimAudioJob: mocks.claimAudioJob,
+    unclaimAndResetAudioJob: mocks.unclaimAndResetAudioJob,
+    failAudioJob: mocks.failAudioJob,
   },
+  transcripts: { saveCompletedTranscript: mocks.saveCompletedTranscript },
 }));
 
 vi.mock("../../core/ai/ai_transcribe_client", () => ({
   transcribeAI: mocks.transcribeAI,
 }));
 
-vi.mock("../../core/files", () => ({ files: { path: mocks.filePath } }));
+vi.mock("../../core/files", () => ({
+  pathOf: mocks.filePath,
+}));
 
 vi.mock("../../core/message-queue/messageQueue", async (importActual) => ({
   ...(await importActual<
     typeof import("../../core/message-queue/messageQueue")
   >()),
-  mq: {
-    queues: { TRANSCRIBE_DONE: "transcribe_done" },
-    publish: mocks.publish,
-  },
+  queues: { TRANSCRIBE_DONE: "transcribe_done" },
+  publish: mocks.publish,
 }));
 
 import { handleTranscribeJob } from "../../api/src/transcribeJob";
-import { jobCancellation } from "@parley/server-kit/transcription/jobCancellation";
+import * as jobCancellation from "@parley/server-kit/transcription/jobCancellation";
 import { DeadLetterError } from "../../core/message-queue/messageQueue";
 
 const audioInput = { audioUploadId } as const;

@@ -2,12 +2,12 @@ import { mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { logger, messageOf } from "@parley/server-kit/runtime/logger";
-import { mq, type QueuePayloads } from "../../core/message-queue/messageQueue";
-import { data } from "../../core/data";
-import { files, MAX_AUDIO_BYTES } from "../../core/files";
-import { jobCancellation } from "@parley/server-kit/transcription/jobCancellation";
+import * as mq from "../../core/message-queue/messageQueue";
+import * as data from "../../core/data";
+import * as files from "../../core/files";
+import * as jobCancellation from "@parley/server-kit/transcription/jobCancellation";
 import type { TranscriptSegment } from "@parley/server-kit/transcription/transcript";
-import { YtDlpError, ytDlp, type VideoInfo } from "./ytDlp";
+import * as ytDlp from "./ytDlp";
 
 const log = logger.child({ component: "youtube-fetch" });
 
@@ -43,7 +43,7 @@ const MAX_ERROR_CHARS = 500;
  * output file) come out the same every time.
  */
 function isRetryable(error: unknown) {
-  if (!(error instanceof YtDlpError)) return false;
+  if (!(error instanceof ytDlp.YtDlpError)) return false;
   const message = error.message.toLowerCase();
   return !PERMANENT_FAILURES.some((marker) => message.includes(marker));
 }
@@ -53,7 +53,7 @@ function isRetryable(error: unknown) {
  * video's own language; never a machine translation. Null when there's
  * neither in a format this reads.
  */
-function captionTrackUrl(info: VideoInfo): string | null {
+function captionTrackUrl(info: ytDlp.VideoInfo): string | null {
   const uploaded = Object.values(info.subtitles ?? {})[0];
   const recognized = Object.entries(info.automatic_captions ?? {}).find(
     ([language]) => language.endsWith("-orig"),
@@ -135,16 +135,16 @@ async function fetchAndStoreAudio(
     (sum, format) => sum + (format.filesize ?? format.filesize_approx ?? 0),
     0,
   );
-  if (expectedBytes > MAX_AUDIO_BYTES) {
+  if (expectedBytes > files.MAX_AUDIO_BYTES) {
     throw new Error(
-      `audio is ~${expectedBytes} bytes, over the ${MAX_AUDIO_BYTES}-byte limit`,
+      `audio is ~${expectedBytes} bytes, over the ${files.MAX_AUDIO_BYTES}-byte limit`,
     );
   }
 
   cancelled.throwIfAborted();
   const directory = await mkdtemp(path.join(tmpdir(), "youtube-fetch-"));
   try {
-    await ytDlp.downloadAudio(url, directory, MAX_AUDIO_BYTES, cancelled);
+    await ytDlp.downloadAudio(url, directory, files.MAX_AUDIO_BYTES, cancelled);
     cancelled.throwIfAborted();
 
     // An aborted download leaves a truncated *.part file behind; never
@@ -154,7 +154,7 @@ async function fetchAndStoreAudio(
     );
     if (!fileName) {
       throw new Error(
-        `yt-dlp produced no audio (it may exceed the ${MAX_AUDIO_BYTES / (1024 * 1024)}MB limit, or the video may be unavailable)`,
+        `yt-dlp produced no audio (it may exceed the ${files.MAX_AUDIO_BYTES / (1024 * 1024)}MB limit, or the video may be unavailable)`,
       );
     }
 
@@ -162,9 +162,9 @@ async function fetchAndStoreAudio(
     // The size up front can be missing or low, and yt-dlp can't stop a
     // download whose size it doesn't know.
     const { size } = await stat(file);
-    if (size > MAX_AUDIO_BYTES) {
+    if (size > files.MAX_AUDIO_BYTES) {
       throw new Error(
-        `audio is ${size} bytes, over the ${MAX_AUDIO_BYTES}-byte limit`,
+        `audio is ${size} bytes, over the ${files.MAX_AUDIO_BYTES}-byte limit`,
       );
     }
 
@@ -216,7 +216,7 @@ export async function handleYoutubeFetch({
   audioUploadId,
   url,
   useCaptionsIfAvailable,
-}: QueuePayloads[typeof mq.queues.YT_FETCH]) {
+}: mq.QueuePayloads[typeof mq.queues.YT_FETCH]) {
   // Started before looking for the job, so a delete is seen by one or the other.
   const { signal: cancelled, finish } = jobCancellation.start(audioUploadId);
   try {

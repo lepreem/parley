@@ -12,11 +12,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../../src/data", () => ({
-  data: {
-    jobs: {
-      findAudioJob: mocks.findAudioJob,
-      failAudioJobById: mocks.failAudioJobById,
-    },
+  jobs: {
+    findAudioJob: mocks.findAudioJob,
+    failAudioJobById: mocks.failAudioJobById,
   },
 }));
 
@@ -24,7 +22,7 @@ vi.mock("../../src/supadata/youtubeCaptions", async (importOriginal) => ({
   ...(await importOriginal<
     typeof import("../../src/supadata/youtubeCaptions")
   >()),
-  youtubeCaptions: { fetchCaptions: mocks.fetchCaptions },
+  fetchCaptions: mocks.fetchCaptions,
 }));
 
 vi.mock("../../src/transcription/transcribeJob", () => ({
@@ -36,7 +34,10 @@ vi.mock("../../src/sse/hub", () => ({
 }));
 
 import { handleYoutubeCaptionsJob } from "../../src/transcription/youtubeCaptionsJob";
-import { CAPTIONS_MESSAGES, CaptionsError } from "../../src/supadata";
+import {
+  CAPTIONS_MESSAGES,
+  CaptionsError,
+} from "../../src/supadata/youtubeCaptions";
 
 const message = { audioUploadId, userId: "user_01", url };
 const delivery = { attempt: 1, lastAttempt: false, redelivered: false };

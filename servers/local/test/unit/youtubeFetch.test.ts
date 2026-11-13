@@ -12,36 +12,33 @@ const { mockProbe, mockDownloadAudio, mockWrite, mockPublish, mockFindJob } =
   }));
 
 vi.mock("../../core/data", () => ({
-  data: { jobs: { findAudioJob: mockFindJob } },
+  jobs: { findAudioJob: mockFindJob },
 }));
 
 vi.mock("../../api/src/ytDlp", async (importActual) => ({
   ...(await importActual<typeof import("../../api/src/ytDlp")>()),
-  ytDlp: { probe: mockProbe, downloadAudio: mockDownloadAudio },
+  probe: mockProbe,
+  downloadAudio: mockDownloadAudio,
 }));
 
 vi.mock("../../core/files", () => ({
   MAX_AUDIO_BYTES: 1_000,
-  files: { write: mockWrite },
+  write: mockWrite,
 }));
 
 vi.mock("../../core/message-queue/messageQueue", async (importActual) => ({
   ...(await importActual<
     typeof import("../../core/message-queue/messageQueue")
   >()),
-  mq: {
-    queues: (
-      await importActual<
-        typeof import("../../core/message-queue/messageQueue")
-      >()
-    ).QUEUES,
-    publish: mockPublish,
-  },
+  queues: (
+    await importActual<typeof import("../../core/message-queue/messageQueue")>()
+  ).queues,
+  publish: mockPublish,
 }));
 
 import { YtDlpError } from "../../api/src/ytDlp";
 import { fetchCaptions, handleYoutubeFetch } from "../../api/src/youtubeFetch";
-import { jobCancellation } from "@parley/server-kit/transcription/jobCancellation";
+import * as jobCancellation from "@parley/server-kit/transcription/jobCancellation";
 
 const job = {
   audioUploadId: "11111111-1111-4111-8111-111111111111",

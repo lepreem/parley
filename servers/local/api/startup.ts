@@ -1,7 +1,7 @@
 import { verifyServices } from "@parley/server-kit/runtime/preflight";
-import { memory } from "./src/memory";
+import * as memory from "./src/memory";
 import { pingTranscribeAI } from "../core/ai/ai_transcribe_client";
-import { ytDlp } from "./src/ytDlp";
+import * as ytDlp from "./src/ytDlp";
 
 /**
  * Fail-fast preflight: aborts startup if any third-party dependency is

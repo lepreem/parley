@@ -1,15 +1,11 @@
 import { transcribeAI } from "../../core/ai/ai_transcribe_client";
-import { files } from "../../core/files";
-import { data } from "../../core/data";
+import * as files from "../../core/files";
+import * as data from "../../core/data";
 import { logger } from "@parley/server-kit/runtime/logger";
-import {
-  DeadLetterError,
-  mq,
-  type DeliveryMetadata,
-} from "../../core/message-queue/messageQueue";
+import * as mq from "../../core/message-queue/messageQueue";
 import type { TranscriptSegment } from "@parley/server-kit/transcription/transcript";
 import type { UploadId } from "@parley/server-kit/ids";
-import { jobCancellation } from "@parley/server-kit/transcription/jobCancellation";
+import * as jobCancellation from "@parley/server-kit/transcription/jobCancellation";
 
 const log = logger.child({ component: "transcribe" });
 
@@ -39,7 +35,7 @@ type ClaimedJob = NonNullable<
 /** The job's audio, transcribed. */
 async function transcribeAudio(job: ClaimedJob, cancelled: AbortSignal) {
   return transcribeAI(
-    files.path({ kind: "audio", uploadId: job.audioUploadId }),
+    files.pathOf({ kind: "audio", uploadId: job.audioUploadId }),
     cancelled,
   );
 }
@@ -77,7 +73,7 @@ async function settleFailedJob(
       claimToken,
     );
   } catch (unclaimError) {
-    throw new DeadLetterError(
+    throw new mq.DeadLetterError(
       "Could not unclaim and reset the job after it failed; it is left " +
         "processing until the next startup queues it again",
       { cause: unclaimError },
@@ -100,7 +96,7 @@ export async function handleTranscribeJob(
     audioUploadId: UploadId;
     segments?: TranscriptSegment[];
   },
-  { attempt, lastAttempt }: DeliveryMetadata,
+  { attempt, lastAttempt }: mq.DeliveryMetadata,
 ) {
   let claimToken: string | null = null;
   const { signal: cancelled, finish } = jobCancellation.start(audioUploadId);

@@ -20,16 +20,12 @@ const testState = vi.hoisted(() => ({
 }));
 
 vi.mock("../../src/storage/bucket", () => ({
-  bucket: {
-    delete: testState.deleteFromBucket,
-  },
+  delete: testState.deleteFromBucket,
 }));
 
 vi.mock("../../src/storage/sign", () => ({
   IMAGE_URL_TTL_SECONDS: 604800,
-  sign: {
-    urls: vi.fn(),
-  },
+  urls: vi.fn(),
 }));
 
 vi.mock("../../src/db", async () => {
@@ -59,13 +55,13 @@ import {
   users,
   type Executor,
 } from "../../src/db";
-import { attachments } from "../../src/data/attachments.data";
-import { jobs } from "../../src/data/jobs.data";
-import { images } from "../../src/data/images.data";
-import { storageSweep } from "../../src/recurring/storageSweep";
-import { uploads } from "../../src/uploads/uploads";
-import { storageLedger } from "../../src/data/storageLedger.data";
-import { advisoryLock } from "../../src/data/advisoryLock.data";
+import * as attachments from "../../src/data/attachments.data";
+import * as jobs from "../../src/data/jobs.data";
+import * as images from "../../src/data/images.data";
+import * as storageSweep from "../../src/recurring/storageSweep";
+import * as uploads from "../../src/uploads/uploads";
+import * as storageLedger from "../../src/data/storageLedger.data";
+import * as advisoryLock from "../../src/data/advisoryLock.data";
 
 const userId = "ledger-owner";
 const HOUR_MS = 60 * 60 * 1000;

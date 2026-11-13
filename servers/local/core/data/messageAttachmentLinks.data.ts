@@ -6,7 +6,7 @@ import {
   type Executor,
 } from "../db";
 
-function attachmentIsUnlinked(executor: Executor) {
+export function attachmentIsUnlinked(executor: Executor) {
   return notExists(
     executor
       .select({ messageId: ChatMessageAttachmentLinks.messageId })
@@ -17,7 +17,7 @@ function attachmentIsUnlinked(executor: Executor) {
   );
 }
 
-async function linkAttachmentsToMessage(
+export async function linkAttachmentsToMessage(
   messageId: string,
   attachmentIds: readonly string[],
   executor: Executor = db,
@@ -32,8 +32,3 @@ async function linkAttachmentsToMessage(
     })),
   );
 }
-
-export const messageAttachmentLinks = {
-  attachmentIsUnlinked,
-  linkAttachmentsToMessage,
-};

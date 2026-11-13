@@ -7,8 +7,8 @@ vi.mock("../../core/db", async () =>
 
 import { AudioTranscriptionJobs, db, TranscriptContents } from "../../core/db";
 import { deleteAllRows } from "../helpers/inMemoryDb";
-import { jobs } from "../../core/data/jobs.data";
-import { transcripts } from "../../core/data/transcripts.data";
+import * as jobs from "../../core/data/jobs.data";
+import * as transcripts from "../../core/data/transcripts.data";
 
 /** A queued audio job, claimed, as the transcription handler holds it. */
 async function claimedJob() {

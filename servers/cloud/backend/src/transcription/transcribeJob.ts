@@ -1,15 +1,12 @@
 import { transcription, type Transcription } from "../ai";
 import { sign } from "../storage";
-import { data } from "../data";
+import * as data from "../data";
 import { logger } from "@parley/server-kit/runtime/logger";
-import {
-  DeadLetterError,
-  type DeliveryMetadata,
-} from "../message-queue/messageQueue";
+import * as mq from "../message-queue/messageQueue";
 import type { TranscriptSegment } from "@parley/server-kit/transcription/transcript";
 import type { UploadId } from "@parley/server-kit/ids";
 import { eventHub } from "../sse/hub";
-import { jobCancellation } from "@parley/server-kit/transcription/jobCancellation";
+import * as jobCancellation from "@parley/server-kit/transcription/jobCancellation";
 
 const log = logger.child({ component: "transcribe" });
 
@@ -110,7 +107,7 @@ async function settleFailedJob(
       claimToken,
     );
   } catch (unclaimError) {
-    throw new DeadLetterError(
+    throw new mq.DeadLetterError(
       "Could not unclaim and reset the job after it failed; it is left processing, " +
         "so reset it to queued with no claim token before replaying this",
       { cause: unclaimError },
@@ -136,7 +133,7 @@ export async function handleTranscribeJob(
     segments?: TranscriptSegment[];
     language?: string;
   },
-  { attempt, lastAttempt, redelivered }: DeliveryMetadata,
+  { attempt, lastAttempt, redelivered }: mq.DeliveryMetadata,
 ) {
   let job: ClaimedJob | null = null;
   const { signal: cancelled, finish } = jobCancellation.start(audioUploadId);

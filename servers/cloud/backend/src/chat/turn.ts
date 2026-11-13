@@ -7,10 +7,10 @@ import type {
 import type { ReplyInProgressEntry } from "@parley/server-kit/memory/repliesInProgress";
 import { logger, messageOf } from "@parley/server-kit/runtime/logger";
 import { addSource } from "@parley/server-kit/webSources";
-import { data, type HistoryCandidate, type HistoryTranscript } from "../data";
-import { buildUserTurn, chat, type ChatTurn } from "../ai";
+import * as data from "../data";
+import { chat, type ChatTurn } from "../ai";
 import { measurePreparation } from "../metrics/preparationMetrics";
-import { uploads } from "../uploads/uploads";
+import * as uploads from "../uploads/uploads";
 import type { messageCreateBodySchema } from "../schema/messages.schema";
 import {
   MAX_CONTEXT_CHARS,
@@ -19,7 +19,7 @@ import {
   completionTokenCeiling,
   countMessagesInContextWindow,
 } from "./contextWindow";
-import { memory } from "../memory";
+import * as memory from "../memory";
 import { buildPrompt, countImageInputs, withTranscripts } from "./prompt";
 import type { TurnClaim } from "./turnClaim";
 
@@ -106,13 +106,13 @@ export type PreparedTurn = {
   historyCharCounts: number[];
   newTurnCharCount: number;
   /** The new turn's transcripts, kept with its text once it's saved. */
-  newTurnTranscripts: HistoryTranscript[];
+  newTurnTranscripts: data.messages.HistoryTranscript[];
   /** What went into the prompt, for the turn's stats. */
   contextStats: TurnStats["context"];
 };
 
 /** History candidates as the prompt would carry them, measured for the budget. */
-function measureHistory(candidates: readonly HistoryCandidate[]) {
+function measureHistory(candidates: readonly data.messages.HistoryCandidate[]) {
   return candidates.map((candidate) => {
     const promptContent = withTranscripts(
       candidate.content,
@@ -132,7 +132,7 @@ function measureHistory(candidates: readonly HistoryCandidate[]) {
  */
 async function admitAndSignHistory(
   userId: string,
-  candidates: readonly HistoryCandidate[],
+  candidates: readonly data.messages.HistoryCandidate[],
   newTurnCharCount: number,
   newTurnImageCount: number,
 ): Promise<AdmittedTurn[]> {
@@ -262,7 +262,7 @@ export async function prepareTurn(
   );
   const prompt = buildPrompt(
     history,
-    buildUserTurn(
+    chat.buildUserTurn(
       newTurnContent,
       newTurnResolvedImages.map((image) => image.url),
     ),

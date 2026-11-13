@@ -8,7 +8,7 @@ vi.mock("../../core/db", async () =>
 
 import { AudioTranscriptionJobs, db } from "../../core/db";
 import { deleteAllRows } from "../helpers/inMemoryDb";
-import { jobs } from "../../core/data/jobs.data";
+import * as jobs from "../../core/data/jobs.data";
 
 async function createJob() {
   const audioUploadId = randomUUID();

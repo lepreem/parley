@@ -9,12 +9,10 @@ vi.mock("../../core/db", async () => ({
 }));
 
 vi.mock("../../core/data/images.data", () => ({
-  images: {
-    deleteUnlinkedUnreservedImageAttachments: vi.fn(),
-  },
+  deleteUnlinkedUnreservedImageAttachments: vi.fn(),
 }));
 
-import { messages } from "../../core/data/messages.data";
+import * as messages from "../../core/data/messages.data";
 
 const createdAt = new Date("2026-08-31T00:00:00.000Z");
 

@@ -9,7 +9,7 @@ vi.mock("@supabase/supabase-js", () => ({
   createClient: () => ({ storage: { from: () => storage } }),
 }));
 
-import { sign } from "../../src/storage/sign";
+import * as sign from "../../src/storage/sign";
 
 const USER = "user_01";
 const WEEK = 7 * 24 * 60 * 60;

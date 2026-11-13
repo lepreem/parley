@@ -18,7 +18,8 @@ import {
   Conversations,
   db,
 } from "../../core/db";
-import { files, MAX_IMAGE_BYTES } from "../../core/files";
+import * as files from "../../core/files";
+import { MAX_IMAGE_BYTES } from "../../core/files";
 import { createApp } from "../../api/app";
 import { originHeaders } from "../helpers/headers";
 import { deleteAllRows } from "../helpers/inMemoryDb";

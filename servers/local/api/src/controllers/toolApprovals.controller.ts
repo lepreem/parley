@@ -1,7 +1,7 @@
 import type { Context } from "hono";
 import type { ToolApproval } from "@parley/contract";
 import { CTX_KEYS } from "../../../core/keys";
-import { memory } from "../memory";
+import * as memory from "../memory";
 
 /** GET /conversations/:conversationId/tool-approvals */
 export function handleListToolApprovals(c: Context) {

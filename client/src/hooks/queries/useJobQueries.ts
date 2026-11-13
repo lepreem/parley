@@ -11,7 +11,7 @@ import {
   type JobsFilters,
 } from "../../api/jobs";
 import { errorMessage } from "../../api/http";
-import { audioCopies } from "../../media/audioCopies";
+import * as audioCopies from "../../media/audioCopies";
 import { queryKeys } from "../../lib/queryClient";
 import { useServer } from "../server/useServer";
 import { useToast } from "../toast/useToast";

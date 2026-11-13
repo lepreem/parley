@@ -12,7 +12,7 @@ vi.mock("../../src/db", async () => ({
   ...(await import("../helpers/dbTableStubs")).tableStubs,
 }));
 
-import { conversations } from "../../src/data/conversations.data";
+import * as conversations from "../../src/data/conversations.data";
 
 beforeEach(() => {
   vi.clearAllMocks();

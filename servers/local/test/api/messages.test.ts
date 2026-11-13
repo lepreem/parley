@@ -45,11 +45,8 @@ vi.mock("../../core/data/attachments.data", async (importActual) => {
     await importActual<typeof import("../../core/data/attachments.data")>();
   return {
     ...actual,
-    attachments: {
-      ...actual.attachments,
-      claimAttachments: mockClaimAttachments,
-      unclaimAttachments: mockUnclaimAttachments,
-    },
+    claimAttachments: mockClaimAttachments,
+    unclaimAttachments: mockUnclaimAttachments,
   };
 });
 
@@ -68,12 +65,9 @@ vi.mock("../../core/data/conversations.data", async (importActual) => {
     await importActual<typeof import("../../core/data/conversations.data")>();
   return {
     ...actual,
-    conversations: {
-      ...actual.conversations,
-      findConversation: mockFindConversation,
-      claimConversationTurn: mockClaimConversationTurn,
-      unclaimConversationTurn: mockUnclaimConversationTurn,
-    },
+    findConversation: mockFindConversation,
+    claimConversationTurn: mockClaimConversationTurn,
+    unclaimConversationTurn: mockUnclaimConversationTurn,
   };
 });
 
@@ -82,13 +76,10 @@ vi.mock("../../core/data/messages.data", async (importActual) => {
     await importActual<typeof import("../../core/data/messages.data")>();
   return {
     ...actual,
-    messages: {
-      ...actual.messages,
-      findCreateMessageHistory: mockFindCreateMessageHistory,
-      persistAndUnclaimChatTurn: mockPersistAndUnclaimChatTurn,
-      findConversationMessages: mockFindConversationMessages,
-      deleteMessage: mockDeleteMessage,
-    },
+    findCreateMessageHistory: mockFindCreateMessageHistory,
+    persistAndUnclaimChatTurn: mockPersistAndUnclaimChatTurn,
+    findConversationMessages: mockFindConversationMessages,
+    deleteMessage: mockDeleteMessage,
   };
 });
 
@@ -97,12 +88,9 @@ vi.mock("../../core/data/images.data", async (importActual) => {
     await importActual<typeof import("../../core/data/images.data")>();
   return {
     ...actual,
-    images: {
-      ...actual.images,
-      resolveImages: mockResolveImages,
-      resolveMessageImages: mockResolveMessageImages,
-      resolveImageAttachmentUrls: mockResolveImageAttachmentUrls,
-    },
+    resolveImages: mockResolveImages,
+    resolveMessageImages: mockResolveMessageImages,
+    resolveImageAttachmentUrls: mockResolveImageAttachmentUrls,
   };
 });
 
@@ -111,19 +99,19 @@ vi.mock("../../core/data/transcripts.data", async (importActual) => {
     await importActual<typeof import("../../core/data/transcripts.data")>();
   return {
     ...actual,
-    transcripts: {
-      ...actual.transcripts,
-      findMessageTranscriptAttachments: mockFindMessageTranscriptAttachments,
-      findTranscripts: mockFindTranscripts,
-      linkTranscriptionsToMessage: vi.fn(),
-    },
+    findMessageTranscriptAttachments: mockFindMessageTranscriptAttachments,
+    findTranscripts: mockFindTranscripts,
+    linkTranscriptionsToMessage: vi.fn(),
   };
 });
 
 // Controllers release deleted objects through the upload module.
 vi.mock("../../core/files", async (importActual) => {
   const actual = await importActual<typeof import("../../core/files")>();
-  return { ...actual, files: { ...actual.files, delete: mockDeleteFiles } };
+  return {
+    ...actual,
+    delete: mockDeleteFiles,
+  };
 });
 
 // buildUserTurn is the real one: what the model is handed for an image turn is

@@ -7,7 +7,7 @@ import {
   type Executor,
 } from "../db";
 import type { UploadId } from "@parley/server-kit/ids";
-import { attachments } from "./attachments.data";
+import * as attachments from "./attachments.data";
 
 /** What the client is told about an image, and what the model needs of it. */
 const imageAttachmentColumns = {
@@ -28,7 +28,7 @@ type ImageAttachmentRow = {
  * Where an image's bytes are served. Relative to this server, which may be
  * reached by more than one name (this machine's, or its Tailscale one).
  */
-function imageUrl(imageUploadId: string) {
+export function imageUrl(imageUploadId: string) {
   return `/upload/image/${imageUploadId}`;
 }
 
@@ -42,7 +42,7 @@ export type ResolvedImage = {
 };
 
 /** The row for an image whose file is already written. */
-async function createImageAttachment(input: {
+export async function createImageAttachment(input: {
   imageUploadId: UploadId;
   fileName: string;
   mimeType: string;
@@ -112,7 +112,7 @@ async function resolveImagesWhere(
 }
 
 /** Images by id, whether or not they've been sent on a message. */
-async function resolveImages(imageUploadIds: readonly string[]) {
+export async function resolveImages(imageUploadIds: readonly string[]) {
   return resolveImagesWhere(imageUploadIds, undefined);
 }
 
@@ -121,7 +121,7 @@ async function resolveImages(imageUploadIds: readonly string[]) {
  * a whole page of history rather than one per turn. Messages with no images are
  * absent from the map.
  */
-async function resolveMessageImages(
+export async function resolveMessageImages(
   messageIds: readonly string[],
 ): Promise<Map<string, ResolvedImage[]>> {
   const imagesByMessageId = new Map<string, ResolvedImage[]>();
@@ -172,7 +172,9 @@ async function findLinkedImageAttachmentIdsWhere(filter: SQL | undefined) {
 }
 
 /** Same, for every message in a conversation about to be deleted. */
-async function findConversationImageAttachmentIds(conversationId: string) {
+export async function findConversationImageAttachmentIds(
+  conversationId: string,
+) {
   return findLinkedImageAttachmentIdsWhere(
     inArray(
       ChatMessageAttachmentLinks.messageId,
@@ -188,14 +190,16 @@ async function findConversationImageAttachmentIds(conversationId: string) {
  * Deletes the row; the caller removes its file. Null when no unlinked,
  * unreserved image matched.
  */
-async function deleteUnlinkedUnreservedImageAttachment(imageUploadId: string) {
+export async function deleteUnlinkedUnreservedImageAttachment(
+  imageUploadId: string,
+) {
   return attachments.deleteUnlinkedUnreservedAttachment({
     attachmentId: imageUploadId,
     kind: "image",
   });
 }
 
-async function deleteUnlinkedUnreservedImageAttachments(
+export async function deleteUnlinkedUnreservedImageAttachments(
   candidateAttachmentIds: readonly string[],
   executor: Executor = db,
 ) {
@@ -204,13 +208,3 @@ async function deleteUnlinkedUnreservedImageAttachments(
     executor,
   );
 }
-
-export const images = {
-  imageUrl,
-  createImageAttachment,
-  resolveImages,
-  resolveMessageImages,
-  findConversationImageAttachmentIds,
-  deleteUnlinkedUnreservedImageAttachment,
-  deleteUnlinkedUnreservedImageAttachments,
-};

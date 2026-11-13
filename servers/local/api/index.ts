@@ -3,12 +3,12 @@ const env = getApiEnv();
 import { getApiEnv } from "../core/env";
 import { EVERYONE, eventHub } from "./src/sse/hub";
 
-import { mq } from "../core/message-queue/messageQueue";
+import * as mq from "../core/message-queue/messageQueue";
 import { resumeUnfinishedJobs } from "../core/audioTranscription";
-import { data } from "../core/data";
+import * as data from "../core/data";
 import { closeDb, migrateDb } from "../core/db";
 import { onShutdown } from "@parley/server-kit/runtime/shutdown";
-import { files } from "../core/files";
+import * as files from "../core/files";
 import { logger } from "@parley/server-kit/runtime/logger";
 import { handleTranscribeJob } from "./src/transcribeJob";
 import { handleYoutubeFetch } from "./src/youtubeFetch";

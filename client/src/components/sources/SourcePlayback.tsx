@@ -10,7 +10,7 @@ import { fetchJobAudio, type Job } from "../../api/jobs";
 import { errorMessage } from "../../api/http";
 import { serverUrl } from "../../api/server";
 import { useServer } from "../../hooks/server/useServer";
-import { audioCopies } from "../../media/audioCopies";
+import * as audioCopies from "../../media/audioCopies";
 import { classifyFile, MEDIA_ACCEPT } from "../../media/fileKind";
 import { prepareSpeech, preparedSpeechName } from "../../media/speech";
 import { youtubeEmbedUrl } from "../../media/youtube";

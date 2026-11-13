@@ -6,15 +6,18 @@ const { mockRequeue, mockPublish } = vi.hoisted(() => ({
 }));
 
 vi.mock("../../core/data", () => ({
-  data: { jobs: { requeueUnfinishedAudioJobs: mockRequeue } },
+  jobs: { requeueUnfinishedAudioJobs: mockRequeue },
 }));
 
 vi.mock("../../core/message-queue/messageQueue", async (importActual) => {
-  const { QUEUES } =
+  const { queues: QUEUES } =
     await importActual<
       typeof import("../../core/message-queue/messageQueue")
     >();
-  return { mq: { queues: QUEUES, publish: mockPublish } };
+  return {
+    queues: QUEUES,
+    publish: mockPublish,
+  };
 });
 
 import { resumeUnfinishedJobs } from "../../core/audioTranscription";

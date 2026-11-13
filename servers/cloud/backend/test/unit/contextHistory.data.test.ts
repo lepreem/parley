@@ -10,7 +10,7 @@ vi.mock("../../src/db", async () => ({
   ...(await import("../../src/db/schema")),
 }));
 
-import { messages } from "../../src/data/messages.data";
+import * as messages from "../../src/data/messages.data";
 
 const createdAt = new Date("2026-08-31T00:00:00.000Z");
 

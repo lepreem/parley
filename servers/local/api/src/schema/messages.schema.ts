@@ -3,7 +3,7 @@ import type { LocalSendMessageBody, PermissionMode } from "@parley/contract";
 import { takesBody } from "@parley/server-kit/http/takesBody";
 import { REASONING_EFFORTS } from "@parley/server-kit/reasoningEfforts";
 import { CTX_KEYS } from "../../../core/keys";
-import { memory } from "../memory";
+import * as memory from "../memory";
 
 const MAX_MESSAGE_LENGTH = 50_000;
 

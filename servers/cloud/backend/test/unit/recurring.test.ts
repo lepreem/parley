@@ -15,28 +15,24 @@ const {
 }));
 
 vi.mock("../../src/data/advisoryLock.data", () => ({
-  advisoryLock: {
-    withAdvisoryLock: mockWithAdvisoryLock,
-  },
+  withAdvisoryLock: mockWithAdvisoryLock,
 }));
 vi.mock("../../src/data/storageLedger.data", () => ({
-  storageLedger: {
-    findLedgerEntries: mockFindLedgerEntries,
-    markFinishedAudioDeleted: mockMarkFinishedAudioDeleted,
-  },
+  findLedgerEntries: mockFindLedgerEntries,
+  markFinishedAudioDeleted: mockMarkFinishedAudioDeleted,
 }));
 vi.mock("../../src/data/users.data", () => ({
-  users: { deleteGuestsCreatedBefore: mockDeleteGuestsCreatedBefore },
+  deleteGuestsCreatedBefore: mockDeleteGuestsCreatedBefore,
 }));
 vi.mock("../../src/uploads/uploads", () => ({
   UPLOAD_CONFIRM_WINDOW_MS: 2 * 60 * 60 * 1000,
-  uploads: { deleteObjects: mockDeleteObjects },
+  deleteObjects: mockDeleteObjects,
 }));
 
-import { recurring } from "../../src/recurring";
+import * as recurring from "../../src/recurring";
 import { every } from "../../src/recurring/every";
-import { guestSweep } from "../../src/recurring/guestSweep";
-import { storageSweep } from "../../src/recurring/storageSweep";
+import * as guestSweep from "../../src/recurring/guestSweep";
+import * as storageSweep from "../../src/recurring/storageSweep";
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;

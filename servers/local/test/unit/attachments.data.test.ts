@@ -37,7 +37,7 @@ vi.mock("../../core/db", async () => ({
 }));
 
 // The ledger update itself is covered by the storage ledger integration tests.
-import { attachments } from "../../core/data/attachments.data";
+import * as attachments from "../../core/data/attachments.data";
 import { Attachments, ChatMessageAttachmentLinks } from "../../core/db";
 
 type AttachmentExecutor = NonNullable<

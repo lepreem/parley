@@ -14,7 +14,7 @@ const bucket = vi.hoisted(() => ({
   updateSettings: vi.fn(),
 }));
 
-vi.mock("../../src/storage/bucket", () => ({ bucket }));
+vi.mock("../../src/storage/bucket", () => bucket);
 
 /** The script does its work when imported, like scripts/migrate.ts. */
 async function runScript() {

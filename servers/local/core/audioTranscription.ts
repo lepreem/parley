@@ -1,6 +1,6 @@
-import { data } from "./data";
+import * as data from "./data";
 import { logger } from "@parley/server-kit/runtime/logger";
-import { mq } from "./message-queue/messageQueue";
+import * as mq from "./message-queue/messageQueue";
 import type { UploadId } from "@parley/server-kit/ids";
 import { youtubeWatchUrl } from "@parley/contract/youtube";
 

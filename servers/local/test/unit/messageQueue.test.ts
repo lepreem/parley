@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import * as mq from "../../core/message-queue/messageQueue";
 import {
   DeadLetterError,
-  mq,
-  QUEUES,
+  queues as QUEUES,
   resetQueues,
 } from "../../core/message-queue/messageQueue";
 

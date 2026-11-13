@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import * as uploadController from "../controllers/upload.controller";
-import { MAX_AUDIO_BYTES } from "../../../core/files";
+import * as files from "../../../core/files";
 import {
   validateReqBody,
   validateReqForm,
@@ -18,7 +18,7 @@ uploadRouter.route("/image", imagesRouter);
 
 uploadRouter.post(
   "/audio",
-  uploadLimit(MAX_AUDIO_BYTES, "Audio file is too large"),
+  uploadLimit(files.MAX_AUDIO_BYTES, "Audio file is too large"),
   validateReqForm(audioUploadSchema),
   uploadController.handleAudioUpload,
 );

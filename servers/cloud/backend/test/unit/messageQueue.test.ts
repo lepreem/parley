@@ -74,7 +74,8 @@ vi.mock("amqplib", async () => {
   };
 });
 
-import { DeadLetterError, mq } from "../../src/message-queue/messageQueue";
+import * as mq from "../../src/message-queue/messageQueue";
+import { DeadLetterError } from "../../src/message-queue/messageQueue";
 import { QUEUES } from "../../src/message-queue/queues";
 
 const payload = {

@@ -13,7 +13,7 @@ const { mockGetOrSetCache, mockModelsList, mockResponsesSend, sentWithKeys } =
 
 vi.mock("../../src/memory/modelLists", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../src/memory/modelLists")>()),
-  modelLists: { getOrSet: mockGetOrSetCache },
+  getOrSet: mockGetOrSetCache,
 }));
 
 /** Caching itself is covered in modelLists.test.ts; here the fetch always runs. */
@@ -34,10 +34,9 @@ vi.mock("@openrouter/sdk", () => ({
   },
 }));
 
+import * as chat from "../../src/ai/ai_chat_client/ai_chat_client";
 import {
   buildUserTurn,
-  chat,
-  type ChatTurn,
   NoRoomToReply,
 } from "../../src/ai/ai_chat_client/ai_chat_client";
 
@@ -339,7 +338,7 @@ describe("chatAI", () => {
 
   it("asks every model to cache the prompt", async () => {
     mockResponsesSend.mockResolvedValue(responseOf("hi"));
-    const turn: ChatTurn[] = [{ role: "user", content: "yo" }];
+    const turn: chat.ChatTurn[] = [{ role: "user", content: "yo" }];
 
     await chat.complete("~anthropic/claude-sonnet-latest", turn);
     await chat.complete(MODEL_ID, turn);

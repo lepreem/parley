@@ -35,23 +35,23 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * Where a file lives. The id becomes a file name, so anything but a UUID is
  * refused rather than allowed to point somewhere else.
  */
-function pathOf({ kind, uploadId }: StoredFile) {
+export function pathOf({ kind, uploadId }: StoredFile) {
   if (!UUID.test(uploadId)) throw new Error(`Not an upload id: ${uploadId}`);
   return path.join(getBaseEnv().DATA_DIR, FOLDERS[kind], uploadId);
 }
 
-async function write(file: StoredFile, bytes: Uint8Array) {
+export async function write(file: StoredFile, bytes: Uint8Array) {
   const filePath = pathOf(file);
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(filePath, bytes);
 }
 
-async function read(file: StoredFile) {
+export async function read(file: StoredFile) {
   return readFile(pathOf(file));
 }
 
 /** Whether the file is there: a YouTube job with captions never writes one. */
-async function exists(file: StoredFile) {
+export async function exists(file: StoredFile) {
   return access(pathOf(file)).then(
     () => true,
     () => false,
@@ -69,7 +69,7 @@ async function deleteFiles(files: readonly StoredFile[]) {
  * what a YouTube fetch wrote for a job deleted while it ran. Runs at startup,
  * before anything can write.
  */
-async function removeOrphans(inUse: ReadonlySet<string>) {
+export async function removeOrphans(inUse: ReadonlySet<string>) {
   let removed = 0;
   for (const kind of Object.keys(FOLDERS) as FileKind[]) {
     const folder = path.join(getBaseEnv().DATA_DIR, FOLDERS[kind]);
@@ -83,11 +83,4 @@ async function removeOrphans(inUse: ReadonlySet<string>) {
   return removed;
 }
 
-export const files = {
-  path: pathOf,
-  write,
-  read,
-  exists,
-  delete: deleteFiles,
-  removeOrphans,
-};
+export { deleteFiles as delete };

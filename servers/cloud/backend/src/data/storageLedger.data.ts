@@ -29,7 +29,7 @@ function ownedObjects(userId: string, objects: readonly StoredObject[]) {
 }
 
 /** Records an upload whose URL is being handed out. */
-async function recordPendingUpload(entry: LedgerEntry) {
+export async function recordPendingUpload(entry: LedgerEntry) {
   await db.insert(StorageLedger).values({ ...entry, status: "pending" });
 }
 
@@ -38,7 +38,7 @@ async function recordPendingUpload(entry: LedgerEntry) {
  * upload to confirm, such as a YouTube video's audio if the server ever
  * downloads it again.
  */
-async function recordConfirmedObjects(
+export async function recordConfirmedObjects(
   userId: string,
   objects: readonly StoredObject[],
   executor: Executor = db,
@@ -55,7 +55,7 @@ async function recordConfirmedObjects(
 }
 
 /** An object's ledger status and when it was recorded, for this owner and kind. */
-async function findLedgerEntry(entry: LedgerEntry) {
+export async function findLedgerEntry(entry: LedgerEntry) {
   const [row] = await db
     .select({
       status: StorageLedger.status,
@@ -67,7 +67,7 @@ async function findLedgerEntry(entry: LedgerEntry) {
 }
 
 /** Entries in any of `statuses` recorded before `createdBefore`, oldest first. */
-async function findLedgerEntries({
+export async function findLedgerEntries({
   statuses,
   createdBefore,
   limit,
@@ -100,7 +100,7 @@ async function findLedgerEntries({
  * pending and recent any more, which covers a concurrent confirm having got
  * there first.
  */
-async function confirmUpload(
+export async function confirmUpload(
   entry: LedgerEntry,
   withinMs: number,
   write: (executor: Executor) => Promise<unknown>,
@@ -128,7 +128,7 @@ async function confirmUpload(
  * Marks objects as no longer referenced. Call it in the transaction that
  * removes the last rows pointing at them, so they're never left unrecorded.
  */
-async function markDeleted(
+export async function markDeleted(
   userId: string,
   objects: readonly StoredObject[],
   executor: Executor,
@@ -149,7 +149,7 @@ async function markDeleted(
  * whatever its age, because the transcription reads it. The job's rows stay;
  * only the object goes. Returns how many were marked.
  */
-async function markFinishedAudioDeleted(recordedBefore: Date) {
+export async function markFinishedAudioDeleted(recordedBefore: Date) {
   const finishedJobs = (onlyYoutube: boolean) =>
     db
       .select({ audioUploadId: AudioTranscriptionJobs.audioUploadId })
@@ -187,7 +187,7 @@ async function markFinishedAudioDeleted(recordedBefore: Date) {
  * Drops the records of objects that are gone from storage. A confirmed
  * record is never dropped: its object is still in use.
  */
-async function forgetObjects(
+export async function forgetObjects(
   userId: string,
   objects: readonly StoredObject[],
   executor: Executor = db,
@@ -200,14 +200,3 @@ async function forgetObjects(
       and(ownedObjects(userId, objects), ne(StorageLedger.status, "confirmed")),
     );
 }
-
-export const storageLedger = {
-  recordPendingUpload,
-  recordConfirmedObjects,
-  findLedgerEntry,
-  findLedgerEntries,
-  confirmUpload,
-  markDeleted,
-  markFinishedAudioDeleted,
-  forgetObjects,
-};

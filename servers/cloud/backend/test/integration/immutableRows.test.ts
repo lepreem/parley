@@ -44,7 +44,7 @@ import {
   db,
   users,
 } from "../../src/db";
-import { users as usersData } from "../../src/data/users.data";
+import * as usersData from "../../src/data/users.data";
 
 const userId = "immutable-owner";
 const conversationId = randomUUID();

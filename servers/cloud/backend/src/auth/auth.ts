@@ -1,3 +1,5 @@
+/** Sign-in and sessions, from WorkOS AuthKit. */
+
 import { WorkOS } from "@workos-inc/node";
 import { getEnv } from "../env";
 
@@ -28,16 +30,16 @@ const client = new WorkOS(getEnv().WORKOS_API_KEY, {
 });
 
 /** Startup health check: fails if WorkOS is unreachable or rejects the API key. */
-async function ping(): Promise<void> {
+export async function ping(): Promise<void> {
   await client.userManagement.listUsers({ limit: 1 });
 }
 
 /** Where WorkOS publishes the keys it signs access tokens with. */
-function getJwksUrl() {
+export function getJwksUrl() {
   return client.userManagement.getJwksUrl(getEnv().WORKOS_CLIENT_ID);
 }
 
-function getRedirectUrl() {
+export function getRedirectUrl() {
   return client.userManagement.getAuthorizationUrl({
     // Specify that we'd like AuthKit to handle the authentication flow
     provider: "authkit",
@@ -53,7 +55,7 @@ function getRedirectUrl() {
  * tokens: the access token becomes the session cookie as it is, and the
  * refresh token is what gets a new one when it expires.
  */
-async function getAuthSessionFromCode(code: string) {
+export async function getAuthSessionFromCode(code: string) {
   const { user, accessToken, refreshToken } =
     await client.userManagement.authenticateWithCode({
       code,
@@ -67,7 +69,7 @@ async function getAuthSessionFromCode(code: string) {
  * a new refresh token. WorkOS rotates refresh tokens, so the one passed in
  * stops working once this succeeds.
  */
-async function refreshAuthSession(refreshToken: string) {
+export async function refreshAuthSession(refreshToken: string) {
   const {
     user,
     accessToken,
@@ -79,18 +81,8 @@ async function refreshAuthSession(refreshToken: string) {
   return { userId: user.id, accessToken, refreshToken: nextRefreshToken };
 }
 
-async function revokeAuthSession(sessionId: string): Promise<void> {
+export async function revokeAuthSession(sessionId: string): Promise<void> {
   await client.userManagement.revokeSession({
     sessionId,
   });
 }
-
-/** Sign-in and sessions, from WorkOS AuthKit. */
-export const workos = {
-  ping,
-  getJwksUrl,
-  getRedirectUrl,
-  getAuthSessionFromCode,
-  refreshAuthSession,
-  revokeAuthSession,
-};

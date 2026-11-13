@@ -1,15 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  historyText,
-  resetHistoryTextCache,
-} from "../../src/memory/historyText";
-import type { HistoryCandidate } from "../../src/data/index";
+import * as historyText from "../../src/memory/historyText";
+import { resetHistoryTextCache } from "../../src/memory/historyText";
+import type * as data from "../../src/data/index";
 
 function turn(
   id: string,
   content: string,
-  transcripts: HistoryCandidate["transcripts"] = [],
-): HistoryCandidate {
+  transcripts: data.messages.HistoryCandidate["transcripts"] = [],
+): data.messages.HistoryCandidate {
   return {
     id,
     role: "user",

@@ -37,15 +37,11 @@ vi.mock("../../src/db", async () => {
   return { ...schema, db: drizzle(client, { schema }) };
 });
 
-vi.mock("../../src/storage/bucket", () => ({
-  bucket: {},
-}));
+vi.mock("../../src/storage/bucket", () => ({}));
 
 vi.mock("../../src/storage/sign", () => ({
   IMAGE_URL_TTL_SECONDS: 604800,
-  sign: {
-    urls: vi.fn(),
-  },
+  urls: vi.fn(),
 }));
 
 import {
@@ -56,9 +52,9 @@ import {
   db,
   users,
 } from "../../src/db";
-import { attachments } from "../../src/data/attachments.data";
-import { images } from "../../src/data/images.data";
-import { messages } from "../../src/data/messages.data";
+import * as attachments from "../../src/data/attachments.data";
+import * as images from "../../src/data/images.data";
+import * as messages from "../../src/data/messages.data";
 
 const userId = "reservation-owner";
 const imageUploadId = randomUUID();

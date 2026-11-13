@@ -6,7 +6,7 @@ import { GUEST_USER_ID_PATTERN } from "../auth/guestToken";
  * First login creates the row; every later one is a no-op. The auth provider
  * owns identity, so there is nothing to update here.
  */
-async function ensureUser(userId: string) {
+export async function ensureUser(userId: string) {
   await db.insert(Users).values({ id: userId }).onConflictDoNothing();
 }
 
@@ -28,7 +28,7 @@ async function ensureUser(userId: string) {
  * to the columns its trigger tolerates, which user_id is one of
  * (drizzle/0005_tolerate_owner_change.sql).
  */
-async function adoptGuest(guestUserId: string, userId: string) {
+export async function adoptGuest(guestUserId: string, userId: string) {
   await db.transaction(async (tx) => {
     await tx
       .update(Conversations)
@@ -49,7 +49,7 @@ async function adoptGuest(guestUserId: string, userId: string) {
  * returns how many. Guest sessions don't outlast GUEST_SESSION_SECONDS, so
  * past that no one can open what these guests left.
  */
-async function deleteGuestsCreatedBefore(createdBefore: Date) {
+export async function deleteGuestsCreatedBefore(createdBefore: Date) {
   const deleted = await db
     .delete(Users)
     .where(
@@ -61,9 +61,3 @@ async function deleteGuestsCreatedBefore(createdBefore: Date) {
     .returning({ id: Users.id });
   return deleted.length;
 }
-
-export const users = {
-  ensureUser,
-  adoptGuest,
-  deleteGuestsCreatedBefore,
-};

@@ -4,7 +4,7 @@ import type { AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 import { Attachments, AudioTranscriptionJobs, db, type Executor } from "../db";
 import type { jobStatuses } from "../db";
 import type { UploadId } from "@parley/server-kit/ids";
-import { attachments } from "./attachments.data";
+import * as attachments from "./attachments.data";
 
 /**
  * Types are derived from the schema rather than imported from the API's zod
@@ -16,7 +16,7 @@ type AudioJobRow = typeof AudioTranscriptionJobs.$inferSelect;
 
 /* ---------------------------------------------------------------- API reads */
 
-async function findAudioJob(audioUploadId: string) {
+export async function findAudioJob(audioUploadId: string) {
   const [row] = await db
     .select({
       audioUploadId: AudioTranscriptionJobs.audioUploadId,
@@ -95,7 +95,9 @@ type JobsPageFilters = {
  * encoding. The audioUploadId tiebreak in the ordering is what makes the keyset
  * cursor deterministic.
  */
-async function findJobsPage(filters: JobsPageFilters): Promise<JobSummary[]> {
+export async function findJobsPage(
+  filters: JobsPageFilters,
+): Promise<JobSummary[]> {
   const { status, searchQuery, cursor, fetchCount } = filters;
 
   return db
@@ -130,7 +132,7 @@ async function findJobsPage(filters: JobsPageFilters): Promise<JobSummary[]> {
 /* --------------------------------------------------------------- API writes */
 
 /** The attachment row and the job row, together. */
-async function createAudioJob(job: {
+export async function createAudioJob(job: {
   audioUploadId: UploadId;
   source: AudioJobRow["source"];
   fileName: string;
@@ -175,7 +177,7 @@ async function createAudioJob(job: {
  * Deletes a job's audio attachment, and with it the job, unless it's linked to
  * a message or reserved for a response. False when nothing was deleted.
  */
-async function deleteAudioJob(audioUploadId: string) {
+export async function deleteAudioJob(audioUploadId: string) {
   const deletedAudioUploadId =
     await attachments.deleteUnlinkedUnreservedAttachment({
       attachmentId: audioUploadId,
@@ -190,7 +192,7 @@ async function deleteAudioJob(audioUploadId: string) {
  * Only an unfinished job can fail this way: a report must never turn a job
  * with a transcript into a failed one.
  */
-async function failAudioJobById(audioUploadId: string, error: string) {
+export async function failAudioJobById(audioUploadId: string, error: string) {
   await db
     .update(AudioTranscriptionJobs)
     .set({ status: "failed", error })
@@ -208,7 +210,7 @@ async function failAudioJobById(audioUploadId: string, error: string) {
  * Claim a queued job atomically. Every claim gets a new claimToken, which
  * fences an earlier attempt out of every terminal write if it later finishes.
  */
-async function claimAudioJob(audioUploadId: UploadId) {
+export async function claimAudioJob(audioUploadId: UploadId) {
   const claimToken = randomUUID();
   const [job] = await db
     .update(AudioTranscriptionJobs)
@@ -236,7 +238,7 @@ async function claimAudioJob(audioUploadId: UploadId) {
  * A terminal transition belongs only to the latest claimant. Returns false when
  * this attempt lost its claim, so its caller can discard the stale result.
  */
-async function completeAudioJob(
+export async function completeAudioJob(
   audioUploadId: UploadId,
   claimToken: string,
   executor: Executor = db,
@@ -261,7 +263,7 @@ async function completeAudioJob(
  * claims it as any queued job rather than taking over a claim. Only the
  * current claimant can, and only while the job is processing; false otherwise.
  */
-async function unclaimAndResetAudioJob(
+export async function unclaimAndResetAudioJob(
   audioUploadId: UploadId,
   claimToken: string,
 ) {
@@ -281,7 +283,7 @@ async function unclaimAndResetAudioJob(
 }
 
 /** `error` is shown to the user, so it says what happened, not how. */
-async function failAudioJob(
+export async function failAudioJob(
   audioUploadId: UploadId,
   claimToken: string,
   error: string,
@@ -303,7 +305,7 @@ async function failAudioJob(
  * returning the ones a stopped process left processing to queued. Only for
  * startup, when nothing in this process can be working on one.
  */
-async function requeueUnfinishedAudioJobs() {
+export async function requeueUnfinishedAudioJobs() {
   return db.transaction(async (tx) => {
     await tx
       .update(AudioTranscriptionJobs)
@@ -327,16 +329,3 @@ async function requeueUnfinishedAudioJobs() {
     }));
   });
 }
-
-export const jobs = {
-  findAudioJob,
-  findJobsPage,
-  createAudioJob,
-  deleteAudioJob,
-  failAudioJobById,
-  claimAudioJob,
-  completeAudioJob,
-  unclaimAndResetAudioJob,
-  failAudioJob,
-  requeueUnfinishedAudioJobs,
-};

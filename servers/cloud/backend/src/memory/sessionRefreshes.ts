@@ -1,3 +1,5 @@
+/** The session refreshes this process has running or just finished. */
+
 /**
  * How long a refresh's result is kept for requests that bring the refresh
  * token it spent. A page whose requests all found the access token expired
@@ -15,7 +17,10 @@ const refreshes = new Map<string, Promise<unknown>>();
  * once or within the replay window. A failure isn't kept, so the next caller
  * runs it again.
  */
-function once<T>(refreshToken: string, refresh: () => Promise<T>): Promise<T> {
+export function once<T>(
+  refreshToken: string,
+  refresh: () => Promise<T>,
+): Promise<T> {
   const existing = refreshes.get(refreshToken);
   if (existing) return existing as Promise<T>;
 
@@ -32,6 +37,3 @@ function once<T>(refreshToken: string, refresh: () => Promise<T>): Promise<T> {
   );
   return refreshing;
 }
-
-/** The session refreshes this process has running or just finished. */
-export const sessionRefreshes = { once };

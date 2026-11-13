@@ -34,9 +34,7 @@ vi.mock("../../src/db", async () => {
   return { ...schema, db: drizzle(client, { schema }) };
 });
 
-vi.mock("../../src/storage/bucket", () => ({
-  bucket: {},
-}));
+vi.mock("../../src/storage/bucket", () => ({}));
 
 import {
   Attachments,
@@ -48,11 +46,7 @@ import {
   db,
   users,
 } from "../../src/db";
-import {
-  messages,
-  type HistoryCandidate,
-  type KnownHistoryText,
-} from "../../src/data/messages.data";
+import * as messages from "../../src/data/messages.data";
 
 const userId = "history-owner";
 const conversationId = randomUUID();
@@ -63,7 +57,7 @@ const firstAudioId = randomUUID();
 const imageId = randomUUID();
 const secondAudioId = randomUUID();
 
-function read(knownText?: KnownHistoryText, beforeMessageId?: string) {
+function read(knownText?: messages.KnownHistoryText, beforeMessageId?: string) {
   return messages.findContextHistory({
     userId,
     conversationId,
@@ -74,7 +68,9 @@ function read(knownText?: KnownHistoryText, beforeMessageId?: string) {
 }
 
 /** Everything a read returned, as the text cache would hold it. */
-function knownFrom(history: readonly HistoryCandidate[]): KnownHistoryText {
+function knownFrom(
+  history: readonly messages.HistoryCandidate[],
+): messages.KnownHistoryText {
   return {
     messages: new Map(history.map((message) => [message.id, message.content])),
     transcripts: new Map(

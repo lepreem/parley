@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { Context } from "hono";
 import type { UploadedImage } from "@parley/contract";
-import { data } from "../../../core/data";
-import { files } from "../../../core/files";
+import * as data from "../../../core/data";
+import * as files from "../../../core/files";
 import { CTX_KEYS } from "../../../core/keys";
 import type { UploadId } from "@parley/server-kit/ids";
 

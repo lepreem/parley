@@ -40,7 +40,7 @@ vi.mock("../../src/ai/ai_chat_client/ai_chat_client", async (importActual) => {
     >();
   return {
     ...actual,
-    chat: { ...actual.chat, listModels: mockListChatModels },
+    listModels: mockListChatModels,
   };
 });
 
@@ -73,24 +73,22 @@ vi.mock("../../src/db", async () => ({
 // decisions made around it. A confirm that goes through runs its writes
 // against the same insert mock as everything else.
 vi.mock("../../src/data/storageLedger.data", () => ({
-  storageLedger: {
-    recordPendingUpload: ledger.recordPendingUpload,
-    recordConfirmedObjects: ledger.recordConfirmedObjects,
-    findLedgerEntry: ledger.findLedgerEntry,
-    forgetObjects: ledger.forgetObjects,
-    confirmUpload: async (
-      entry: unknown,
-      withinMs: number,
-      write: (executor: unknown) => Promise<unknown>,
-    ) => {
-      if (!(await ledger.claim(entry, withinMs))) return false;
-      await write({
-        insert: mockInsert,
-        transaction: (run: (tx: unknown) => unknown) =>
-          run({ insert: mockInsert }),
-      });
-      return true;
-    },
+  recordPendingUpload: ledger.recordPendingUpload,
+  recordConfirmedObjects: ledger.recordConfirmedObjects,
+  findLedgerEntry: ledger.findLedgerEntry,
+  forgetObjects: ledger.forgetObjects,
+  confirmUpload: async (
+    entry: unknown,
+    withinMs: number,
+    write: (executor: unknown) => Promise<unknown>,
+  ) => {
+    if (!(await ledger.claim(entry, withinMs))) return false;
+    await write({
+      insert: mockInsert,
+      transaction: (run: (tx: unknown) => unknown) =>
+        run({ insert: mockInsert }),
+    });
+    return true;
   },
 }));
 
@@ -99,28 +97,22 @@ vi.mock("../../src/storage/bucket", () => ({
   // import evaluation, before this module's own bindings initialize.
   AUDIO_BUCKET: "Audio",
   MAX_AUDIO_BYTES: 50 * 1024 * 1024,
-  bucket: {
-    createUploadUrl: mockCreateUploadUrl,
-    inspectUploadedObject: mockInspectUploadedObject,
-  },
+  createUploadUrl: mockCreateUploadUrl,
+  inspectUploadedObject: mockInspectUploadedObject,
 }));
 
 vi.mock("../../src/storage/sign", () => ({
   IMAGE_URL_TTL_SECONDS: 7 * 24 * 60 * 60,
-  sign: {
-    url: vi.fn(),
-    urls: vi.fn(),
-  },
+  url: vi.fn(),
+  urls: vi.fn(),
 }));
 
 vi.mock("../../src/message-queue/messageQueue", () => ({
-  mq: {
-    queues: {
-      TRANSCRIBE_AUDIO: "transcribe_audio",
-      YT_FETCH_CAPTIONS: "yt_fetch_captions",
-    },
-    publish: mockSendEvent,
+  queues: {
+    TRANSCRIBE_AUDIO: "transcribe_audio",
+    YT_FETCH_CAPTIONS: "yt_fetch_captions",
   },
+  publish: mockSendEvent,
 }));
 
 import { createApp } from "../../src/app";

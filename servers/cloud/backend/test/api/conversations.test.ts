@@ -51,20 +51,16 @@ vi.mock("../../src/db", async () => ({
 
 // Controllers release deleted objects through the upload module.
 vi.mock("../../src/uploads/uploads", () => ({
-  uploads: { deleteObjects: mockDeleteObjects },
+  deleteObjects: mockDeleteObjects,
 }));
 
 vi.mock("../../src/storage/bucket", () => ({
-  bucket: {
-    delete: vi.fn(),
-  },
+  delete: vi.fn(),
 }));
 
 vi.mock("../../src/storage/sign", () => ({
   IMAGE_URL_TTL_SECONDS: 7 * 24 * 60 * 60,
-  sign: {
-    urls: vi.fn(),
-  },
+  urls: vi.fn(),
 }));
 
 import { desc } from "drizzle-orm";

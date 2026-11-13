@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { logger } from "@parley/server-kit/runtime/logger";
-import { data } from "../data";
+import * as data from "../data";
 import { measurePreparation } from "../metrics/preparationMetrics";
 
 const log = logger.child({ component: "turn-claim" });

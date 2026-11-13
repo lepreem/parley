@@ -45,7 +45,7 @@ async function inStore<T>(
 let persistAsked = false;
 
 /** Keeps a source's audio, replacing any copy it had. */
-async function save(audioUploadId: string, audio: Blob): Promise<void> {
+export async function save(audioUploadId: string, audio: Blob): Promise<void> {
   // Without this the browser may evict the copies when the disk runs low.
   if (!persistAsked) {
     persistAsked = true;
@@ -55,7 +55,7 @@ async function save(audioUploadId: string, audio: Blob): Promise<void> {
 }
 
 /** The source's audio, or null when this browser has no copy. */
-async function load(audioUploadId: string): Promise<Blob | null> {
+export async function load(audioUploadId: string): Promise<Blob | null> {
   try {
     const audio = await inStore<unknown>("readonly", (store) =>
       store.get(audioUploadId),
@@ -66,8 +66,6 @@ async function load(audioUploadId: string): Promise<Blob | null> {
   }
 }
 
-async function remove(audioUploadId: string): Promise<void> {
+export async function remove(audioUploadId: string): Promise<void> {
   await inStore("readwrite", (store) => store.delete(audioUploadId));
 }
-
-export const audioCopies = { save, load, remove };

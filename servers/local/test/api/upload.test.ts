@@ -15,15 +15,19 @@ vi.mock("../../core/files", async (importActual) => ({
 }));
 
 vi.mock("../../core/message-queue/messageQueue", async (importActual) => {
-  const { QUEUES } =
+  const { queues: QUEUES } =
     await importActual<
       typeof import("../../core/message-queue/messageQueue")
     >();
-  return { mq: { queues: QUEUES, publish: mockPublish } };
+  return {
+    queues: QUEUES,
+    publish: mockPublish,
+  };
 });
 
 import { Attachments, AudioTranscriptionJobs, db } from "../../core/db";
-import { files, MAX_AUDIO_BYTES } from "../../core/files";
+import * as files from "../../core/files";
+import { MAX_AUDIO_BYTES } from "../../core/files";
 import { createApp } from "../../api/app";
 import { originHeaders } from "../helpers/headers";
 import { deleteAllRows } from "../helpers/inMemoryDb";

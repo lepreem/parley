@@ -1,3 +1,5 @@
+/** The replies this instance is writing, by owner and conversation. */
+
 import { createRepliesInProgress } from "@parley/server-kit/memory/repliesInProgress";
 
 const byKey = createRepliesInProgress();
@@ -6,12 +8,11 @@ const byKey = createRepliesInProgress();
 const keyOf = (userId: string, conversationId: string) =>
   `${userId}/${conversationId}`;
 
-/** The replies this instance is writing, by owner and conversation. */
-export const repliesInProgress = {
-  add: (userId: string, conversationId: string, content: string) =>
-    byKey.add(keyOf(userId, conversationId), content),
-  find: (userId: string, conversationId: string) =>
-    byKey.find(keyOf(userId, conversationId)),
-  stop: (userId: string, conversationId: string) =>
-    byKey.stop(keyOf(userId, conversationId)),
-};
+export const add = (userId: string, conversationId: string, content: string) =>
+  byKey.add(keyOf(userId, conversationId), content);
+
+export const find = (userId: string, conversationId: string) =>
+  byKey.find(keyOf(userId, conversationId));
+
+export const stop = (userId: string, conversationId: string) =>
+  byKey.stop(keyOf(userId, conversationId));

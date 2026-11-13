@@ -1,8 +1,8 @@
 /**
  * Lists members of exported object literals that nothing reads, then exits 1
- * if there are any. knip covers unused files and exports but not members, and
- * the backend is built on grouped objects like `data.messages.<operation>` and
- * `FORM_KEYS.<field>`. A member read only by tests counts as used. An object
+ * if there are any. knip covers unused files and exports, including those of
+ * namespace modules like `data.messages`, but not the members of a constant
+ * object like `FORM_KEYS.<field>`. A member read only by tests counts as used. An object
  * used as a whole, like `POLICIES[name]` or `Object.values(KINDS)`, may read
  * any member, so it is skipped.
  */

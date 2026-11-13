@@ -31,12 +31,10 @@ vi.mock("../../src/db", async () => ({
 }));
 
 vi.mock("../../src/data/jobs.data", () => ({
-  jobs: {
-    completeAudioJob: mockCompleteAudioJob,
-  },
+  completeAudioJob: mockCompleteAudioJob,
 }));
 
-import { transcripts } from "../../src/data/transcripts.data";
+import * as transcripts from "../../src/data/transcripts.data";
 
 describe("findTranscripts", () => {
   it("returns without querying when no uploads were requested", async () => {

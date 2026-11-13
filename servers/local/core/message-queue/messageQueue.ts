@@ -1,6 +1,14 @@
+/**
+ * The process's work queues, held in memory: publishing hands a message to
+ * its queue's consumer, which takes them one at a time, in order.
+ *
+ * Nothing here outlives the process. The job rows do: at startup the API puts
+ * every unfinished job back on its queue (resumeUnfinishedJobs).
+ */
+
 import { logger, messageOf } from "@parley/server-kit/runtime/logger";
-import { QUEUES, type Queue, type QueuePayloads } from "./queues";
-export { QUEUES } from "./queues";
+import type { Queue, QueuePayloads } from "./queues";
+export { QUEUES as queues } from "./queues";
 export type { QueuePayloads } from "./queues";
 
 const log = logger.child({ component: "message-queue" });
@@ -122,53 +130,42 @@ function drain<Q extends Queue>(queue: Q) {
 }
 
 /**
- * The process's work queues, held in memory: publishing hands a message to
- * its queue's consumer, which takes them one at a time, in order.
- *
- * Nothing here outlives the process. The job rows do: at startup the API puts
- * every unfinished job back on its queue (resumeUnfinishedJobs).
+ * Queues a copy of `payload`, as it would arrive over the wire, so the
+ * consumer shares nothing with the publisher.
  */
-export const mq = {
-  queues: QUEUES,
+export function publish<Q extends Queue>(queue: Q, payload: QueuePayloads[Q]) {
+  stateOf(queue).waiting.push(JSON.parse(JSON.stringify(payload)));
+  drain(queue);
+}
 
-  /**
-   * Queues a copy of `payload`, as it would arrive over the wire, so the
-   * consumer shares nothing with the publisher.
-   */
-  publish<Q extends Queue>(queue: Q, payload: QueuePayloads[Q]) {
-    stateOf(queue).waiting.push(JSON.parse(JSON.stringify(payload)));
-    drain(queue);
-  },
+/**
+ * Hands each message on `queue` to `handler`, trying up to `attempts` times
+ * before giving it up. A handler fails an attempt by throwing.
+ */
+export function consume<Q extends Queue>(
+  queue: Q,
+  handler: Handler<Q>,
+  { attempts }: { attempts: number },
+) {
+  if (!Number.isInteger(attempts) || attempts < 1) {
+    throw new Error(`A consumer needs at least one attempt, got ${attempts}`);
+  }
+  const state = stateOf(queue);
+  if (state.consumer) throw new Error(`${queue} already has a consumer`);
+  state.consumer = { handler, attempts };
+  drain(queue);
+}
 
-  /**
-   * Hands each message on `queue` to `handler`, trying up to `attempts` times
-   * before giving it up. A handler fails an attempt by throwing.
-   */
-  consume<Q extends Queue>(
-    queue: Q,
-    handler: Handler<Q>,
-    { attempts }: { attempts: number },
-  ) {
-    if (!Number.isInteger(attempts) || attempts < 1) {
-      throw new Error(`A consumer needs at least one attempt, got ${attempts}`);
-    }
-    const state = stateOf(queue);
-    if (state.consumer) throw new Error(`${queue} already has a consumer`);
-    state.consumer = { handler, attempts };
-    drain(queue);
-  },
-
-  /**
-   * Stops handing out messages, then waits for the ones being handled. What's
-   * still waiting is dropped with the process; its jobs resume at startup.
-   */
-  async stopConsuming() {
-    stopped = true;
-    await Promise.allSettled(
-      [...queues.values()].map((state) => state.drainPromise),
-    );
-  },
-};
+/**
+ * Stops handing out messages, then waits for the ones being handled. What's
+ * still waiting is dropped with the process; its jobs resume at startup.
+ */
+export async function stopConsuming() {
+  stopped = true;
+  await Promise.allSettled(
+    [...queues.values()].map((state) => state.drainPromise),
+  );
+}
 
 /** Test-only: forgets every queue, consumer and message, and starts again. */
 export function resetQueues() {

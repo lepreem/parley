@@ -15,8 +15,8 @@ import {
   TranscriptContents,
 } from "../../core/db";
 import { deleteAllRows } from "../helpers/inMemoryDb";
-import { jobs } from "../../core/data/jobs.data";
-import { transcripts } from "../../core/data/transcripts.data";
+import * as jobs from "../../core/data/jobs.data";
+import * as transcripts from "../../core/data/transcripts.data";
 
 const conversationId = randomUUID();
 

@@ -1,5 +1,5 @@
-import { memory } from "../memory";
-import { workos } from "./auth";
+import * as memory from "../memory";
+import * as workos from "./auth";
 
 /**
  * Refreshes a session, making one request to WorkOS however many callers

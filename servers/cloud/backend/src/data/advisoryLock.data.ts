@@ -7,7 +7,7 @@ import { db } from "../db";
  * transaction, so it is released however the run ends — including the
  * process dying.
  */
-async function withAdvisoryLock<T>(
+export async function withAdvisoryLock<T>(
   name: string,
   run: () => Promise<T>,
 ): Promise<T | undefined> {
@@ -19,7 +19,3 @@ async function withAdvisoryLock<T>(
     return run();
   });
 }
-
-export const advisoryLock = {
-  withAdvisoryLock,
-};

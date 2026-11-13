@@ -1,9 +1,9 @@
-import { data } from "../data";
+import * as data from "../data";
 import { logger } from "@parley/server-kit/runtime/logger";
 import type { DeliveryMetadata } from "../message-queue/messageQueue";
 import type { UploadId } from "@parley/server-kit/ids";
 import { eventHub } from "../sse/hub";
-import { CAPTIONS_MESSAGES, CaptionsError, youtubeCaptions } from "../supadata";
+import { youtubeCaptions } from "../supadata";
 import { handleTranscribeJob } from "./transcribeJob";
 
 const log = logger.child({ component: "youtube-captions" });
@@ -30,20 +30,24 @@ export async function handleYoutubeCaptionsJob(
   try {
     captions = await youtubeCaptions.fetchCaptions(url);
   } catch (error) {
-    if (!(error instanceof CaptionsError)) {
+    if (!(error instanceof youtubeCaptions.CaptionsError)) {
       log.error("Fetching captions failed", error, { audioUploadId });
     }
     await fail(
       audioUploadId,
       userId,
-      error instanceof CaptionsError
+      error instanceof youtubeCaptions.CaptionsError
         ? error.message
-        : CAPTIONS_MESSAGES.unavailable,
+        : youtubeCaptions.CAPTIONS_MESSAGES.unavailable,
     );
     return;
   }
   if (!captions) {
-    await fail(audioUploadId, userId, CAPTIONS_MESSAGES.noCaptions);
+    await fail(
+      audioUploadId,
+      userId,
+      youtubeCaptions.CAPTIONS_MESSAGES.noCaptions,
+    );
     return;
   }
 

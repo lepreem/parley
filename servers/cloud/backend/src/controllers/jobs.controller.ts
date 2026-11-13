@@ -7,12 +7,12 @@ import {
   jobsListQuerySchema,
 } from "../schema/jobs.schema";
 import { encodeCursor, decodeCursor } from "@parley/server-kit/http/cursor";
-import { uploads } from "../uploads/uploads";
+import * as uploads from "../uploads/uploads";
 import { sign } from "../storage";
-import { data } from "../data";
+import * as data from "../data";
 import { tryCatch } from "@parley/server-kit/runtime/try-catch";
 import { logger } from "@parley/server-kit/runtime/logger";
-import { jobCancellation } from "@parley/server-kit/transcription/jobCancellation";
+import * as jobCancellation from "@parley/server-kit/transcription/jobCancellation";
 
 const log = logger.child({ controller: "jobs" });
 

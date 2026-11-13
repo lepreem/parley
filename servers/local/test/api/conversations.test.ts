@@ -13,7 +13,7 @@ import {
   Conversations,
   db,
 } from "../../core/db";
-import { files } from "../../core/files";
+import * as files from "../../core/files";
 import { createApp } from "../../api/app";
 import { originHeaders } from "../helpers/headers";
 import { deleteAllRows } from "../helpers/inMemoryDb";

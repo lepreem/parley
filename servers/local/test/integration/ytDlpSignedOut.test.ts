@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { ytDlp } from "../../api/src/ytDlp";
+import * as ytDlp from "../../api/src/ytDlp";
 
 /**
  * The real yt-dlp, run the way Parley runs it, on a computer set up to sign

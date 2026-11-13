@@ -1,8 +1,8 @@
 import { getEnv } from "./env";
 import { eventHub } from "./sse/hub";
 
-import { mq } from "./message-queue/messageQueue";
-import { recurring } from "./recurring";
+import * as mq from "./message-queue/messageQueue";
+import * as recurring from "./recurring";
 import { onShutdown } from "@parley/server-kit/runtime/shutdown";
 import {
   getTranscriptionConcurrency,

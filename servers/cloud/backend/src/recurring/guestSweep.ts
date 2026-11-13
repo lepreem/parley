@@ -1,4 +1,4 @@
-import { data } from "../data";
+import * as data from "../data";
 import { logger } from "@parley/server-kit/runtime/logger";
 import { GUEST_SESSION_SECONDS } from "../auth/guestToken";
 
@@ -15,7 +15,7 @@ const GUEST_LIFETIME_MS = (GUEST_SESSION_SECONDS + 24 * 60 * 60) * 1000;
  * own nothing in storage (guests chat in text only), so there's nothing to
  * remove there first. Returns how many were deleted.
  */
-async function sweepExpiredGuests() {
+export async function run() {
   const deleted = await data.users.deleteGuestsCreatedBefore(
     new Date(Date.now() - GUEST_LIFETIME_MS),
   );
@@ -24,7 +24,4 @@ async function sweepExpiredGuests() {
 }
 
 /** Runs every hour. */
-export const guestSweep = {
-  intervalMs: 60 * 60 * 1000,
-  run: sweepExpiredGuests,
-};
+export const intervalMs = 60 * 60 * 1000;

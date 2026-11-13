@@ -1,7 +1,9 @@
+/** Chat completions and the chat model catalog, from OpenRouter. */
+
 import { getEnv } from "../../env";
 import { OpenRouter } from "@openrouter/sdk";
 
-import { CACHE_KEYS, memory } from "../../memory";
+import * as memory from "../../memory";
 import type {
   InputImage,
   InputText,
@@ -42,7 +44,7 @@ function clientFor(guest: boolean) {
 }
 
 /** Startup health check: fails if OpenRouter is unreachable or rejects the API key. */
-async function ping(): Promise<void> {
+export async function ping(): Promise<void> {
   await client.models.list();
 }
 
@@ -273,7 +275,7 @@ type ChatOptions = {
   onUnreadPage?: ((url: unknown, error: unknown) => void) | undefined;
 };
 
-async function complete(
+export async function complete(
   model: string,
   messages: ChatTurn[],
   opts: ChatOptions = {},
@@ -332,9 +334,9 @@ async function fetchChatModels(): Promise<ChatModel[]> {
 // Every send looks up the chosen model here, so the cache keeps that lookup
 // off the network. Serving it stale while it refreshes means no send waits on
 // the catalog once a process has loaded it.
-function listModels(): Promise<ChatModel[]> {
+export function listModels(): Promise<ChatModel[]> {
   return memory.modelLists.getOrSet(
-    CACHE_KEYS.openRouterModels,
+    memory.modelLists.CACHE_KEYS.openRouterModels,
     fetchChatModels,
     {
       serveStale: true,
@@ -348,16 +350,16 @@ function listModels(): Promise<ChatModel[]> {
  * is a 400 on the request rather than a provider rejection mid-stream, where
  * the only channel left is an SSE error event.
  */
-async function findModel(id: string): Promise<ChatModel | undefined> {
+export async function findModel(id: string): Promise<ChatModel | undefined> {
   return (await listModels()).find((model) => model.id === id);
 }
 
 /** The models a guest can chat with. */
-async function listGuestModels(): Promise<ChatModel[]> {
+export async function listGuestModels(): Promise<ChatModel[]> {
   return guestModelsOf(await listModels());
 }
 
-async function isGuestModel(id: string): Promise<boolean> {
+export async function isGuestModel(id: string): Promise<boolean> {
   return (await listGuestModels()).some((model) => model.id === id);
 }
 
@@ -366,11 +368,11 @@ async function isGuestModel(id: string): Promise<boolean> {
  * family's newest model, but only while the provider keeps the family's name:
  * OpenAI's "GPT Mini" became Luna, and its alias stopped moving.
  */
-const DEFAULT_CHAT_MODEL = "~openai/gpt-luna-latest";
+export const defaultModelId = "~openai/gpt-luna-latest";
 
 /** Listed first in the picker, in this order. */
-const RECOMMENDED_CHAT_MODELS = [
-  DEFAULT_CHAT_MODEL,
+export const recommendedModelIds = [
+  defaultModelId,
   "~anthropic/claude-sonnet-latest",
   "~anthropic/claude-haiku-latest",
   "~google/gemini-pro-latest",
@@ -382,7 +384,7 @@ const MAX_TITLE_INPUT_CHARS = 12_000;
 // The alias follows OpenAI's newest Luna.
 const DEFAULT_TITLE_GENERATION_MODEL = "~openai/gpt-luna-latest";
 
-async function generateTitle(
+export async function generateTitle(
   kind: "conversation" | "transcript",
   content: string,
   { guest = false }: { guest?: boolean } = {},
@@ -405,16 +407,3 @@ async function generateTitle(
 
   return title.trim();
 }
-
-/** Chat completions and the chat model catalog, from OpenRouter. */
-export const chat = {
-  complete,
-  defaultModelId: DEFAULT_CHAT_MODEL,
-  recommendedModelIds: RECOMMENDED_CHAT_MODELS,
-  listModels,
-  listGuestModels,
-  findModel,
-  isGuestModel,
-  generateTitle,
-  ping,
-};

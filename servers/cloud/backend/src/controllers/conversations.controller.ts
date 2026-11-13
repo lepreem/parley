@@ -6,10 +6,12 @@ import {
   conversationPatchBodySchema,
   conversationReqParamSchema,
 } from "../schema/conversations.schema";
-import { uploads } from "../uploads/uploads";
-import { data, type ConversationRow } from "../data";
+import * as uploads from "../uploads/uploads";
+import * as data from "../data";
 
-function toConversationJson(row: ConversationRow): Conversation {
+function toConversationJson(
+  row: data.conversations.ConversationRow,
+): Conversation {
   return {
     id: row.id,
     title: row.title,

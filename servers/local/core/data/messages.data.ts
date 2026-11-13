@@ -9,10 +9,10 @@ import {
   db,
   type Executor,
 } from "../db";
-import { images } from "./images.data";
-import { claimIsFreeOrExpired, conversations } from "./conversations.data";
-import { messageAttachmentLinks } from "./messageAttachmentLinks.data";
-import { attachments } from "./attachments.data";
+import * as images from "./images.data";
+import * as conversations from "./conversations.data";
+import * as messageAttachmentLinks from "./messageAttachmentLinks.data";
+import * as attachments from "./attachments.data";
 
 /**
  * The columns a message is exposed through — every read feeding `toMessageJson`
@@ -63,7 +63,7 @@ export type MessageRow = Pick<
 >;
 
 /** Full history for a conversation, oldest first. */
-async function findConversationMessages(conversationId: string) {
+export async function findConversationMessages(conversationId: string) {
   return db
     .select(messageColumns)
     .from(ChatMessages)
@@ -104,7 +104,7 @@ type CreateMessageHistoryRow = {
 };
 
 /** Fully resolved admitted history for POST message creation, newest first. */
-async function findCreateMessageHistory(input: {
+export async function findCreateMessageHistory(input: {
   conversationId: string;
   newMessageContentCharCount: number;
   newTranscriptUploadIds: readonly string[];
@@ -317,7 +317,7 @@ async function createMessage(
  * delete through this route. Null when nothing matched, which the caller
  * reports as a 404.
  */
-async function deleteMessage(
+export async function deleteMessage(
   conversationId: string,
   messageId: string,
   options: { claimToken?: string; onlyRole?: MessageRow["role"] } = {},
@@ -326,7 +326,9 @@ async function deleteMessage(
     const [conversation] = await tx
       .select({
         activeTurnClaimToken: Conversations.activeTurnClaimToken,
-        claimIsFree: sql`${claimIsFreeOrExpired()}`.mapWith(Boolean),
+        claimIsFree: sql`${conversations.claimIsFreeOrExpired()}`.mapWith(
+          Boolean,
+        ),
       })
       .from(Conversations)
       .where(eq(Conversations.id, conversationId))
@@ -429,7 +431,7 @@ async function deleteMessage(
  * until the lease runs out, and the claim check refuses the write if this
  * turn's lease was lost to another.
  */
-async function persistAndUnclaimChatTurn(turn: {
+export async function persistAndUnclaimChatTurn(turn: {
   conversationId: string;
   content: string;
   attachmentIds: readonly string[];
@@ -484,10 +486,3 @@ async function persistAndUnclaimChatTurn(turn: {
     return assistantMessage.id;
   });
 }
-
-export const messages = {
-  findConversationMessages,
-  findCreateMessageHistory,
-  deleteMessage,
-  persistAndUnclaimChatTurn,
-};

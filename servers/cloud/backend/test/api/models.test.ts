@@ -13,7 +13,7 @@ vi.mock("../../src/ai/ai_chat_client/ai_chat_client", async (importActual) => {
     >();
   return {
     ...actual,
-    chat: { ...actual.chat, listModels: mockListChatModels },
+    listModels: mockListChatModels,
   };
 });
 

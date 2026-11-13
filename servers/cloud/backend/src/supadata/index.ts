@@ -1,5 +1,1 @@
-export {
-  CAPTIONS_MESSAGES,
-  CaptionsError,
-  youtubeCaptions,
-} from "./youtubeCaptions";
+export * as youtubeCaptions from "./youtubeCaptions";

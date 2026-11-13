@@ -19,16 +19,14 @@ vi.mock("@deepgram/sdk", () => ({
 
 vi.mock("../../src/memory/modelLists", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../src/memory/modelLists")>()),
-  modelLists: { getOrSet: mockGetOrSetCache },
+  getOrSet: mockGetOrSetCache,
 }));
 
 /** Caching itself is covered in modelLists.test.ts; here the fetch always runs. */
 const runFetch = <T>(_name: unknown, fetch: () => Promise<T>) => fetch();
 
-import {
-  getTranscribeModelData,
-  transcription,
-} from "../../src/ai/ai_transcribe_client/ai_transcribe_client";
+import * as transcription from "../../src/ai/ai_transcribe_client/ai_transcribe_client";
+import { getTranscribeModelData } from "../../src/ai/ai_transcribe_client/ai_transcribe_client";
 
 const sttResponse = {
   stt: [

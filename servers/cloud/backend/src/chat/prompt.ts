@@ -1,4 +1,4 @@
-import { buildUserTurn, type ChatTurn } from "../ai";
+import { chat, type ChatTurn } from "../ai";
 
 const TRANSCRIPT_SEPARATOR = "\n\n";
 
@@ -21,7 +21,7 @@ function toHistoryTurn(
   imageUrls: readonly string[],
 ): ChatTurn {
   return imageUrls.length > 0
-    ? buildUserTurn(content, imageUrls)
+    ? chat.buildUserTurn(content, imageUrls)
     : { role, content };
 }
 

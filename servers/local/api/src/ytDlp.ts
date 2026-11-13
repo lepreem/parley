@@ -153,7 +153,7 @@ export type VideoInfo = FormatSize & {
 };
 
 /** The video's metadata, with the audio format a download would pick. */
-async function probe(
+export async function probe(
   url: string,
   abortSignal?: AbortSignal,
 ): Promise<VideoInfo> {
@@ -168,7 +168,7 @@ async function probe(
  * Downloads the audio into `directory` as `audio.<ext>`. yt-dlp aborts when
  * the size is known up front to be over `maxBytes`, leaving a partial file.
  */
-async function downloadAudio(
+export async function downloadAudio(
   url: string,
   directory: string,
   maxBytes: number,
@@ -195,8 +195,6 @@ async function downloadAudio(
 }
 
 /** Startup health check: fails if yt-dlp can't be run. */
-async function ping(): Promise<void> {
+export async function ping(): Promise<void> {
   await run(["--version"]);
 }
-
-export const ytDlp = { probe, downloadAudio, ping };

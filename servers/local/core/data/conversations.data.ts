@@ -25,7 +25,7 @@ export type ConversationRow = Pick<
  * Most recently active first. `updatedAt` is touched by both posting a message
  * and renaming, so a revived old conversation surfaces back to the top.
  */
-async function findConversations() {
+export async function findConversations() {
   return db
     .select(conversationColumns)
     .from(Conversations)
@@ -33,7 +33,7 @@ async function findConversations() {
 }
 
 /** Shared by every message route: null when there's no such conversation. */
-async function findConversation(conversationId: string) {
+export async function findConversation(conversationId: string) {
   const [row] = await db
     .select(conversationColumns)
     .from(Conversations)
@@ -72,7 +72,7 @@ export function claimIsFreeOrExpired(): SQL | undefined {
   );
 }
 
-async function claimConversationTurn(
+export async function claimConversationTurn(
   conversationId: string,
   expectedLastMessageId: string | null,
   claimToken: string = randomUUID(),
@@ -98,7 +98,7 @@ async function claimConversationTurn(
   return row ? claimToken : null;
 }
 
-async function unclaimConversationTurn(
+export async function unclaimConversationTurn(
   conversationId: string,
   claimToken: string,
   executor: Executor = db,
@@ -119,7 +119,7 @@ async function unclaimConversationTurn(
 }
 
 /** Marks a claim as still held, now. False if it's no longer this token's. */
-async function renewConversationClaim(
+export async function renewConversationClaim(
   conversationId: string,
   claimToken: string,
 ) {
@@ -139,7 +139,7 @@ async function renewConversationClaim(
   return Boolean(row);
 }
 
-async function completeConversationTurn(
+export async function completeConversationTurn(
   conversationId: string,
   claimToken: string,
   lastMessageId: string,
@@ -175,7 +175,7 @@ async function completeConversationTurn(
 }
 
 /** Omitting `title` leaves the column to its DB default. */
-async function createConversation(title?: string) {
+export async function createConversation(title?: string) {
   const [row] = await db
     .insert(Conversations)
     .values(title !== undefined ? { title } : {})
@@ -184,7 +184,10 @@ async function createConversation(title?: string) {
   return row;
 }
 
-async function renameConversation(conversationId: string, title: string) {
+export async function renameConversation(
+  conversationId: string,
+  title: string,
+) {
   const [row] = await db
     .update(Conversations)
     .set({ title, updatedAt: new Date() })
@@ -195,7 +198,7 @@ async function renameConversation(conversationId: string, title: string) {
 }
 
 /** Null when there's no such conversation, which the caller reports as a 404. */
-async function deleteConversation(conversationId: string) {
+export async function deleteConversation(conversationId: string) {
   const [row] = await db
     .delete(Conversations)
     .where(and(eq(Conversations.id, conversationId), claimIsFreeOrExpired()))
@@ -203,15 +206,3 @@ async function deleteConversation(conversationId: string) {
 
   return row ?? null;
 }
-
-export const conversations = {
-  findConversations,
-  findConversation,
-  claimConversationTurn,
-  unclaimConversationTurn,
-  renewConversationClaim,
-  completeConversationTurn,
-  createConversation,
-  renameConversation,
-  deleteConversation,
-};

@@ -1,8 +1,4 @@
-import type {
-  HistoryCandidate,
-  HistoryTranscript,
-  KnownHistoryText,
-} from "../data/index";
+import type * as data from "../data/index";
 
 /**
  * In-process cache of message and transcript text, per conversation. A turn
@@ -93,10 +89,10 @@ function store(conversationId: string, entry: Entry, now: number) {
  * copy, so evicting or rebuilding the entry while the read is in flight can't
  * take text the read was told it needn't send.
  */
-function known(
+export function known(
   userId: string,
   conversationId: string,
-): KnownHistoryText | undefined {
+): data.messages.KnownHistoryText | undefined {
   const now = Date.now();
   const entry = usable(userId, conversationId, now);
   if (!entry) return undefined;
@@ -116,10 +112,10 @@ function known(
  * history is a conversation's first turn, which isn't held: most
  * conversations never get a second.
  */
-function rememberHistory(
+export function rememberHistory(
   userId: string,
   conversationId: string,
-  history: readonly HistoryCandidate[],
+  history: readonly data.messages.HistoryCandidate[],
 ) {
   if (history.length === 0) {
     if (entries.get(conversationId)?.userId === userId) remove(conversationId);
@@ -153,13 +149,13 @@ function rememberHistory(
  * Adds a turn just saved, so the next turn here reads none of it. Only to a
  * conversation already held: a first turn starts nothing.
  */
-function rememberTurn(
+export function rememberTurn(
   userId: string,
   conversationId: string,
   turn: {
     userMessageId: string;
     content: string;
-    transcripts: readonly HistoryTranscript[];
+    transcripts: readonly data.messages.HistoryTranscript[];
     assistantMessageId: string;
     assistantContent: string;
   },
@@ -194,5 +190,3 @@ export function resetHistoryTextCache() {
   entries.clear();
   totalBytes = 0;
 }
-
-export const historyText = { known, rememberHistory, rememberTurn };

@@ -6,7 +6,8 @@ const { mockSpawn } = vi.hoisted(() => ({ mockSpawn: vi.fn() }));
 
 vi.mock("node:child_process", () => ({ spawn: mockSpawn }));
 
-import { YtDlpError, refusedFlag, ytDlp } from "../../api/src/ytDlp";
+import * as ytDlp from "../../api/src/ytDlp";
+import { YtDlpError, refusedFlag } from "../../api/src/ytDlp";
 
 /** A yt-dlp run that prints `stdout` and `stderr`, then exits with `code`. */
 function exitsWith(code: number, { stdout = "", stderr = "" } = {}) {

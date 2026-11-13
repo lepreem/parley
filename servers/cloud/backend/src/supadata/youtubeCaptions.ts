@@ -63,7 +63,7 @@ function apiUrl() {
 }
 
 /** Startup check: throws if the key is wrong. Spends no credit. */
-async function ping(): Promise<void> {
+export async function ping(): Promise<void> {
   const response = await fetch(`${apiUrl()}/me`, {
     headers: { "x-api-key": getEnv().SUPADATA_API_KEY },
     signal: AbortSignal.timeout(10_000),
@@ -137,7 +137,7 @@ function isMadeUp(content: TranscriptChunk[]): boolean {
  * language; or null when it has none. Throws CaptionsError for a failure the
  * person should hear about.
  */
-async function fetchCaptions(
+export async function fetchCaptions(
   url: string,
 ): Promise<{ segments: TranscriptSegment[]; language: string } | null> {
   let answer: TranscriptOrJobId;
@@ -187,5 +187,3 @@ async function fetchCaptions(
     }));
   return segments.length ? { segments, language: lang } : null;
 }
-
-export const youtubeCaptions = { ping, fetchCaptions };

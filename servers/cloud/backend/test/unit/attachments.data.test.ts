@@ -42,12 +42,10 @@ const { mockMarkDeleted } = vi.hoisted(() => ({
 
 // The ledger update itself is covered by the storage ledger integration tests.
 vi.mock("../../src/data/storageLedger.data", () => ({
-  storageLedger: {
-    markDeleted: mockMarkDeleted,
-  },
+  markDeleted: mockMarkDeleted,
 }));
 
-import { attachments } from "../../src/data/attachments.data";
+import * as attachments from "../../src/data/attachments.data";
 import { Attachments, ChatMessageAttachmentLinks } from "../../src/db";
 
 type AttachmentExecutor = NonNullable<

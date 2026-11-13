@@ -14,7 +14,7 @@ const dataDirs = vi.hoisted(async () => {
   return { shared, own: process.env.DATA_DIR };
 });
 
-import { files } from "../../core/files";
+import * as files from "../../core/files";
 
 afterAll(async () => {
   const { shared, own } = await dataDirs;
@@ -30,7 +30,7 @@ describe("files", () => {
     await files.write(file, new TextEncoder().encode("pixels"));
 
     expect((await files.read(file)).toString()).toBe("pixels");
-    expect(files.path(file)).toBe(
+    expect(files.pathOf(file)).toBe(
       path.join((await dataDirs).own, "images", file.uploadId),
     );
   });
@@ -48,7 +48,7 @@ describe("files", () => {
 
   it("refuses an id that isn't a UUID, so it can't name a path elsewhere", () => {
     expect(() =>
-      files.path({ kind: "image", uploadId: "../../outside" }),
+      files.pathOf({ kind: "image", uploadId: "../../outside" }),
     ).toThrow("Not an upload id");
   });
 

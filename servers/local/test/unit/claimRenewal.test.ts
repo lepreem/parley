@@ -5,7 +5,7 @@ vi.mock("../../core/db", async () =>
 );
 
 import { AttachmentTurnReservations, db } from "../../core/db";
-import { data } from "../../core/data";
+import * as data from "../../core/data";
 import { CLAIM_LEASE_MS } from "../../core/data/conversations.data";
 
 describe("a reply's claims, renewed while it runs", () => {

@@ -24,7 +24,7 @@
       "node scripts/eslintStaged.mjs"
     ],
     "{client,servers/cloud/backend,servers/local}/**/*.{css,html,json,md,yaml,yml}": "prettier --write",
-    "{packages,desktop}/**/*.{css,html,js,json,md,ts,tsx,yaml,yml}": "prettier --write"
+    "{packages,desktop,eslint-rules}/**/*.{css,html,js,json,md,mjs,ts,tsx,yaml,yml}": "prettier --write"
   },
   "simple-git-hooks": {
     "pre-commit": "npx lint-staged"

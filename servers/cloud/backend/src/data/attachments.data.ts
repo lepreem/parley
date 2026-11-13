@@ -6,9 +6,9 @@ import {
   db,
   type Executor,
 } from "../db";
-import { CLAIM_LEASE_MS } from "./conversations.data";
-import { messageAttachmentLinks } from "./messageAttachmentLinks.data";
-import { storageLedger } from "./storageLedger.data";
+import * as conversations from "./conversations.data";
+import * as messageAttachmentLinks from "./messageAttachmentLinks.data";
+import * as storageLedger from "./storageLedger.data";
 
 type AttachmentValues = Pick<
   typeof Attachments.$inferInsert,
@@ -40,7 +40,7 @@ type OwnedAttachments = {
   kind: AttachmentValues["kind"];
 };
 
-function userOwnsAttachments(input: OwnedAttachments) {
+export function userOwnsAttachments(input: OwnedAttachments) {
   return and(
     eq(Attachments.userId, input.userId),
     eq(Attachments.kind, input.kind),
@@ -91,7 +91,7 @@ async function lockOwnedAttachments(
     .for("update");
 }
 
-async function claimAttachments(
+export async function claimAttachments(
   userId: string,
   attachmentIds: readonly string[],
   claimToken: string,
@@ -117,7 +117,7 @@ async function claimAttachments(
       select
         ${sql.identifier(Attachments.attachmentId.name)},
         ${claimToken},
-        ${new Date(Date.now() + CLAIM_LEASE_MS).toISOString()}::timestamptz
+        ${new Date(Date.now() + conversations.CLAIM_LEASE_MS).toISOString()}::timestamptz
       from locked_attachments
       where (
         select count(*) from locked_attachments
@@ -131,20 +131,23 @@ async function claimAttachments(
   return result?.reservationCount === uniqueAttachmentIds.length;
 }
 
-async function unclaimAttachments(claimToken: string, executor: Executor = db) {
+export async function unclaimAttachments(
+  claimToken: string,
+  executor: Executor = db,
+) {
   await executor
     .delete(AttachmentTurnReservations)
     .where(eq(AttachmentTurnReservations.claimToken, claimToken));
 }
 
-async function createAttachment(
+export async function createAttachment(
   values: AttachmentValues,
   executor: Executor = db,
 ) {
   await executor.insert(Attachments).values(values);
 }
 
-async function deleteOwnedUnlinkedUnreservedAttachment(
+export async function deleteOwnedUnlinkedUnreservedAttachment(
   input: DeleteAttachmentInput,
   executor: Executor = db,
 ) {
@@ -160,7 +163,7 @@ async function deleteOwnedUnlinkedUnreservedAttachment(
   return deletedAttachmentId ?? null;
 }
 
-async function deleteOwnedUnlinkedUnreservedAttachments(
+export async function deleteOwnedUnlinkedUnreservedAttachments(
   input: DeleteAttachmentsInput,
   executor: Executor = db,
 ): Promise<string[]> {
@@ -198,12 +201,3 @@ async function deleteOwnedUnlinkedUnreservedAttachments(
 
   return deletedIds;
 }
-
-export const attachments = {
-  userOwnsAttachments,
-  claimAttachments,
-  unclaimAttachments,
-  createAttachment,
-  deleteOwnedUnlinkedUnreservedAttachment,
-  deleteOwnedUnlinkedUnreservedAttachments,
-};

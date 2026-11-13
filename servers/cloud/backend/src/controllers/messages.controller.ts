@@ -3,18 +3,13 @@
 import type { ChatMessage, MessagesResponse } from "@parley/contract";
 import { randomUUID } from "node:crypto";
 import { logger } from "@parley/server-kit/runtime/logger";
-import {
-  data,
-  type MessageRow,
-  type ResolvedImage,
-  type StoredTranscriptAttachment,
-} from "../data";
+import * as data from "../data";
 import {
   measurePreparation,
   withPreparationMetrics,
 } from "../metrics/preparationMetrics";
-import { uploads } from "../uploads/uploads";
-import { memory } from "../memory";
+import * as uploads from "../uploads/uploads";
+import * as memory from "../memory";
 import { streamTurn, type TurnMetrics } from "../chat/replyStream";
 import { authed } from "../middleware/auth.middleware";
 import { validate } from "../middleware/validate.middleware";
@@ -32,9 +27,9 @@ import {
 import { claimTurn } from "../chat/turnClaim";
 
 function toMessageJson(
-  row: MessageRow,
-  images: ResolvedImage[] = [],
-  transcripts: StoredTranscriptAttachment[] = [],
+  row: data.messages.MessageRow,
+  images: data.images.ResolvedImage[] = [],
+  transcripts: data.transcripts.StoredTranscriptAttachment[] = [],
 ): ChatMessage {
   return {
     id: row.id,
@@ -54,7 +49,7 @@ function toMessageJson(
 
 /** Assistant turns never carry images, so they're not worth looking up. */
 function userMessageIds(
-  rows: readonly { id: string; role: MessageRow["role"] }[],
+  rows: readonly { id: string; role: data.messages.MessageRow["role"] }[],
 ) {
   return rows.filter((row) => row.role === "user").map((row) => row.id);
 }

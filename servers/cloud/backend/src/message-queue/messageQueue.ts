@@ -13,6 +13,7 @@ import {
   type Queue,
   type QueuePayloads,
 } from "./queues";
+export { QUEUES as queues } from "./queues";
 
 const log = logger.child({ component: "message-queue" });
 
@@ -254,84 +255,83 @@ function getBroker() {
   return opening;
 }
 
-export const mq = {
-  queues: QUEUES,
+/**
+ * Startup health check: fails if RabbitMQ is unreachable or refuses the
+ * credentials. The topology is declared when the process first uses mq.
+ */
+export async function ping() {
+  const connection = await amqplib.connect(getEnv().MQ_URL);
+  await connection.close();
+}
 
-  /**
-   * Startup health check: fails if RabbitMQ is unreachable or refuses the
-   * credentials. The topology is declared when the process first uses mq.
-   */
-  async ping() {
-    const connection = await amqplib.connect(getEnv().MQ_URL);
-    await connection.close();
-  },
+export async function publish<Q extends Queue>(
+  queue: Q,
+  payload: QueuePayloads[Q],
+) {
+  await publishConfirmed(
+    await getBroker(),
+    MAIN_EXCHANGE,
+    queue,
+    Buffer.from(JSON.stringify(payload)),
+  );
+}
 
-  async publish<Q extends Queue>(queue: Q, payload: QueuePayloads[Q]) {
-    await publishConfirmed(
-      await getBroker(),
-      MAIN_EXCHANGE,
-      queue,
-      Buffer.from(JSON.stringify(payload)),
+/**
+ * Hands each message on `queue` to `handler`, trying up to `attempts` times
+ * before dead-lettering it. A handler fails an attempt by throwing.
+ *
+ * `prefetch` is how many of the queue's messages this process works on at
+ * once (default 1); the broker holds the rest back until one is settled, so
+ * other processes consuming the queue get them instead.
+ */
+export async function consume<Q extends Queue>(
+  queue: Q,
+  handler: Handler<Q>,
+  { attempts, prefetch = 1 }: { attempts: number; prefetch?: number },
+) {
+  if (!Number.isInteger(attempts) || attempts < 1) {
+    throw new Error(`A consumer needs at least one attempt, got ${attempts}`);
+  }
+  if (!Number.isInteger(prefetch) || prefetch < 1) {
+    throw new Error(
+      `A consumer needs a prefetch of at least 1, got ${prefetch}`,
     );
-  },
+  }
 
-  /**
-   * Hands each message on `queue` to `handler`, trying up to `attempts` times
-   * before dead-lettering it. A handler fails an attempt by throwing.
-   *
-   * `prefetch` is how many of the queue's messages this process works on at
-   * once (default 1); the broker holds the rest back until one is settled, so
-   * other processes consuming the queue get them instead.
-   */
-  async consume<Q extends Queue>(
-    queue: Q,
-    handler: Handler<Q>,
-    { attempts, prefetch = 1 }: { attempts: number; prefetch?: number },
-  ) {
-    if (!Number.isInteger(attempts) || attempts < 1) {
-      throw new Error(`A consumer needs at least one attempt, got ${attempts}`);
-    }
-    if (!Number.isInteger(prefetch) || prefetch < 1) {
-      throw new Error(
-        `A consumer needs a prefetch of at least 1, got ${prefetch}`,
-      );
-    }
+  const broker = await getBroker();
+  // The prefetch applies to the consumers the channel starts after it. Both
+  // are sent in the same turn, and a channel sends in order, so no other
+  // consume() can start a consumer between them and take this prefetch.
+  const [, { consumerTag }] = await Promise.all([
+    broker.consumer.prefetch(prefetch),
+    broker.consumer.consume(queue, (message) => {
+      if (!message) return;
+      const handling = handle(broker, queue, message, handler, attempts);
+      broker.running.add(handling);
+      void handling.finally(() => broker.running.delete(handling));
+    }),
+  ]);
+  broker.consumerTags.push(consumerTag);
+}
 
-    const broker = await getBroker();
-    // The prefetch applies to the consumers the channel starts after it. Both
-    // are sent in the same turn, and a channel sends in order, so no other
-    // consume() can start a consumer between them and take this prefetch.
-    const [, { consumerTag }] = await Promise.all([
-      broker.consumer.prefetch(prefetch),
-      broker.consumer.consume(queue, (message) => {
-        if (!message) return;
-        const handling = handle(broker, queue, message, handler, attempts);
-        broker.running.add(handling);
-        void handling.finally(() => broker.running.delete(handling));
-      }),
-    ]);
-    broker.consumerTags.push(consumerTag);
-  },
+/**
+ * Stops every consumer, so the broker delivers nothing more, then waits for
+ * the handlers already running. What they were given is still settled.
+ */
+export async function stopConsuming() {
+  if (!opening) return;
 
-  /**
-   * Stops every consumer, so the broker delivers nothing more, then waits for
-   * the handlers already running. What they were given is still settled.
-   */
-  async stopConsuming() {
-    if (!opening) return;
+  const broker = await opening;
+  const consumerTags = broker.consumerTags.splice(0);
+  await Promise.all(consumerTags.map((tag) => broker.consumer.cancel(tag)));
+  await Promise.allSettled(broker.running);
+}
 
-    const broker = await opening;
-    const consumerTags = broker.consumerTags.splice(0);
-    await Promise.all(consumerTags.map((tag) => broker.consumer.cancel(tag)));
-    await Promise.allSettled(broker.running);
-  },
+export async function close() {
+  if (!opening) return;
 
-  async close() {
-    if (!opening) return;
-
-    const broker = await opening;
-    opening = undefined;
-    broker.closing = true;
-    await broker.connection.close();
-  },
-};
+  const broker = await opening;
+  opening = undefined;
+  broker.closing = true;
+  await broker.connection.close();
+}

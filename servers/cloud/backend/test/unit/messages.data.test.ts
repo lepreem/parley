@@ -46,25 +46,19 @@ vi.mock("../../src/db", async () => ({
 
 vi.mock("../../src/data/images.data", () => ({
   linkImagesToMessage: vi.fn(),
-  images: {
-    deleteOwnedUnlinkedUnreservedImageAttachments: mockDeleteImageAttachments,
-  },
+  deleteOwnedUnlinkedUnreservedImageAttachments: mockDeleteImageAttachments,
 }));
 
 vi.mock("../../src/data/conversations.data", () => ({
-  conversations: {
-    completeConversationTurn: mockCompleteConversationTurn,
-  },
+  completeConversationTurn: mockCompleteConversationTurn,
 }));
 
 vi.mock("../../src/data/transcripts.data", () => ({
   linkTranscriptionsToMessage: mockLinkTranscriptions,
-  transcripts: {
-    findMessageTranscriptAttachments: vi.fn(),
-  },
+  findMessageTranscriptAttachments: vi.fn(),
 }));
 
-import { messages } from "../../src/data/messages.data";
+import * as messages from "../../src/data/messages.data";
 
 function returnLockedConversation(rows: unknown[]) {
   mockSelect.mockReturnValueOnce({

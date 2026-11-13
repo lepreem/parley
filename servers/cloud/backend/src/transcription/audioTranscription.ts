@@ -1,7 +1,7 @@
-import { data } from "../data";
-import { mq } from "../message-queue/messageQueue";
+import * as data from "../data";
+import * as mq from "../message-queue/messageQueue";
 import type { UploadId } from "@parley/server-kit/ids";
-import { uploads } from "../uploads/uploads";
+import * as uploads from "../uploads/uploads";
 
 /**
  * Confirms an uploaded audio file as a transcription job and hands it to the
@@ -13,7 +13,7 @@ import { uploads } from "../uploads/uploads";
  * leave a queued job no worker will ever take. Failing the job says so
  * instead, and the error reaches the user on the source.
  */
-async function queue(job: {
+export async function queue(job: {
   audioUploadId: UploadId;
   userId: string;
   source: "audio" | "video";
@@ -41,7 +41,7 @@ async function queue(job: {
  * doesn't go through. It can't cover a process that dies between the two:
  * a job left queued past its worker's reach is a separate problem.
  */
-async function publishOrFail(
+export async function publishOrFail(
   audioUploadId: UploadId,
   publish: () => Promise<unknown>,
 ) {
@@ -55,8 +55,3 @@ async function publishOrFail(
     throw error;
   }
 }
-
-export const audioTranscription = {
-  queue,
-  publishOrFail,
-};
