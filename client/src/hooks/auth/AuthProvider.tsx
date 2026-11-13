@@ -16,6 +16,7 @@ import {
   refreshSession,
   type Session,
 } from "../../api/session";
+import type { Capabilities } from "@parley/contract/tiers";
 import { AuthContext, type AuthUser } from "./context";
 
 /**
@@ -68,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // A guest's session has nothing to refresh it with, and its month is
     // past what setTimeout can wait: the timer would fire at once.
-    if (!session || session.isGuest) return;
+    if (!session || session.tier === "guest") return;
     const timer = setTimeout(
       () => {
         // A failure leaves the next request's 401 to refresh.
@@ -91,10 +92,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Only a different user is a new user: a refresh keeps the same object.
   const userId = session?.userId;
-  const isGuest = session?.isGuest ?? false;
+  const tier = session?.tier;
+  // By value: every refresh parses a new capabilities object.
+  const capabilitiesJson = session ? JSON.stringify(session.capabilities) : "";
   const user = useMemo<AuthUser | null>(
-    () => (userId ? { userId, isGuest } : null),
-    [userId, isGuest],
+    () =>
+      userId && tier
+        ? {
+            userId,
+            tier,
+            capabilities: JSON.parse(capabilitiesJson) as Capabilities,
+          }
+        : null,
+    [userId, tier, capabilitiesJson],
   );
 
   return (

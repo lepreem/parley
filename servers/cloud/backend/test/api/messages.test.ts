@@ -17,7 +17,7 @@ const {
   mockFindChatModel,
   mockChatAI,
   mockGenerateTitle,
-  mockIsGuestModel,
+  mockOffersModelTo,
   mockClaimAttachments,
   mockUnclaimAttachments,
 } = vi.hoisted(() => ({
@@ -37,7 +37,7 @@ const {
   mockFindChatModel: vi.fn(),
   mockChatAI: vi.fn(),
   mockGenerateTitle: vi.fn(),
-  mockIsGuestModel: vi.fn(),
+  mockOffersModelTo: vi.fn(),
   mockClaimAttachments: vi.fn(),
   mockUnclaimAttachments: vi.fn(),
 }));
@@ -133,7 +133,7 @@ vi.mock("../../src/ai/ai_chat_client/ai_chat_client", async (importActual) => {
     findModel: mockFindChatModel,
     complete: mockChatAI,
     generateTitle: mockGenerateTitle,
-    isGuestModel: mockIsGuestModel,
+    offersModelTo: mockOffersModelTo,
   };
 });
 
@@ -322,7 +322,7 @@ beforeEach(() => {
     retires: null,
   });
   mockGenerateTitle.mockResolvedValue("Friendly greeting");
-  mockIsGuestModel.mockResolvedValue(true);
+  mockOffersModelTo.mockResolvedValue(true);
   mockDeleteObjects.mockResolvedValue([]);
 });
 
@@ -373,10 +373,10 @@ describe("a guest's turn", () => {
     expect(mockChatAI).toHaveBeenCalledWith(
       modelId,
       expect.anything(),
-      expect.objectContaining({ guest: true }),
+      expect.objectContaining({ tier: "guest" }),
     );
     expect(mockGenerateTitle).toHaveBeenCalledWith("conversation", "Hi there", {
-      guest: true,
+      tier: "guest",
     });
     expect(mockPersistAndUnclaimChatTurn).toHaveBeenCalledWith(
       expect.objectContaining({ userId: guestId }),
@@ -384,7 +384,7 @@ describe("a guest's turn", () => {
   });
 
   it("is refused a model that costs more than the guest ones", async () => {
-    mockIsGuestModel.mockResolvedValue(false);
+    mockOffersModelTo.mockResolvedValue(false);
 
     const res = await postAsGuest({
       messageContent: "Hi there",
@@ -488,7 +488,7 @@ describe("a guest's turn", () => {
       await res.text();
       expect(res.status).toBe(200);
     }
-    expect(mockIsGuestModel).not.toHaveBeenCalled();
+    expect(mockOffersModelTo).toHaveBeenCalledWith("signedIn", modelId);
   });
 });
 
@@ -1311,7 +1311,7 @@ describe("POST /conversations/:conversationId/messages", () => {
       }),
     );
     expect(mockGenerateTitle).toHaveBeenCalledWith("conversation", "Hi there", {
-      guest: false,
+      tier: "signedIn",
     });
   });
 

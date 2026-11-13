@@ -1,14 +1,14 @@
 import { useParams } from "react-router-dom";
 import { useConversationsQuery } from "../../hooks/queries/useConversationQueries";
 import { useServerReady } from "../../hooks/server/useServerReady";
-import { useIsGuest } from "../../hooks/auth/useIsGuest";
+import { useCapabilities } from "../../hooks/auth/useCapabilities";
 import { Icon } from "../ui/Icon";
 import { useShell } from "./shellContext";
 
 export function TopBar() {
   const { conversationId } = useParams<{ conversationId: string }>();
   const ready = useServerReady();
-  const guest = useIsGuest();
+  const can = useCapabilities();
   const { setSidebarOpen, setSourcesOpen } = useShell();
   const conversationsQuery = useConversationsQuery(ready);
 
@@ -33,8 +33,8 @@ export function TopBar() {
         {title}
       </h1>
 
-      {/* Guests chat in text only, so have no sources. */}
-      {!guest && (
+      {/* Without attachments there are no sources. */}
+      {can.attachments && (
         <button
           type="button"
           onClick={() => setSourcesOpen(true)}

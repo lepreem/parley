@@ -2,6 +2,7 @@ import type { Context } from "hono";
 import { getCookie } from "hono/cookie";
 
 import { getEnv, guestChatEnabled } from "../env";
+import { tierReport } from "@parley/contract/tiers";
 import * as workos from "../auth/auth";
 import { readAccessTokenExpiry, verifyAccessToken } from "../auth/accessToken";
 import {
@@ -43,7 +44,7 @@ export const handleMe = authed.createHandlers(async (c) => {
   return c.json({
     userId: c.var.userId,
     expiresAt: expiresAt(c.var.sessionExpiresAtEpochSeconds),
-    isGuest: c.var.isGuest,
+    ...tierReport(c.var.tier),
   });
 });
 
@@ -68,7 +69,7 @@ export async function handleGuestSignIn(c: Context) {
       return c.json({
         userId: session.userId,
         expiresAt: expiresAt(session.expiresAtEpochSeconds),
-        isGuest: session.isGuest,
+        ...tierReport(session.tier),
       });
     } catch {
       // An expired or foreign token: start a new guest.
@@ -82,7 +83,7 @@ export async function handleGuestSignIn(c: Context) {
   return c.json({
     userId,
     expiresAt: expiresAt(expiresAtEpochSeconds),
-    isGuest: true,
+    ...tierReport("guest"),
   });
 }
 
@@ -128,6 +129,8 @@ export async function handleRefresh(c: Context) {
   return c.json({
     userId: tokens.userId,
     expiresAt: expiresAt(readAccessTokenExpiry(tokens.accessToken)),
+    // Only WorkOS sessions refresh.
+    ...tierReport("signedIn"),
   });
 }
 

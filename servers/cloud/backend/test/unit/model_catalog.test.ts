@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Model } from "@openrouter/sdk/models";
-import {
-  guestModelsOf,
-  offeredModels,
-} from "../../src/ai/ai_chat_client/model_catalog";
+import { allowsModelPrice, CAPABILITIES } from "@parley/contract/tiers";
+import { offeredModels } from "../../src/ai/ai_chat_client/model_catalog";
 
 const DAY = 24 * 60 * 60;
 
@@ -379,7 +377,7 @@ describe("archiving", () => {
   });
 });
 
-describe("guestModelsOf", () => {
+describe("the guest price ceiling", () => {
   it("offers what costs no more than $0.10/$0.50, for input and output both", () => {
     const models = offeredModels(
       [
@@ -392,7 +390,10 @@ describe("guestModelsOf", () => {
       ],
       Date.parse("2026-10-31"),
     );
-    expect(guestModelsOf(models).map((model) => model.id)).toEqual([
+    const guestModels = models.filter((model) =>
+      allowsModelPrice(CAPABILITIES.guest, model.pricing),
+    );
+    expect(guestModels.map((model) => model.id)).toEqual([
       "at-ceiling/model",
       "cheap/model",
       "free/model:free",

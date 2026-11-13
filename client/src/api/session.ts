@@ -1,3 +1,9 @@
+import {
+  FEATURES,
+  isTier,
+  type Capabilities,
+  type Tier,
+} from "@parley/contract/tiers";
 import { authRefreshEndpoint } from "../config";
 
 /**
@@ -10,23 +16,61 @@ export type Session = {
   /** Epoch milliseconds. */
   expiresAt: number;
   /**
-   * Chatting without an account. A guest's session isn't refreshed: it ends
-   * when it expires, or when they sign in and their chats move to the account.
+   * What kind of user: see @parley/contract/tiers. A guest's session isn't
+   * refreshed: it ends when it expires, or when they sign in and their chats
+   * move to the account.
    */
-  isGuest: boolean;
+  tier: Tier;
+  /** What the server says this tier can do. */
+  capabilities: Capabilities;
 };
 
 /**
- * Reads `{ userId, expiresAt, isGuest }` as /auth/me, /auth/guest and
- * /auth/refresh answer it.
+ * The capabilities as the server sent them. A feature it doesn't mention is
+ * one this session doesn't have.
+ */
+function parseCapabilities(data: unknown): Capabilities | undefined {
+  if (!data || typeof data !== "object") return undefined;
+  const fields = data as Record<string, unknown>;
+  const ceiling = fields.modelPriceCeiling;
+  const features = Object.fromEntries(
+    FEATURES.map((feature) => [feature, fields[feature] === true]),
+  ) as Record<(typeof FEATURES)[number], boolean>;
+  return {
+    ...features,
+    // Only the server filters models by it; kept as sent.
+    modelPriceCeiling:
+      ceiling && typeof ceiling === "object"
+        ? (ceiling as Capabilities["modelPriceCeiling"])
+        : null,
+  };
+}
+
+/**
+ * Reads `{ userId, expiresAt, tier, capabilities }` as /auth/me, /auth/guest
+ * and /auth/refresh answer it.
  */
 export function parseSession(data: unknown): Session {
   if (data && typeof data === "object") {
-    const { userId, expiresAt, isGuest } = data as Record<string, unknown>;
+    const { userId, expiresAt, tier, capabilities } = data as Record<
+      string,
+      unknown
+    >;
     const expiresAtMs =
       typeof expiresAt === "string" ? Date.parse(expiresAt) : NaN;
-    if (typeof userId === "string" && Number.isFinite(expiresAtMs)) {
-      return { userId, expiresAt: expiresAtMs, isGuest: isGuest === true };
+    const parsedCapabilities = parseCapabilities(capabilities);
+    if (
+      typeof userId === "string" &&
+      Number.isFinite(expiresAtMs) &&
+      isTier(tier) &&
+      parsedCapabilities
+    ) {
+      return {
+        userId,
+        expiresAt: expiresAtMs,
+        tier,
+        capabilities: parsedCapabilities,
+      };
     }
   }
   throw new Error("Invalid session response");

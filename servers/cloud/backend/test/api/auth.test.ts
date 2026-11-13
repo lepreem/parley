@@ -1,3 +1,4 @@
+import { tierReport } from "@parley/contract/tiers";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { generateKeyPair, SignJWT } from "jose";
 
@@ -73,7 +74,7 @@ describe("GET /auth/me", () => {
     expect(await res.json()).toEqual({
       userId: "user_01TEST",
       expiresAt: new Date(expiresAtEpochSeconds * 1000).toISOString(),
-      isGuest: false,
+      ...tierReport("signedIn"),
     });
   });
 });
@@ -216,6 +217,7 @@ describe("POST /auth/refresh", () => {
     expect(await res.json()).toEqual({
       userId,
       expiresAt: new Date(expiresAtEpochSeconds * 1000).toISOString(),
+      ...tierReport("signedIn"),
     });
     const cookies = res.headers.getSetCookie();
     expect(cookies).toContainEqual(
@@ -253,6 +255,7 @@ describe("POST /auth/refresh", () => {
     expect(await res.json()).toEqual({
       userId,
       expiresAt: new Date(expiresAtEpochSeconds * 1000).toISOString(),
+      ...tierReport("signedIn"),
     });
     expect(res.headers.getSetCookie()).toContainEqual(
       expect.stringMatching(

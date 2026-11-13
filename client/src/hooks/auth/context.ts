@@ -1,8 +1,10 @@
 import { createContext } from "react";
+import type { Capabilities, Tier } from "@parley/contract/tiers";
 
 export type AuthUser = {
   userId: string;
-  isGuest: boolean;
+  tier: Tier;
+  capabilities: Capabilities;
 };
 
 export type AuthContextValue = {

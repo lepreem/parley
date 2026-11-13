@@ -122,6 +122,7 @@ describe("POST /speech/transcribe", () => {
     });
 
     expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ message: "Sign in to dictate" });
     expect(mockTranscribeDictation).not.toHaveBeenCalled();
   });
 

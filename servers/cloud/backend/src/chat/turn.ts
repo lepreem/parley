@@ -22,6 +22,8 @@ import {
 import * as memory from "../memory";
 import { buildPrompt, countImageInputs, withTranscripts } from "./prompt";
 import type { TurnClaim } from "./turnClaim";
+import { CAPABILITIES, howToReach, type Tier } from "@parley/contract/tiers";
+import { refusalOf } from "../middleware/auth.middleware";
 
 const log = logger.child({ component: "chat-turn" });
 
@@ -30,8 +32,8 @@ const FALLBACK_CONVERSATION_TITLE_CHARS = 80;
 /** One user turn to answer, as the request asked for it. */
 export type TurnRequest = {
   userId: string;
-  /** A guest's turn: guest models only, billed to the guest key. */
-  guest: boolean;
+  /** Whose turn it is: what it may ask for, and the key it's billed to. */
+  tier: Tier;
   conversationId: string;
   content: string;
   chosenModelId: string;
@@ -48,7 +50,7 @@ export type TurnRequest = {
 };
 
 export function turnRequestFrom(
-  { userId, isGuest }: { userId: string; isGuest: boolean },
+  { userId, tier }: { userId: string; tier: Tier },
   conversationId: string,
   {
     messageContent,
@@ -61,7 +63,7 @@ export function turnRequestFrom(
 ): TurnRequest {
   return {
     userId,
-    guest: isGuest,
+    tier,
     conversationId,
     content: messageContent,
     chosenModelId,
@@ -213,22 +215,23 @@ export async function prepareTurn(
         })
       : new TurnRejected(404, { message: "Conversation not found" });
   }
-  if (request.guest && !(await chat.isGuestModel(request.chosenModelId))) {
+  const capabilities = CAPABILITIES[request.tier];
+  if (!(await chat.offersModelTo(request.tier, request.chosenModelId))) {
     throw new TurnRejected(400, {
-      message: "Invalid model: sign in to use this model",
+      message: `Invalid model: ${howToReach(request.tier) ?? "upgrade"} to use this model`,
     });
   }
   // Thinking is paid for, and only the guest key's credit limit stops guests
   // spending, so they leave it to the model.
-  if (request.guest && request.reasoningEffort) {
+  if (request.reasoningEffort && !capabilities.chooseEffort) {
     throw new TurnRejected(400, {
-      message: "Invalid effort: sign in to choose one",
+      message: refusalOf(request.tier, "chooseEffort"),
     });
   }
-  // Searches are charged on top of the tokens, so they're for signed-in users.
-  if (request.guest && request.webSearch) {
+  // Searches are charged on top of the tokens.
+  if (request.webSearch && !capabilities.webSearch) {
     throw new TurnRejected(400, {
-      message: "Web search: sign in to use it",
+      message: refusalOf(request.tier, "webSearch"),
     });
   }
   if (newTurnResolvedImages.length !== request.imageUploadIds.length) {
@@ -351,7 +354,7 @@ async function titleForFirstTurn(request: TurnRequest) {
   try {
     return (
       (await chat.generateTitle("conversation", content, {
-        guest: request.guest,
+        tier: request.tier,
       })) || fallback
     );
   } catch (error) {
@@ -436,7 +439,7 @@ export async function answerTurn(
           : {}),
         sessionId: request.conversationId,
         signal: entry.signal,
-        guest: request.guest,
+        tier: request.tier,
       },
     );
   } catch (error) {

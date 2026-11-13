@@ -13,7 +13,7 @@ import {
 import { useServerReady } from "../../hooks/server/useServerReady";
 import { useChatModelsQuery } from "../../hooks/queries/useModelsQuery";
 import { useServer } from "../../hooks/server/useServer";
-import { useIsGuest } from "../../hooks/auth/useIsGuest";
+import { useCapabilities } from "../../hooks/auth/useCapabilities";
 import { sectionPath } from "../app/sections";
 import { MAX_CONTEXT_MESSAGES } from "../../api/messages";
 import { useMessagesQuery } from "../../hooks/queries/useMessagesQuery";
@@ -62,7 +62,7 @@ export function ChatView() {
   const navigate = useNavigate();
   const server = useServer();
   const ready = useServerReady();
-  const guest = useIsGuest();
+  const can = useCapabilities();
   const draftKey = conversationId ?? NEW_CHAT_KEY;
 
   // Drafts are per chat: switching away and back keeps what you were writing,
@@ -147,14 +147,16 @@ export function ChatView() {
       ? modelPick
       : resolveDefaultModel(eligibleIds, defaultId);
   const chosenModel = eligible.find((model) => model.id === modelId);
-  // Kept across models, but only sent to one that offers it. Guests can't
-  // choose; the server refuses it.
+  // Kept across models, but only sent to one that offers it, and only when
+  // the tier lets the user choose; the server refuses it otherwise.
   const effort =
-    !guest && effortPick && chosenModel?.reasoning?.efforts.includes(effortPick)
+    can.chooseEffort &&
+    effortPick &&
+    chosenModel?.reasoning?.efforts.includes(effortPick)
       ? effortPick
       : null;
-  // Likewise: guests can't search, and not every model can.
-  const canSearchWeb = !guest && !!chosenModel?.searchesWeb;
+  // Likewise: not every tier can search, and not every model can.
+  const canSearchWeb = can.webSearch && !!chosenModel?.searchesWeb;
   const webSearch = canSearchWeb && webSearchOn;
   // Only the programs on this computer have permissions to loosen.
   const canChoosePermissions = !!chosenModel?.asksPermission;
@@ -227,9 +229,9 @@ export function ChatView() {
     });
   };
 
-  // Guests chat in text only, so a dropped file is left to the browser.
+  // Without attachments, a dropped file is left to the browser.
   const handleDragEnter = (event: DragEvent) => {
-    if (guest || !event.dataTransfer.types.includes("Files")) return;
+    if (!can.attachments || !event.dataTransfer.types.includes("Files")) return;
     dragDepth.current += 1;
     setDragging(true);
   };
@@ -238,7 +240,7 @@ export function ChatView() {
     if (dragDepth.current === 0) setDragging(false);
   };
   const handleDrop = (event: DragEvent) => {
-    if (guest) return;
+    if (!can.attachments) return;
     event.preventDefault();
     dragDepth.current = 0;
     setDragging(false);
@@ -250,7 +252,7 @@ export function ChatView() {
       className="relative flex min-h-0 flex-1 flex-col"
       onDragEnter={handleDragEnter}
       onDragOver={(event) => {
-        if (!guest && event.dataTransfer.types.includes("Files"))
+        if (can.attachments && event.dataTransfer.types.includes("Files"))
           event.preventDefault();
       }}
       onDragLeave={handleDragLeave}

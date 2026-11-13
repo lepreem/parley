@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchChatModels, type ChatModel } from "../../api/models";
 import { queryKeys } from "../../lib/queryClient";
 import { useServer } from "../server/useServer";
-import { useIsGuest } from "../auth/useIsGuest";
+import { useTier } from "../auth/useCapabilities";
 
 /**
  * The catalog only changes when the app does, or when the server says it
@@ -13,9 +13,10 @@ const MODEL_CATALOG_STALE_MS = 60 * 60_000;
 /** The chat models, in the order the API lists them, and how to offer them. */
 export function useChatModelsQuery(enabled: boolean) {
   const server = useServer();
-  const guest = useIsGuest();
+  // Each tier is offered its own models.
+  const tier = useTier();
   const query = useQuery({
-    queryKey: queryKeys.chatModels(server.id, guest),
+    queryKey: queryKeys.chatModels(server.id, tier),
     queryFn: () => fetchChatModels(server),
     enabled,
     staleTime: MODEL_CATALOG_STALE_MS,
