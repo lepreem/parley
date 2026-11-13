@@ -65,7 +65,11 @@ function usable(userId: string, conversationId: string, now: number) {
   return entry;
 }
 
-function store(conversationId: string, entry: Entry, now: number) {
+/**
+ * Puts `entry` in place of whatever the conversation held, then drops what the
+ * limits say must go.
+ */
+function replaceEntry(conversationId: string, entry: Entry, now: number) {
   remove(conversationId);
   entries.set(conversationId, entry);
   totalBytes += entry.bytes;
@@ -132,7 +136,7 @@ export function rememberHistory(
   }
 
   const now = Date.now();
-  store(
+  replaceEntry(
     conversationId,
     {
       userId,
@@ -172,7 +176,7 @@ export function rememberTurn(
     transcripts.set(transcript.audioUploadId, transcript.content);
   }
 
-  store(
+  replaceEntry(
     conversationId,
     {
       userId,
