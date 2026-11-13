@@ -386,12 +386,18 @@ export const defaultModelId = "~openai/gpt-luna-latest";
 
 /** Listed first in the picker, in this order. */
 export const recommendedModelIds = [
-  defaultModelId,
-  "~anthropic/claude-sonnet-latest",
-  "~anthropic/claude-haiku-latest",
-  "~google/gemini-pro-latest",
-  "~google/gemini-flash-latest",
-  "~deepseek/deepseek-flash-latest",
+  ...new Set([
+    defaultModelId,
+
+    "~anthropic/claude-sonnet-latest",
+    "~anthropic/claude-opus-latest",
+
+    "~openai/gpt-sol-latest",
+    "~openai/gpt-terra-latest",
+    "~openai/gpt-luna-latest",
+
+    "~deepseek/deepseek-flash-latest",
+  ]),
 ];
 
 const MAX_TITLE_INPUT_CHARS = 12_000;
