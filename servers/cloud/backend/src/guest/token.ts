@@ -3,25 +3,22 @@ import { decodeJwt, jwtVerify, SignJWT } from "jose";
 import { getEnv } from "../env";
 
 /**
- * A guest is a user like any other, under an id this server makes rather than
- * one from WorkOS, in a session token it signs itself. Signing in moves what
- * the guest made to their account (users.adoptGuest) and the guest is gone.
+ * A guest's session token: signed by this server, where an account's comes
+ * from WorkOS, and naming an id this server made.
  */
-const GUEST_ID_PREFIX = "guest_";
+export const ID_PREFIX = "guest_";
 const GUEST_ISSUER = "parley-guest";
 
 /**
  * How long a guest session lasts, from when it began; nothing extends it.
- * The guest sweep deletes guests older than this, whose chats no one can open.
+ * deleteExpired (index.ts) deletes guests older than this, whose chats no one
+ * can open.
  */
-export const GUEST_SESSION_SECONDS = 30 * 24 * 60 * 60;
+export const SESSION_SECONDS = 30 * 24 * 60 * 60;
 
-export function newGuestUserId(): string {
-  return `${GUEST_ID_PREFIX}${randomUUID()}`;
+export function newUserId(): string {
+  return `${ID_PREFIX}${randomUUID()}`;
 }
-
-/** Guest ids, as SQL LIKE matches them: the prefix with its `_` escaped. */
-export const GUEST_USER_ID_PATTERN = `${GUEST_ID_PREFIX.replace("_", "\\_")}%`;
 
 function secret() {
   const value = getEnv().GUEST_SESSION_SECRET;
@@ -29,9 +26,8 @@ function secret() {
   return new TextEncoder().encode(value);
 }
 
-export async function signGuestToken(userId: string) {
-  const expiresAtEpochSeconds =
-    Math.floor(Date.now() / 1000) + GUEST_SESSION_SECONDS;
+export async function sign(userId: string) {
+  const expiresAtEpochSeconds = Math.floor(Date.now() / 1000) + SESSION_SECONDS;
   const token = await new SignJWT()
     .setProtectedHeader({ alg: "HS256" })
     .setIssuer(GUEST_ISSUER)
@@ -47,7 +43,7 @@ export async function signGuestToken(userId: string) {
  * these are HS256, and each check accepts only its own algorithm, so a token
  * routed to the wrong one fails rather than passes.
  */
-export function isGuestToken(token: string): boolean {
+export function isToken(token: string): boolean {
   try {
     return decodeJwt(token).iss === GUEST_ISSUER;
   } catch {
@@ -55,15 +51,12 @@ export function isGuestToken(token: string): boolean {
   }
 }
 
-export async function verifyGuestToken(token: string) {
+export async function verifyToken(token: string) {
   const { payload } = await jwtVerify(token, secret(), {
     algorithms: ["HS256"],
     issuer: GUEST_ISSUER,
   });
-  if (
-    typeof payload.sub !== "string" ||
-    !payload.sub.startsWith(GUEST_ID_PREFIX)
-  ) {
+  if (typeof payload.sub !== "string" || !payload.sub.startsWith(ID_PREFIX)) {
     throw new Error("Guest token is missing a guest ID");
   }
   if (typeof payload.exp !== "number") {

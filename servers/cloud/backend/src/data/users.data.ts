@@ -1,6 +1,5 @@
 import { and, eq, like, lt, sql } from "drizzle-orm";
 import { ChatMessages, Conversations, db, users as Users } from "../db";
-import { GUEST_USER_ID_PATTERN } from "../auth/guestToken";
 
 /**
  * First login creates the row; every later one is a no-op. The auth provider
@@ -17,7 +16,7 @@ export async function ensureUser(userId: string) {
  * their place in the list: moving them isn't an edit.
  *
  * Only conversations and messages move, because they're all a guest can have:
- * guests chat in text only (refuseGuests on the upload routes). Letting them
+ * guests chat in text only (requireFeature("attachments") on the upload routes). Letting them
  * upload would need more than adding Attachments here. Each stored object's key
  * starts with its owner's id (objectPath in storage/core.ts), so the objects
  * would have to move in storage too, and their storage_ledger rows with them;
@@ -45,19 +44,26 @@ export async function adoptGuest(guestUserId: string, userId: string) {
 }
 
 /**
- * Deletes guests made before `createdBefore`, with everything they made, and
- * returns how many. Guest sessions don't outlast GUEST_SESSION_SECONDS, so
- * past that no one can open what these guests left.
+ * Deletes guests, the users whose ids start with `idPrefix`, made before
+ * `createdBefore`, with everything they made, and returns how many.
  */
-export async function deleteGuestsCreatedBefore(createdBefore: Date) {
+export async function deleteGuestsCreatedBefore(
+  createdBefore: Date,
+  { idPrefix }: { idPrefix: string },
+) {
   const deleted = await db
     .delete(Users)
     .where(
       and(
-        like(Users.id, GUEST_USER_ID_PATTERN),
+        like(Users.id, `${escapeLike(idPrefix)}%`),
         lt(Users.createdAt, createdBefore),
       ),
     )
     .returning({ id: Users.id });
   return deleted.length;
+}
+
+/** `text` as a LIKE pattern matches it, with its wildcards escaped. */
+function escapeLike(text: string) {
+  return text.replace(/[\\%_]/g, (character) => `\\${character}`);
 }

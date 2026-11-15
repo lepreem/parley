@@ -28,6 +28,7 @@ const namespaceModules = [
   { file: srcDirectory("ai/transcription/index"), name: "transcription" },
   { file: srcDirectory("auth/auth"), name: "workos" },
   { file: srcDirectory("data/index"), name: "data" },
+  { file: srcDirectory("guest/index"), name: "guest" },
   ...modulesIn("data", ".data.ts"),
   { file: srcDirectory("memory/index"), name: "memory" },
   ...modulesIn("memory", ".ts"),
@@ -142,6 +143,8 @@ export default defineConfig([
               separateFiles: true,
             },
             { directory: srcDirectory("supadata"), entry: "index" },
+            // Everything only guests have; outside it a guest is just a tier.
+            { directory: srcDirectory("guest"), entry: "index" },
             // Each client's catalog rules are its own: what to offer is
             // decided in one place, next to the fetch. The files beside the
             // index don't import each other: the index puts them together.

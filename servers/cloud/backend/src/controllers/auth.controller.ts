@@ -1,17 +1,11 @@
 import type { Context } from "hono";
 import { getCookie } from "hono/cookie";
 
-import { getEnv, guestChatEnabled } from "../env";
+import { getEnv } from "../env";
 import { tierReport } from "@parley/contract/tiers";
 import * as workos from "../auth/auth";
 import { readAccessTokenExpiry, verifyAccessToken } from "../auth/accessToken";
-import {
-  GUEST_SESSION_SECONDS,
-  isGuestToken,
-  newGuestUserId,
-  signGuestToken,
-  verifyGuestToken,
-} from "../auth/guestToken";
+import * as guest from "../guest";
 import { refreshSession } from "../auth/refreshSession";
 import {
   clearAuthCookies,
@@ -50,7 +44,7 @@ export const handleMe = authed.createHandlers(async (c) => {
 
 /** Whether the landing page can offer to chat without signing in. */
 export function handleGuestStatus(c: Context) {
-  return c.json({ enabled: guestChatEnabled() });
+  return c.json({ enabled: guest.enabled() });
 }
 
 /**
@@ -59,7 +53,7 @@ export function handleGuestStatus(c: Context) {
  * a second click say, gets that one back rather than another guest.
  */
 export async function handleGuestSignIn(c: Context) {
-  if (!guestChatEnabled())
+  if (!guest.enabled())
     return c.json({ message: "Guest chat isn't available" }, 404);
 
   const existing = getCookie(c, COOKIE_KEYS.session);
@@ -76,10 +70,8 @@ export async function handleGuestSignIn(c: Context) {
     }
   }
 
-  const userId = newGuestUserId();
-  await data.users.ensureUser(userId);
-  const { token, expiresAtEpochSeconds } = await signGuestToken(userId);
-  setGuestCookie(c, token, GUEST_SESSION_SECONDS);
+  const { userId, token, expiresAtEpochSeconds } = await guest.start();
+  setGuestCookie(c, token, guest.SESSION_SECONDS);
   return c.json({
     userId,
     expiresAt: expiresAt(expiresAtEpochSeconds),
@@ -166,35 +158,8 @@ export async function handleCallback(c: Context) {
     await workos.getAuthSessionFromCode(code);
 
   await data.users.ensureUser(userId);
-  await adoptSignedInGuest(c, userId);
+  await guest.moveToAccount(getCookie(c, COOKIE_KEYS.session), userId);
   setAuthCookies(c, { accessToken, refreshToken });
 
   return c.redirect(getEnv().CLIENT_URL);
-}
-
-/**
- * A guest signing in keeps what they made: the session cookie they arrive
- * with still names the guest, so their chats move to the account. Failing to
- * move them doesn't fail the sign-in, which has already spent WorkOS's code;
- * the guest is left as it was, for the guest sweep.
- */
-async function adoptSignedInGuest(c: Context, userId: string) {
-  const token = getCookie(c, COOKIE_KEYS.session);
-  if (!token || !isGuestToken(token) || !guestChatEnabled()) return;
-
-  let guestUserId: string;
-  try {
-    ({ userId: guestUserId } = await verifyGuestToken(token));
-  } catch {
-    return;
-  }
-
-  try {
-    await data.users.adoptGuest(guestUserId, userId);
-  } catch (error) {
-    log.error("Failed to move a guest's chats to their account", error, {
-      guestUserId,
-      userId,
-    });
-  }
 }

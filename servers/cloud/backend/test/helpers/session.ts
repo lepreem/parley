@@ -1,5 +1,5 @@
 import { COOKIE_KEYS } from "../../src/cookies/session";
-import { signGuestToken } from "../../src/auth/guestToken";
+import { sign as signGuestToken } from "../../src/guest/token";
 import { signAccessToken } from "./accessTokens";
 
 /** A session cookie for a guest, signed as the server signs one. */

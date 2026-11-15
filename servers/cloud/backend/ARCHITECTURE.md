@@ -180,25 +180,28 @@ There are two kinds of stream, and both are read with fetch, not EventSource
 
 ## Guests
 
-Someone can chat without an account. A guest is a user like any other, under
-an id the API makes (`guest_<uuid>`), and its session cookie holds a token the
-API signs itself (`src/auth/guestToken.ts`) rather than one from WorkOS.
-`requireAuth` accepts either and sets `isGuest`; everything behind it works
-by `userId` as before.
+Someone can chat without an account. A guest is a user like any other, on the
+`guest` tier (`@parley/contract/tiers`), under an id the API makes
+(`guest_<uuid>`), and its session cookie holds a token the API signs itself
+rather than one from WorkOS. Everything only guests have is in `src/guest/`
+(`guest.<what>`): the token, starting a session, moving to an account, and
+deleting expired guests. `requireAuth` accepts either token and sets the
+tier; everything behind it works by `userId` and tier, and never asks whether
+someone is a guest.
 
 Signing in keeps what a guest made. The guest's cookie is still there when
 WorkOS sends them back to `/auth/callback`, which moves the guest's
 conversations and messages to their account and deletes the guest, in one
-transaction (`users.adoptGuest`). The account can be new or years old.
+transaction (`guest.moveToAccount`, then `users.adoptGuest`). The account can be new or years old.
 
 What a guest can't do, because it costs money nobody is accountable for:
 
-- **Upload.** Guests chat in text only (`refuseGuests` on `/upload`). Each
+- **Upload.** Guests chat in text only (`requireFeature("attachments")` on `/upload`). Each
   stored object's key starts with its owner's id, so letting guests upload
   means moving their objects in storage when they sign in; see
   `users.adoptGuest`.
 - **Use a model that costs more than $0.10 in / $0.50 out** per million
-  tokens, GPT-6 Luna's price (`chat.listGuestModels`).
+  tokens, GPT-6 Luna's price (the guest tier's `modelPriceCeiling`).
 - **Spend from the main OpenRouter key.** Guest turns, titles included, go
   through `OPENROUTER_GUEST_API_KEY`, whose credit limit in OpenRouter is the
   hard cap on guest spending. Without it, and `GUEST_SESSION_SECRET`, there is
@@ -208,8 +211,8 @@ What a guest can't do, because it costs money nobody is accountable for:
   one click away.
 
 A guest session lasts thirty days from when it starts, and nothing extends it.
-The hourly guest sweep (`src/recurring/guestSweep.ts`) deletes guests a day
-past that, with what they made.
+The hourly guest sweep (`src/recurring/guestSweep.ts`, calling
+`guest.deleteExpired`) deletes guests a day past that, with what they made.
 
 ## Deployment & scaling
 

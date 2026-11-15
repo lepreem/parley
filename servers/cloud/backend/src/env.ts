@@ -142,11 +142,6 @@ export function getEnv(): Env {
   return cachedEnv;
 }
 
-/** Whether guests can chat: both guest settings are there. */
-export function guestChatEnabled(): boolean {
-  return getEnv().OPENROUTER_GUEST_API_KEY !== undefined;
-}
-
 /**
  * For the one-shots that only touch the database (migrate, baseline) and
  * drizzle-kit: their container is given DATABASE_URL and nothing else.
