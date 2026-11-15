@@ -43,13 +43,13 @@ describe("the tier ladder", () => {
         outputPerMillionTokens: 0.5,
       },
     });
-    expect(CAPABILITIES.signedIn).toEqual(UNLIMITED);
+    expect(CAPABILITIES.free).toEqual(UNLIMITED);
   });
 
   it("tells a guest to sign in for what they lack", () => {
     expect(howToReach("guest", "webSearch")).toBe("sign in");
     expect(howToReach("guest")).toBe("sign in");
-    expect(howToReach("signedIn")).toBeUndefined();
+    expect(howToReach("free")).toBeUndefined();
     expect(refusalOf("guest", "attachments")).toBe("Sign in to add files");
     expect(refusalOf("guest", "dictation")).toBe("Sign in to dictate");
   });

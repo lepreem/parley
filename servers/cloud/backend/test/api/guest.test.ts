@@ -118,7 +118,7 @@ describe("POST /auth/guest", () => {
 
     expect(await res.json()).toMatchObject({
       userId: "user_01SIGNEDIN",
-      tier: "signedIn",
+      tier: "free",
     });
     expect(mockEnsureUser).not.toHaveBeenCalled();
   });

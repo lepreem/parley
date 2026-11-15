@@ -201,9 +201,7 @@ describe("listGuestModels", () => {
     ).toEqual(["at-ceiling/model", "cheap/model", "free/model:free"]);
     expect(await chat.offersModelTo("guest", "cheap/model")).toBe(true);
     expect(await chat.offersModelTo("guest", "dear-output/model")).toBe(false);
-    expect(await chat.offersModelTo("signedIn", "dear-output/model")).toBe(
-      true,
-    );
+    expect(await chat.offersModelTo("free", "dear-output/model")).toBe(true);
   });
 });
 
@@ -260,7 +258,7 @@ describe("chatAI", () => {
       tier: "guest",
     });
     await chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
-      tier: "signedIn",
+      tier: "free",
     });
     await chat.generateTitle("conversation", "yo", { tier: "guest" });
 
@@ -275,11 +273,11 @@ describe("chatAI", () => {
     mockResponsesSend.mockResolvedValue((async function* () {})());
 
     await chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
-      tier: "signedIn",
+      tier: "free",
       onDelta: () => {},
     });
     await chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
-      tier: "signedIn",
+      tier: "free",
       onDelta: () => {},
       webSearch: true,
       onSource: () => {},
@@ -321,7 +319,7 @@ describe("chatAI", () => {
       {
         maxOutputTokens: 100,
         sessionId: "conversation-1",
-        tier: "signedIn",
+        tier: "free",
       },
     );
 
@@ -344,9 +342,9 @@ describe("chatAI", () => {
     const turn: chat.ChatTurn[] = [{ role: "user", content: "yo" }];
 
     await chat.complete("~anthropic/claude-sonnet-latest", turn, {
-      tier: "signedIn",
+      tier: "free",
     });
-    await chat.complete(MODEL_ID, turn, { tier: "signedIn" });
+    await chat.complete(MODEL_ID, turn, { tier: "free" });
 
     const sent = mockResponsesSend.mock.calls.map(
       ([{ responsesRequest }]) => responsesRequest.cacheControl,
@@ -371,7 +369,7 @@ describe("chatAI", () => {
     const reply = await chat.complete(
       MODEL_ID,
       [{ role: "user", content: "yo" }],
-      { onDelta: () => {}, onUsage, tier: "signedIn" },
+      { onDelta: () => {}, onUsage, tier: "free" },
     );
 
     expect(reply).toBe("hi");
@@ -436,7 +434,7 @@ describe("chatAI", () => {
     const onUnreadPage = vi.fn();
 
     await chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
-      tier: "signedIn",
+      tier: "free",
       onDelta: () => {},
       webSearch: true,
       onSource,
@@ -465,7 +463,7 @@ describe("chatAI", () => {
 
     await expect(
       chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
-        tier: "signedIn",
+        tier: "free",
         onDelta: () => {},
       }),
     ).rejects.toThrow("It broke");
@@ -540,7 +538,7 @@ describe("chatAI timeouts", () => {
 
   const streamChat = () =>
     chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
-      tier: "signedIn",
+      tier: "free",
       onDelta: () => {},
     });
 
@@ -572,7 +570,7 @@ describe("chatAI timeouts", () => {
     );
     const outcome = track(
       chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
-        tier: "signedIn",
+        tier: "free",
         onDelta: () => {},
         webSearch: true,
         onSource: () => {},
@@ -639,7 +637,7 @@ describe("chatAI timeouts", () => {
     );
     const outcome = track(
       chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
-        tier: "signedIn",
+        tier: "free",
         onDelta: (delta) => {
           deltas.push(delta);
         },
@@ -677,7 +675,7 @@ describe("chatAI timeouts", () => {
       (_request: unknown, { signal }: SendOptions) => abortableWait(signal),
     );
     const outcome = track(
-      chat.generateTitle("conversation", "hello", { tier: "signedIn" }),
+      chat.generateTitle("conversation", "hello", { tier: "free" }),
     );
 
     await vi.advanceTimersByTimeAsync(TITLE_TIMEOUT_MS - 1);
@@ -702,7 +700,7 @@ describe("generateTitle", () => {
     const title = await chat.generateTitle(
       "conversation",
       "How should we organize the next quarter?",
-      { tier: "signedIn" },
+      { tier: "free" },
     );
 
     expect(title).toBe("Quarterly planning");

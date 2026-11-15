@@ -130,7 +130,7 @@ export async function handleRefresh(c: Context) {
     userId: tokens.userId,
     expiresAt: expiresAt(readAccessTokenExpiry(tokens.accessToken)),
     // Only WorkOS sessions refresh.
-    ...tierReport("signedIn"),
+    ...tierReport("free"),
   });
 }
 

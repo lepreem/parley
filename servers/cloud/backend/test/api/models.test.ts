@@ -62,7 +62,7 @@ describe("GET /models/chat", () => {
       ]) as unknown,
     });
     expect(mockListChatModels).toHaveBeenCalledTimes(1);
-    expect(mockListChatModels).toHaveBeenCalledWith("signedIn");
+    expect(mockListChatModels).toHaveBeenCalledWith("free");
   });
 
   it("gzips the catalog when the client accepts it", async () => {

@@ -74,7 +74,7 @@ describe("GET /auth/me", () => {
     expect(await res.json()).toEqual({
       userId: "user_01TEST",
       expiresAt: new Date(expiresAtEpochSeconds * 1000).toISOString(),
-      ...tierReport("signedIn"),
+      ...tierReport("free"),
     });
   });
 });
@@ -217,7 +217,7 @@ describe("POST /auth/refresh", () => {
     expect(await res.json()).toEqual({
       userId,
       expiresAt: new Date(expiresAtEpochSeconds * 1000).toISOString(),
-      ...tierReport("signedIn"),
+      ...tierReport("free"),
     });
     const cookies = res.headers.getSetCookie();
     expect(cookies).toContainEqual(
@@ -255,7 +255,7 @@ describe("POST /auth/refresh", () => {
     expect(await res.json()).toEqual({
       userId,
       expiresAt: new Date(expiresAtEpochSeconds * 1000).toISOString(),
-      ...tierReport("signedIn"),
+      ...tierReport("free"),
     });
     expect(res.headers.getSetCookie()).toContainEqual(
       expect.stringMatching(

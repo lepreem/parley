@@ -485,7 +485,7 @@ describe("a guest's turn", () => {
       await res.text();
       expect(res.status).toBe(200);
     }
-    expect(mockOffersModelTo).toHaveBeenCalledWith("signedIn", modelId);
+    expect(mockOffersModelTo).toHaveBeenCalledWith("free", modelId);
   });
 });
 
@@ -1308,7 +1308,7 @@ describe("POST /conversations/:conversationId/messages", () => {
       }),
     );
     expect(mockGenerateTitle).toHaveBeenCalledWith("conversation", "Hi there", {
-      tier: "signedIn",
+      tier: "free",
     });
   });
 

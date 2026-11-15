@@ -12,7 +12,7 @@
 import type { ModelPricing } from "./contract";
 
 /** Lowest first. */
-export const TIERS = ["guest", "signedIn"] as const;
+export const TIERS = ["guest", "free"] as const;
 export type Tier = (typeof TIERS)[number];
 
 /** What a tier switches on, and keeps switched on for every tier above it. */
@@ -58,7 +58,7 @@ const LADDER: Record<Tier, Rung> = {
       outputPerMillionTokens: 0.5,
     },
   },
-  signedIn: {
+  free: {
     reachedBy: "sign in",
     adds: ["attachments", "dictation", "chooseEffort", "webSearch"],
     modelPriceCeiling: null,

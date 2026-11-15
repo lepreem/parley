@@ -32,8 +32,8 @@ export async function verifySessionToken(token: string) {
     if (!guestChatEnabled()) throw new Error("Guest chat isn't enabled");
     return { ...(await verifyGuestToken(token)), tier: "guest" as const };
   }
-  // Every WorkOS user is on one tier until there are plans to pay for.
-  return { ...(await verifyAccessToken(token)), tier: "signedIn" as const };
+  // Every WorkOS user is on the free tier until there are plans to pay for.
+  return { ...(await verifyAccessToken(token)), tier: "free" as const };
 }
 
 export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {

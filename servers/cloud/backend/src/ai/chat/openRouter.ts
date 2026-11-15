@@ -28,7 +28,7 @@ const guestClient =
 /** The OpenRouter key each tier's turns are billed to. */
 const KEY_OF_TIER: Record<Tier, "main" | "guest"> = {
   guest: "guest",
-  signedIn: "main",
+  free: "main",
 };
 
 /** The connection a tier's call goes through. */
