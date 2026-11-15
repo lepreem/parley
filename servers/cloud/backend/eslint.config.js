@@ -135,7 +135,12 @@ export default defineConfig([
             { directory: srcDirectory("storage"), entry: "index" },
             { directory: srcDirectory("memory"), entry: "index" },
             { directory: srcDirectory("recurring"), entry: "index" },
-            { directory: srcDirectory("ai"), entry: "index" },
+            // chat and transcription don't import each other.
+            {
+              directory: srcDirectory("ai"),
+              entry: "index",
+              separateFiles: true,
+            },
             { directory: srcDirectory("supadata"), entry: "index" },
             // Each client's catalog rules are its own: what to offer is
             // decided in one place, next to the fetch. The files beside the

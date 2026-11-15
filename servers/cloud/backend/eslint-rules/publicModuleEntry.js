@@ -16,8 +16,17 @@ function isInsideDirectory(filePath, directory) {
 }
 
 /**
- * The modules that keep their files separate and hold the importer as one of
- * those files, not the entry: it may import nothing else in the module.
+ * The file or folder directly inside `directory` that holds `filePath`:
+ * "chat" for ai/chat/completion.ts, "completion" for ai/chat/completion.ts
+ * seen from ai/chat.
+ */
+function partOf(filePath, directory) {
+  return path.relative(directory, filePath).split(path.sep)[0];
+}
+
+/**
+ * The modules that keep their parts separate and hold the importer in one of
+ * those parts, not the entry: it may import nothing from another part.
  */
 function siblingImportRules(modules, importerPath) {
   return modules
@@ -59,8 +68,9 @@ export default {
                 directory: { type: "string" },
                 entry: { type: "string" },
                 /**
-                 * The files beside the entry don't import each other either:
-                 * whatever needs two of them is put together in the entry.
+                 * The files and folders beside the entry don't import each
+                 * other either: whatever needs two of them is put together
+                 * in the entry. A folder's own files may import each other.
                  */
                 separateFiles: { type: "boolean" },
               },
@@ -77,7 +87,7 @@ export default {
       privateModule:
         "Only {{entry}}.ts is public outside {{directory}}. Import from that entry point instead.",
       siblingImport:
-        "Files in {{directory}} don't import each other. Put what needs both together in {{entry}}.ts.",
+        "The files and folders in {{directory}} don't import each other. Put what needs both together in {{entry}}.ts.",
     },
   },
 
@@ -117,8 +127,11 @@ export default {
         path.resolve(path.dirname(importerPath), sourceNode.value),
       );
 
-      const sibling = siblingRules.find(({ moduleDirectory }) =>
-        isInsideDirectory(importedPath, moduleDirectory),
+      const sibling = siblingRules.find(
+        ({ moduleDirectory }) =>
+          isInsideDirectory(importedPath, moduleDirectory) &&
+          partOf(importedPath, moduleDirectory) !==
+            partOf(importerPath, moduleDirectory),
       );
       if (sibling) {
         context.report({
