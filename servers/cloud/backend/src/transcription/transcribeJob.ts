@@ -1,6 +1,6 @@
 import { transcription } from "../ai";
 import { sign } from "../storage";
-import type * as mq from "../message-queue/messageQueue";
+import type * as mq from "../message-queue";
 import type { UploadId } from "@parley/server-kit/ids";
 import { completeAudioJob, type ClaimedJob } from "./audioJob";
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { generateKeyPair, SignJWT } from "jose";
 
-import { verifyAccessToken } from "../../src/auth/accessToken";
+import { verify as verifyAccessToken } from "../../src/auth/accessToken";
 import { signAccessToken, signTestToken } from "../helpers/accessTokens";
 
 const userId = "user_01ACCESS";

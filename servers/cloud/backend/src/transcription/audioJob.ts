@@ -1,6 +1,6 @@
 import * as data from "../data";
 import { logger } from "@parley/server-kit/runtime/logger";
-import * as mq from "../message-queue/messageQueue";
+import * as mq from "../message-queue";
 import type { TranscriptSegment } from "@parley/server-kit/transcription/transcript";
 import type { UploadId } from "@parley/server-kit/ids";
 import { eventHub } from "../sse/hub";

@@ -4,11 +4,15 @@ const { mockRefreshAuthSession } = vi.hoisted(() => ({
   mockRefreshAuthSession: vi.fn(),
 }));
 
-vi.mock("../../src/auth/auth", () => ({
-  refreshAuthSession: mockRefreshAuthSession,
+vi.mock("../../src/auth/workos", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../src/auth/workos")>()),
+  refreshTokens: mockRefreshAuthSession,
 }));
 
-import { refreshSession } from "../../src/auth/refreshSession";
+import {
+  refresh as refreshSession,
+  RefreshRefused,
+} from "../../src/auth/refreshSession";
 
 const tokens = { accessToken: "access-2", refreshToken: "refresh-2" };
 let refreshToken = 0;
@@ -82,5 +86,20 @@ describe("refreshSession", () => {
     ]);
 
     expect(mockRefreshAuthSession).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports a token WorkOS turns down as RefreshRefused", async () => {
+    mockRefreshAuthSession.mockRejectedValue(
+      Object.assign(new Error("invalid_grant"), { status: 400 }),
+    );
+    await expect(refreshSession(freshToken())).rejects.toBeInstanceOf(
+      RefreshRefused,
+    );
+  });
+
+  it("passes on a failure to answer as it is", async () => {
+    const outage = Object.assign(new Error("Bad gateway"), { status: 502 });
+    mockRefreshAuthSession.mockRejectedValue(outage);
+    await expect(refreshSession(freshToken())).rejects.toBe(outage);
   });
 });

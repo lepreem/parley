@@ -39,7 +39,7 @@ export function getJwksUrl() {
   return client.userManagement.getJwksUrl(getEnv().WORKOS_CLIENT_ID);
 }
 
-export function getRedirectUrl() {
+export function signInUrl() {
   return client.userManagement.getAuthorizationUrl({
     // Specify that we'd like AuthKit to handle the authentication flow
     provider: "authkit",
@@ -55,7 +55,7 @@ export function getRedirectUrl() {
  * tokens: the access token becomes the session cookie as it is, and the
  * refresh token is what gets a new one when it expires.
  */
-export async function getAuthSessionFromCode(code: string) {
+export async function finishSignIn(code: string) {
   const { user, accessToken, refreshToken } =
     await client.userManagement.authenticateWithCode({
       code,
@@ -69,7 +69,7 @@ export async function getAuthSessionFromCode(code: string) {
  * a new refresh token. WorkOS rotates refresh tokens, so the one passed in
  * stops working once this succeeds.
  */
-export async function refreshAuthSession(refreshToken: string) {
+export async function refreshTokens(refreshToken: string) {
   const {
     user,
     accessToken,
@@ -81,7 +81,21 @@ export async function refreshAuthSession(refreshToken: string) {
   return { userId: user.id, accessToken, refreshToken: nextRefreshToken };
 }
 
-export async function revokeAuthSession(sessionId: string): Promise<void> {
+/**
+ * Whether WorkOS turned a token down, as opposed to failing to answer: it
+ * answers a spent, revoked or expired one with a 4xx.
+ */
+export function isRefusal(error: unknown) {
+  const { status } = error as { status?: unknown };
+  return (
+    typeof status === "number" &&
+    status >= 400 &&
+    status < 500 &&
+    status !== 429
+  );
+}
+
+export async function endSession(sessionId: string): Promise<void> {
   await client.userManagement.revokeSession({
     sessionId,
   });

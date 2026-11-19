@@ -3,10 +3,8 @@ import { getCookie } from "hono/cookie";
 
 import { getEnv } from "../env";
 import { tierReport } from "@parley/contract/tiers";
-import * as workos from "../auth/auth";
-import { readAccessTokenExpiry, verifyAccessToken } from "../auth/accessToken";
+import * as auth from "../auth";
 import * as guest from "../guest";
-import { refreshSession } from "../auth/refreshSession";
 import {
   clearAuthCookies,
   setAuthCookies,
@@ -21,7 +19,7 @@ import { logger } from "@parley/server-kit/runtime/logger";
 const log = logger.child({ controller: "auth" });
 
 export async function handleLogin(c: Context) {
-  return c.redirect(workos.getRedirectUrl());
+  return c.redirect(auth.signInUrl());
 }
 
 /** When an access token expires, as the auth responses report it. */
@@ -80,20 +78,6 @@ export async function handleGuestSignIn(c: Context) {
 }
 
 /**
- * Whether WorkOS turned the refresh token down, as opposed to failing to
- * answer: it answers a spent, revoked or expired one with a 4xx.
- */
-function isRejectedByWorkos(error: unknown) {
-  const { status } = error as { status?: unknown };
-  return (
-    typeof status === "number" &&
-    status >= 400 &&
-    status < 500 &&
-    status !== 429
-  );
-}
-
-/**
  * Trades the refresh cookie for a new access token and refresh token, and
  * answers who the session is for and when the new access token expires, so
  * the client can refresh again before it does. A refresh token WorkOS turns
@@ -107,12 +91,14 @@ export async function handleRefresh(c: Context) {
   const refreshToken = getCookie(c, COOKIE_KEYS.refresh);
   if (!refreshToken) return c.json({ message: "Unauthorized" }, 401);
 
-  let tokens: Awaited<ReturnType<typeof refreshSession>>;
+  let tokens: Awaited<ReturnType<typeof auth.refresh>>;
   try {
-    tokens = await refreshSession(refreshToken);
+    tokens = await auth.refresh(refreshToken);
   } catch (error) {
-    if (!isRejectedByWorkos(error)) throw error;
-    log.debug("WorkOS refused a refresh token", { error: String(error) });
+    if (!(error instanceof auth.RefreshRefused)) throw error;
+    log.debug("WorkOS refused a refresh token", {
+      error: String(error.cause),
+    });
     clearAuthCookies(c);
     return c.json({ message: "Unauthorized" }, 401);
   }
@@ -120,7 +106,7 @@ export async function handleRefresh(c: Context) {
   setAuthCookies(c, tokens);
   return c.json({
     userId: tokens.userId,
-    expiresAt: expiresAt(readAccessTokenExpiry(tokens.accessToken)),
+    expiresAt: expiresAt(auth.readExpiry(tokens.accessToken)),
     // Only WorkOS sessions refresh.
     ...tierReport("free"),
   });
@@ -136,13 +122,13 @@ export async function handleLogout(c: Context) {
   // what names the session to end.
   let sessionId: string;
   try {
-    ({ sessionId } = await verifyAccessToken(token, { allowExpired: true }));
+    ({ sessionId } = await auth.verify(token, { allowExpired: true }));
   } catch {
     return c.json(null, 200);
   }
 
   try {
-    await workos.revokeAuthSession(sessionId);
+    await auth.endSession(sessionId);
   } catch (error) {
     log.error("Failed to revoke WorkOS session", error);
   }
@@ -154,8 +140,7 @@ export async function handleCallback(c: Context) {
   const code = c.req.query("code");
   if (!code) return c.json({ message: "code required" }, 400);
 
-  const { userId, accessToken, refreshToken } =
-    await workos.getAuthSessionFromCode(code);
+  const { userId, accessToken, refreshToken } = await auth.finishSignIn(code);
 
   await data.users.ensureUser(userId);
   await guest.moveToAccount(getCookie(c, COOKIE_KEYS.session), userId);

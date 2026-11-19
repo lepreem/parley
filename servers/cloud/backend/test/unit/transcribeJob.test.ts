@@ -37,7 +37,7 @@ vi.mock("../../src/sse/hub", () => ({
 
 import { handleTranscribeJob } from "../../src/transcription/transcribeJob";
 import * as jobCancellation from "@parley/server-kit/transcription/jobCancellation";
-import { DeadLetterError } from "../../src/message-queue/messageQueue";
+import { DeadLetterError } from "../../src/message-queue";
 
 const audioInput = { audioUploadId } as const;
 const firstAttempt = { attempt: 1, lastAttempt: false, redelivered: false };

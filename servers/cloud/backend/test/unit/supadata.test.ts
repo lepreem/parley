@@ -13,11 +13,11 @@ vi.mock("@supadata/js", async (importOriginal) => {
 });
 
 import { Supadata, SupadataError } from "@supadata/js";
-import { youtubeCaptions } from "../../src/supadata";
+import * as youtubeCaptions from "../../src/youtubeCaptions";
 import {
   CAPTIONS_MESSAGES,
   CaptionsError,
-} from "../../src/supadata/youtubeCaptions";
+} from "../../src/youtubeCaptions/errors";
 
 const URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
 

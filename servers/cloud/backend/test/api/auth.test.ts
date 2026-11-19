@@ -20,14 +20,14 @@ const {
   mockInsert: vi.fn(),
 }));
 
-vi.mock("../../src/auth/auth", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../src/auth/auth")>();
+vi.mock("../../src/auth/workos", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/auth/workos")>();
   return {
     ...actual,
-    getRedirectUrl: mockGetRedirectUrl,
-    getAuthSessionFromCode: mockGetAuthSessionFromCode,
-    revokeAuthSession: mockRevokeAuthSession,
-    refreshAuthSession: mockRefreshAuthSession,
+    signInUrl: mockGetRedirectUrl,
+    finishSignIn: mockGetAuthSessionFromCode,
+    endSession: mockRevokeAuthSession,
+    refreshTokens: mockRefreshAuthSession,
   };
 });
 
@@ -39,7 +39,7 @@ vi.mock("../../src/db", async () => ({
 import { createApp } from "../../src/app";
 import { authedHeaders } from "../helpers/session";
 import { signAccessToken } from "../helpers/accessTokens";
-import { WORKOS_REDIRECT_URI } from "../../src/auth/auth";
+import { WORKOS_REDIRECT_URI } from "../../src/auth/workos";
 import { COOKIE_KEYS } from "../../src/cookies/session";
 
 describe("GET /auth/me", () => {

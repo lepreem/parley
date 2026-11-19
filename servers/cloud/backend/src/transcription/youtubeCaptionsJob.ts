@@ -1,9 +1,9 @@
 import * as data from "../data";
 import { logger } from "@parley/server-kit/runtime/logger";
-import type { DeliveryMetadata } from "../message-queue/messageQueue";
+import type { DeliveryMetadata } from "../message-queue";
 import type { UploadId } from "@parley/server-kit/ids";
 import { eventHub } from "../sse/hub";
-import { youtubeCaptions } from "../supadata";
+import * as youtubeCaptions from "../youtubeCaptions";
 import { completeAudioJob } from "./audioJob";
 
 const log = logger.child({ component: "youtube-captions" });

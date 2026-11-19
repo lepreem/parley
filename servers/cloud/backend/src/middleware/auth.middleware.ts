@@ -3,7 +3,7 @@ import { getCookie } from "hono/cookie";
 
 import { COOKIE_KEYS } from "../cookies/session";
 import { logger } from "@parley/server-kit/runtime/logger";
-import { verifyAccessToken } from "../auth/accessToken";
+import * as auth from "../auth";
 import * as guest from "../guest";
 import {
   CAPABILITIES,
@@ -31,7 +31,7 @@ export async function verifySessionToken(token: string) {
     return { ...(await guest.verify(token)), tier: "guest" as const };
   }
   // Every WorkOS user is on the free tier until there are plans to pay for.
-  return { ...(await verifyAccessToken(token)), tier: "free" as const };
+  return { ...(await auth.verify(token)), tier: "free" as const };
 }
 
 export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {

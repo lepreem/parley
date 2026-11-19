@@ -13,11 +13,11 @@ vi.mock("../../src/data/users.data", () => ({
   adoptGuest: mockAdoptGuest,
 }));
 
-vi.mock("../../src/auth/auth", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../src/auth/auth")>();
+vi.mock("../../src/auth/workos", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../src/auth/workos")>();
   return {
     ...actual,
-    getAuthSessionFromCode: mockGetAuthSessionFromCode,
+    finishSignIn: mockGetAuthSessionFromCode,
   };
 });
 

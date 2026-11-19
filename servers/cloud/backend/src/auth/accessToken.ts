@@ -21,7 +21,7 @@ export type AccessTokenClaims = {
  * in the app, so a load balancer or gateway can make the same check with
  * standard JWT validation against the same keys.
  */
-export async function verifyAccessToken(
+export async function verify(
   token: string,
   { allowExpired = false }: { allowExpired?: boolean } = {},
 ): Promise<AccessTokenClaims> {
@@ -54,7 +54,7 @@ export async function verifyAccessToken(
  * check that fetched WorkOS's keys could fail after WorkOS had already spent
  * the refresh token that bought it.
  */
-export function readAccessTokenExpiry(token: string): number {
+export function readExpiry(token: string): number {
   const { exp } = decodeJwt(token);
   if (typeof exp !== "number") {
     throw new Error("Access token is missing an expiry");

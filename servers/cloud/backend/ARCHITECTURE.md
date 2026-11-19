@@ -10,7 +10,7 @@ A monolith. Everything under `backend/` is a single npm package
 - transcription, which it takes from a RabbitMQ queue. See
   [Why transcription runs in the API](#why-transcription-runs-in-the-api).
 
-- YouTube captions, which it fetches from Supadata (`src/supadata/`), taking
+- YouTube captions, which it fetches from Supadata (`src/youtubeCaptions/`), taking
   each video from a RabbitMQ queue too.
 
 The source is all in `src/`, entry point `src/index.ts`. `scripts/` holds the
@@ -20,13 +20,17 @@ one-shots (migrate, baseline, push-storage) and `test/` the tests.
 
 A folder under `src/` is named for one of two things:
 
-- **A technology**, which it keeps behind one interface: `db/` and `data/`
-  (Postgres through Drizzle), `storage/` (the Supabase bucket),
-  `message-queue/` (RabbitMQ), `ai/` (OpenRouter and Deepgram), `supadata/`
-  (YouTube captions), `sse/`,
-  `memory/` (state held in this process) and `recurring/` (work on a timer).
-  The file names inside say what the app uses it for: `memory/historyText.ts`,
-  `recurring/guestSweep.ts`.
+- **A kind of service**, which it keeps behind one interface: `db/` and
+  `data/` (Postgres through Drizzle), `storage/` (the Supabase bucket),
+  `message-queue/` (RabbitMQ), `ai/` (OpenRouter and Deepgram), `auth/`
+  (WorkOS), `youtubeCaptions/` (Supadata), `sse/`, `memory/` (state held in
+  this process) and `recurring/` (work on a timer). The folder is named for
+  what the service does, never for the company: the company is one file
+  inside (`auth/workos.ts`, `message-queue/rabbitmq.ts`,
+  `ai/chat/openRouter.ts`), and the folder's `index.ts` is the interface the
+  rest of the app uses. Switching companies changes that folder, and the
+  interface as little as it can. The file names inside say what the app uses
+  it for: `memory/historyText.ts`, `recurring/guestSweep.ts`.
 - **What the app does**, combining those: `chat/`, `transcription/`,
   `uploads/`, plus `controllers/`, `routes/`, `middleware/` and `schema/` for
   HTTP.
@@ -40,8 +44,9 @@ Lint (`eslint.config.js`) holds the technology folders to this:
   `memory/`, so that folder lists everything a second instance wouldn't share.
 - `setInterval` goes in `recurring/`, so that folder lists everything that runs
   over and over.
-- `memory/`, `recurring/`, `storage/`, `ai/` and `message-queue/` are imported
-  through their entry file only (`local/public-module-entry`).
+- The service folders are imported through their entry file only
+  (`local/public-module-entry`), and a folder that owns a library must have
+  one: lint refuses to start otherwise.
 
 ## Attachment vocabulary
 

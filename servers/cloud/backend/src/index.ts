@@ -1,7 +1,7 @@
 import { getEnv } from "./env";
 import { eventHub } from "./sse/hub";
 
-import * as mq from "./message-queue/messageQueue";
+import * as mq from "./message-queue";
 import * as recurring from "./recurring";
 import { onShutdown } from "@parley/server-kit/runtime/shutdown";
 import {

@@ -26,19 +26,19 @@ const modulesIn = (folder, suffix) =>
 const namespaceModules = [
   { file: srcDirectory("ai/chat/index"), name: "chat" },
   { file: srcDirectory("ai/transcription/index"), name: "transcription" },
-  { file: srcDirectory("auth/auth"), name: "workos" },
+  { file: srcDirectory("auth/index"), name: "auth" },
   { file: srcDirectory("data/index"), name: "data" },
   { file: srcDirectory("guest/index"), name: "guest" },
   ...modulesIn("data", ".data.ts"),
   { file: srcDirectory("memory/index"), name: "memory" },
   ...modulesIn("memory", ".ts"),
-  { file: srcDirectory("message-queue/messageQueue"), name: "mq" },
+  { file: srcDirectory("message-queue/index"), name: "mq" },
   { file: srcDirectory("recurring/index"), name: "recurring" },
   { file: srcDirectory("recurring/guestSweep"), name: "guestSweep" },
   { file: srcDirectory("recurring/storageSweep"), name: "storageSweep" },
   { file: srcDirectory("storage/bucket"), name: "bucket" },
   { file: srcDirectory("storage/sign"), name: "sign" },
-  { file: srcDirectory("supadata/youtubeCaptions"), name: "youtubeCaptions" },
+  { file: srcDirectory("youtubeCaptions/index"), name: "youtubeCaptions" },
   {
     file: srcDirectory("transcription/audioTranscription"),
     name: "audioTranscription",
@@ -49,6 +49,118 @@ const namespaceModules = [
     name: "jobCancellation",
   },
 ];
+
+/**
+ * The folders only their entry file is imported from: `import * as mq from
+ * "../message-queue"`, never a file inside. A module that does I/O is one
+ * namespace (`mq`, `bucket`, `memory`, `chat`…) behind one entry file.
+ */
+const entryModules = [
+  { directory: srcDirectory("message-queue"), entry: "index" },
+  { directory: srcDirectory("storage"), entry: "index" },
+  { directory: srcDirectory("memory"), entry: "index" },
+  { directory: srcDirectory("recurring"), entry: "index" },
+  // chat and transcription don't import each other.
+  {
+    directory: srcDirectory("ai"),
+    entry: "index",
+    separateFiles: true,
+  },
+  { directory: srcDirectory("youtubeCaptions"), entry: "index" },
+  { directory: srcDirectory("auth"), entry: "index" },
+  { directory: srcDirectory("data"), entry: "index" },
+  { directory: srcDirectory("db"), entry: "index" },
+  // Everything only guests have; outside it a guest is just a tier.
+  { directory: srcDirectory("guest"), entry: "index" },
+  // Each client's catalog rules are its own: what to offer is
+  // decided in one place, next to the fetch. The files beside the
+  // index don't import each other: the index puts them together.
+  {
+    directory: srcDirectory("ai/chat"),
+    entry: "index",
+    separateFiles: true,
+  },
+  {
+    directory: srcDirectory("ai/transcription"),
+    entry: "index",
+    separateFiles: true,
+  },
+];
+
+/** The folder named for a technology is the only one that imports it. */
+const libraries = [
+  {
+    name: "drizzle-orm",
+    owners: [srcDirectory("data"), srcDirectory("db")],
+    use: "data.<table>.<operation>() from src/data",
+  },
+  {
+    name: "postgres",
+    owners: [srcDirectory("db")],
+    use: "data.<table>.<operation>() from src/data",
+  },
+  {
+    name: "@supabase/supabase-js",
+    owners: [srcDirectory("storage")],
+    use: "bucket or sign from src/storage",
+  },
+  {
+    name: "amqplib",
+    owners: [srcDirectory("message-queue")],
+    use: "mq from src/message-queue",
+  },
+  {
+    name: "@openrouter/sdk",
+    owners: [srcDirectory("ai")],
+    use: "chat from src/ai",
+  },
+  {
+    name: "@deepgram/sdk",
+    owners: [srcDirectory("ai")],
+    use: "transcription from src/ai",
+  },
+  {
+    name: "@supadata/js",
+    owners: [srcDirectory("youtubeCaptions")],
+    use: "youtubeCaptions from src/youtubeCaptions",
+  },
+  {
+    name: "@workos-inc/node",
+    owners: [srcDirectory("auth")],
+    use: "auth from src/auth",
+  },
+  {
+    name: "hono/streaming",
+    owners: [],
+    use: "SSEEventQueue or the event hub from @parley/server-kit/sse",
+  },
+  {
+    name: "hono-rate-limiter",
+    owners: [srcDirectory("memory"), srcDirectory("middleware")],
+    use: "the limiters in src/middleware/rateLimit.middleware",
+  },
+];
+
+/**
+ * Owners that aren't behind an entry: the HTTP middleware, which the routes
+ * import file by file.
+ */
+const OWNERS_WITHOUT_ENTRY = [srcDirectory("middleware")];
+
+// A folder that owns a library keeps it behind its entry, so swapping the
+// service behind it changes that folder alone.
+const ownersWithoutEntry = libraries
+  .flatMap(({ owners }) => owners)
+  .filter(
+    (owner) =>
+      !OWNERS_WITHOUT_ENTRY.includes(owner) &&
+      !entryModules.some(({ directory }) => directory === owner),
+  );
+if (ownersWithoutEntry.length > 0) {
+  throw new Error(
+    `These folders own a library but have no entry in entryModules: ${[...new Set(ownersWithoutEntry)].join(", ")}`,
+  );
+}
 
 /**
  * State this process holds, which a second instance wouldn't share. Only the
@@ -123,105 +235,21 @@ export default defineConfig([
       "no-restricted-imports": ["error", dbClientRestriction],
       "local/helper-import-owner": "error",
       "local/namespace-import": ["error", { modules: namespaceModules }],
-      // A module that does I/O is one namespace (`mq`, `bucket`,
-      // `memory`, `chat`…) behind one entry file; nothing outside reaches past it.
       "local/public-module-entry": [
         "error",
         {
-          modules: [
-            {
-              directory: srcDirectory("message-queue"),
-              entry: "messageQueue",
-            },
-            { directory: srcDirectory("storage"), entry: "index" },
-            { directory: srcDirectory("memory"), entry: "index" },
-            { directory: srcDirectory("recurring"), entry: "index" },
-            // chat and transcription don't import each other.
-            {
-              directory: srcDirectory("ai"),
-              entry: "index",
-              separateFiles: true,
-            },
-            { directory: srcDirectory("supadata"), entry: "index" },
-            // Everything only guests have; outside it a guest is just a tier.
-            { directory: srcDirectory("guest"), entry: "index" },
-            // Each client's catalog rules are its own: what to offer is
-            // decided in one place, next to the fetch. The files beside the
-            // index don't import each other: the index puts them together.
-            {
-              directory: srcDirectory("ai/chat"),
-              entry: "index",
-              separateFiles: true,
-            },
-            {
-              directory: srcDirectory("ai/transcription"),
-              entry: "index",
-              separateFiles: true,
-            },
-          ],
+          modules: entryModules,
         },
       ],
     },
   },
   {
-    // The folder named for a technology is the only one that imports it.
     files: ["src/**/*.ts"],
     rules: {
       "local/library-owner": [
         "error",
         {
-          libraries: [
-            {
-              name: "drizzle-orm",
-              owners: [srcDirectory("data"), srcDirectory("db")],
-              use: "data.<table>.<operation>() from src/data",
-            },
-            {
-              name: "postgres",
-              owners: [srcDirectory("db")],
-              use: "data.<table>.<operation>() from src/data",
-            },
-            {
-              name: "@supabase/supabase-js",
-              owners: [srcDirectory("storage")],
-              use: "bucket or sign from src/storage",
-            },
-            {
-              name: "amqplib",
-              owners: [srcDirectory("message-queue")],
-              use: "mq from src/message-queue/messageQueue",
-            },
-            {
-              name: "@openrouter/sdk",
-              owners: [srcDirectory("ai")],
-              use: "chat from src/ai",
-            },
-            {
-              name: "@deepgram/sdk",
-              owners: [srcDirectory("ai")],
-              use: "transcription from src/ai",
-            },
-            {
-              name: "@supadata/js",
-              owners: [srcDirectory("supadata")],
-              use: "youtubeCaptions from src/supadata",
-            },
-            {
-              name: "@workos-inc/node",
-              owners: [srcDirectory("auth")],
-              use: "workos from src/auth/auth",
-            },
-            {
-              name: "hono/streaming",
-              owners: [],
-              use: "SSEEventQueue or the event hub from @parley/server-kit/sse",
-            },
-            {
-              name: "hono-rate-limiter",
-              owners: [srcDirectory("memory"), srcDirectory("middleware")],
-              use: "the limiters in src/middleware/rateLimit.middleware",
-            },
-          ],
+          libraries,
         },
       ],
     },

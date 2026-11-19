@@ -3,7 +3,7 @@ import type { QueuedYoutube, UploadedAudio } from "@parley/contract";
 import * as data from "../data";
 import * as audioTranscription from "../transcription/audioTranscription";
 import * as uploads from "../uploads/uploads";
-import * as mq from "../message-queue/messageQueue";
+import * as mq from "../message-queue";
 import { authed } from "../middleware/auth.middleware";
 import { validate } from "../middleware/validate.middleware";
 import {

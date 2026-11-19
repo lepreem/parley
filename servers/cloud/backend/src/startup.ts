@@ -1,10 +1,10 @@
 import { verifyServices } from "@parley/server-kit/runtime/preflight";
-import * as mq from "./message-queue/messageQueue";
+import * as mq from "./message-queue";
 import { pingDb } from "./db";
 import { bucket } from "./storage";
 import { chat, transcription } from "./ai";
-import * as workos from "./auth/auth";
-import { youtubeCaptions } from "./supadata";
+import * as auth from "./auth";
+import * as youtubeCaptions from "./youtubeCaptions";
 import * as uploads from "./uploads/uploads";
 
 /**
@@ -28,7 +28,7 @@ export function verifyApiServices(): Promise<void> {
       check: () =>
         bucket.verifyUploadUrlLifetime(uploads.UPLOAD_CONFIRM_WINDOW_MS),
     },
-    { name: "WorkOS", check: workos.ping },
+    { name: "WorkOS", check: auth.ping },
     { name: "OpenRouter", check: chat.ping },
     { name: "Deepgram", check: transcription.ping },
     { name: "Supadata", check: youtubeCaptions.ping },

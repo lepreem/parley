@@ -18,9 +18,9 @@ vi.mock("../../src/data", () => ({
   },
 }));
 
-vi.mock("../../src/supadata/youtubeCaptions", async (importOriginal) => ({
+vi.mock("../../src/youtubeCaptions/supadata", async (importOriginal) => ({
   ...(await importOriginal<
-    typeof import("../../src/supadata/youtubeCaptions")
+    typeof import("../../src/youtubeCaptions/supadata")
   >()),
   fetchCaptions: mocks.fetchCaptions,
 }));
@@ -37,7 +37,7 @@ import { handleYoutubeCaptionsJob } from "../../src/transcription/youtubeCaption
 import {
   CAPTIONS_MESSAGES,
   CaptionsError,
-} from "../../src/supadata/youtubeCaptions";
+} from "../../src/youtubeCaptions/errors";
 
 const message = { audioUploadId, userId: "user_01", url };
 const delivery = { attempt: 1, lastAttempt: false, redelivered: false };

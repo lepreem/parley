@@ -1,5 +1,5 @@
 import * as data from "../data";
-import * as mq from "../message-queue/messageQueue";
+import * as mq from "../message-queue";
 import type { UploadId } from "@parley/server-kit/ids";
 import * as uploads from "../uploads/uploads";
 

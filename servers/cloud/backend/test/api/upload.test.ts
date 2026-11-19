@@ -104,7 +104,7 @@ vi.mock("../../src/storage/sign", () => ({
   urls: vi.fn(),
 }));
 
-vi.mock("../../src/message-queue/messageQueue", () => ({
+vi.mock("../../src/message-queue/rabbitmq", () => ({
   queues: {
     TRANSCRIBE_AUDIO: "transcribe_audio",
     YT_FETCH_CAPTIONS: "yt_fetch_captions",
