@@ -262,13 +262,14 @@ indirect, is part of a message and needs the trigger too;
 `test/unit/immutableTables.test.ts` fails, naming the table, until it has one.
 
 A trigger can name columns it tolerates changes to
-(`refuse_update('user_id')`, `drizzle/0005_tolerate_owner_change.sql`): an
+(`refuse_update('some_column')`, `drizzle/0005_tolerate_owner_change.sql`): an
 UPDATE that changes only those goes through, and any other column is still
 refused. The list says what may change, never what may not, so a new column is
-guarded without anyone remembering to. `chat_messages` tolerates `user_id`, so
-a guest's messages can move to their account. A column belongs on the list only
-if changing it leaves the text as it was; the same test holds each trigger to
-the list it keeps (`TOLERATED_UPDATES`).
+guarded without anyone remembering to. No trigger tolerates anything today:
+messages have no owner of their own (their conversation's is theirs), so a
+guest signing in moves only conversations. A column belongs on a list only if
+changing it leaves the text as it was; the same test holds each trigger to the
+list it keeps (`TOLERATED_UPDATES`).
 
 ### Schema changes
 

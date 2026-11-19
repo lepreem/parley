@@ -74,10 +74,7 @@ function toleratedColumns(): Record<string, string[]> {
  * must leave the row's text as it was, which the history text cache keeps by
  * id. A table not listed tolerates nothing.
  */
-const TOLERATED_UPDATES: Record<string, string[]> = {
-  // A guest's messages move to the account they sign in to (users.adoptGuest).
-  chat_messages: ["user_id"],
-};
+const TOLERATED_UPDATES: Record<string, string[]> = {};
 
 // The history text cache keeps message and transcript text by id, so neither
 // may change once written; an edit deletes rows and inserts new ones. A new

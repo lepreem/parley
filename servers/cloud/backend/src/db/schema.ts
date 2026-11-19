@@ -195,11 +195,6 @@ export const ChatMessages = pgTable(
     conversationId: uuid("conversation_id")
       .notNull()
       .references(() => Conversations.id, { onDelete: "cascade" }),
-
-    // could be useful for future "shared chat" feature.
-    userId: text("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
   },
   (table) => [
     // The busiest read in the app: findConversationMessages (asc) and

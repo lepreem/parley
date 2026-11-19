@@ -309,7 +309,6 @@ async function createMessage(
     role: "user" | "assistant";
     content: string;
     conversationId: string;
-    userId: string;
     chosenModelId?: string;
     stopped?: boolean;
     sources?: MessageSource[];
@@ -371,7 +370,6 @@ export async function deleteOwnedMessage(
         and(
           eq(ChatMessages.id, messageId),
           eq(ChatMessages.conversationId, conversationId),
-          eq(ChatMessages.userId, userId),
         ),
       )
       .limit(1);
@@ -386,7 +384,6 @@ export async function deleteOwnedMessage(
       .where(
         and(
           eq(ChatMessages.conversationId, conversationId),
-          eq(ChatMessages.userId, userId),
           messageIsBefore(targetMessage),
         ),
       )
@@ -399,7 +396,6 @@ export async function deleteOwnedMessage(
 
     const deleteFilter = and(
       eq(ChatMessages.conversationId, conversationId),
-      eq(ChatMessages.userId, userId),
       or(eq(ChatMessages.id, targetMessage.id), messageIsAfter(targetMessage)),
     );
     const imageRows = await tx
@@ -484,7 +480,6 @@ export async function persistAndUnclaimChatTurn(turn: {
         role: "user",
         content: turn.content,
         conversationId: turn.conversationId,
-        userId: turn.userId,
       },
       tx,
     );
@@ -497,7 +492,6 @@ export async function persistAndUnclaimChatTurn(turn: {
           stopped: turn.stopped ?? false,
           sources: turn.sources ?? [],
           conversationId: turn.conversationId,
-          userId: turn.userId,
         },
         tx,
       ),
