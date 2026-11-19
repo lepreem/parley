@@ -109,6 +109,8 @@ export type PreparedTurn = {
   newTurnCharCount: number;
   /** The new turn's transcripts, kept with its text once it's saved. */
   newTurnTranscripts: data.messages.HistoryTranscript[];
+  /** The conversation's project's instructions; "" for a chat in no project. */
+  instructions: string;
   /** What went into the prompt, for the turn's stats. */
   contextStats: TurnStats["context"];
 };
@@ -179,6 +181,7 @@ export async function prepareTurn(
     newTurnResolvedImages,
     newTurnTranscriptByAudioUploadId,
     historyCandidates,
+    instructions,
   ] = await Promise.all([
     claim.conversationClaimedPromise,
     claim.attachmentsReservedPromise,
@@ -196,6 +199,12 @@ export async function prepareTurn(
         ...(beforeMessageId === undefined ? {} : { beforeMessageId }),
         ...(knownText === undefined ? {} : { knownText }),
       }),
+    ),
+    measurePreparation("findInstructions", claim.preparationId, () =>
+      data.projects.findConversationInstructions(
+        request.userId,
+        request.conversationId,
+      ),
     ),
   ]);
   memory.historyText.rememberHistory(
@@ -257,10 +266,11 @@ export async function prepareTurn(
     });
   }
 
+  // The instructions go with every turn, so they come out of history's share.
   const history = await admitAndSignHistory(
     request.userId,
     historyCandidates,
-    newTurnContent.length,
+    newTurnContent.length + instructions.length,
     newTurnResolvedImages.length,
   );
   const prompt = buildPrompt(
@@ -290,6 +300,7 @@ export async function prepareTurn(
     historyCharCounts,
     newTurnCharCount: newTurnContent.length,
     newTurnTranscripts,
+    instructions,
     contextStats: {
       historyReadMessages: historyCandidates.length,
       historyCachedMessages: historyCandidates.filter((candidate) =>
@@ -418,6 +429,7 @@ export async function answerTurn(
             webToolCalls: usage.serverToolUseDetails?.toolCallsExecuted,
             cost: usage.cost,
           }),
+        instructions: prepared.instructions,
         maxOutputTokens: completionTokenCeiling(model, request.reasoningEffort),
         reasoningEffort: request.reasoningEffort,
         ...(request.webSearch

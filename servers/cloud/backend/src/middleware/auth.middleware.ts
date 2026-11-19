@@ -60,6 +60,7 @@ const REFUSALS: Record<Feature, (howToReach: string) => string> = {
   dictation: (how) => `${capitalized(how)} to dictate`,
   chooseEffort: (how) => `Invalid effort: ${how} to choose one`,
   webSearch: (how) => `Web search: ${how} to use it`,
+  projects: (how) => `${capitalized(how)} to use projects`,
 };
 
 function capitalized(text: string) {

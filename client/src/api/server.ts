@@ -31,6 +31,8 @@ export type Server = {
    * downloads.
    */
   youtubeAudio: boolean;
+  /** Whether it has projects. Only the cloud does, for now. */
+  projects: boolean;
 };
 
 /**

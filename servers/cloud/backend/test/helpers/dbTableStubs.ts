@@ -47,6 +47,16 @@ export const tableStubs = {
     contextWindowMessageCount: "context_window_message_count",
     activeTurnClaimToken: "active_turn_claim_token",
     userId: "user_id",
+    projectId: "project_id",
+  },
+
+  Projects: {
+    id: "id",
+    name: "name",
+    instructions: "instructions",
+    createdAt: "created_at",
+    updatedAt: "updated_at",
+    userId: "user_id",
   },
 
   ChatMessages: {

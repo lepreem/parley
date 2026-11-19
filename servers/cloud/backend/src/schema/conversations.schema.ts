@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type {
-  CreateConversationBody,
+  CreateProjectConversationBody,
+  MoveConversationBody,
   RenameConversationBody,
 } from "@parley/contract";
 import { MAX_TITLE_LENGTH } from "@parley/contract/limits";
@@ -20,13 +21,22 @@ const titleSchema = z
  * Body for POST /conversations. Title is optional (the DB default applies), and
  * an empty/absent body parses as `null` in validate, so coerce it to {}.
  */
-export const conversationCreateBodySchema = takesBody<CreateConversationBody>()(
-  z.preprocess(
-    (body) => body ?? {},
-    z.object({
-      conversationTitle: titleSchema.optional(),
-    }),
-  ),
+export const conversationCreateBodySchema =
+  takesBody<CreateProjectConversationBody>()(
+    z.preprocess(
+      (body) => body ?? {},
+      z.object({
+        conversationTitle: titleSchema.optional(),
+        projectId: z.string().uuid().optional(),
+      }),
+    ),
+  );
+
+/** Body for PUT /conversations/:id/project. */
+export const conversationMoveBodySchema = takesBody<MoveConversationBody>()(
+  z.object({
+    projectId: z.string().uuid().nullable(),
+  }),
 );
 
 /** Body for PATCH /conversations/:id — renaming requires a title. */

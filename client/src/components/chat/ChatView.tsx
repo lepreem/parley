@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type DragEvent } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useWebSearchPreference } from "../composer/useWebSearchPreference";
 import { usePermissionModePreference } from "../composer/usePermissionModePreference";
 import {
@@ -14,7 +14,7 @@ import { useServerReady } from "../../hooks/server/useServerReady";
 import { useChatModelsQuery } from "../../hooks/queries/useModelsQuery";
 import { useServer } from "../../hooks/server/useServer";
 import { useCapabilities } from "../../hooks/auth/useCapabilities";
-import { sectionPath } from "../app/sections";
+import { NEW_CHAT_PROJECT_PARAM, sectionPath } from "../app/sections";
 import { MAX_CONTEXT_MESSAGES } from "../../api/messages";
 import { useMessagesQuery } from "../../hooks/queries/useMessagesQuery";
 import { isSourceInFlight, type StagedSource } from "../../sources/types";
@@ -26,6 +26,7 @@ import { MessageList } from "./MessageList";
 import type { ChatMessage, ReplyInProgress } from "../../api/messages";
 import type { PendingTurn } from "./types";
 import { sourcesOfMessage, useChatSend } from "./useChatSend";
+import { useProjectsOffered } from "../../hooks/queries/useProjectQueries";
 
 const NEW_CHAT_KEY = "new";
 
@@ -65,6 +66,13 @@ export function ChatView() {
   const ready = useServerReady();
   const can = useCapabilities();
   const draftKey = conversationId ?? NEW_CHAT_KEY;
+  const [searchParams] = useSearchParams();
+  const projectsOffered = useProjectsOffered();
+  // Only a chat not yet made can be started in a project.
+  const newChatProjectId =
+    !conversationId && projectsOffered
+      ? (searchParams.get(NEW_CHAT_PROJECT_PARAM) ?? undefined)
+      : undefined;
 
   // Drafts are per chat: switching away and back keeps what you were writing,
   // and the sources already uploading against it.
@@ -183,6 +191,7 @@ export function ChatView() {
 
     void send({
       conversationId,
+      projectId: newChatProjectId,
       content,
       modelId,
       reasoningEffort: effort,

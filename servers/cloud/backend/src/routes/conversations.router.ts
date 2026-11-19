@@ -1,7 +1,11 @@
 import { Hono } from "hono";
 import * as conversationsController from "../controllers/conversations.controller";
 import { conversationRateLimiter } from "../middleware/rateLimit.middleware";
-import { requireAuth, type AuthEnv } from "../middleware/auth.middleware";
+import {
+  requireAuth,
+  requireFeature,
+  type AuthEnv,
+} from "../middleware/auth.middleware";
 import { messagesRouter } from "./messages.router";
 
 export const conversationsRouter = new Hono<AuthEnv>();
@@ -30,6 +34,12 @@ conversationsRouter.get(
 conversationsRouter.patch(
   "/:conversationId",
   ...conversationsController.handlePatchConversation,
+);
+
+conversationsRouter.put(
+  "/:conversationId/project",
+  requireFeature("projects"),
+  ...conversationsController.handleMoveConversation,
 );
 
 conversationsRouter.delete(
