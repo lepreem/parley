@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { useJobQuery } from "../../hooks/queries/useJobQueries";
-import { useToast } from "../../hooks/toast/useToast";
 import { downloadTextFile, resultFileName } from "../../lib/download";
 import { useSources } from "../../sources/useSources";
 import { useShell } from "../app/shellContext";
@@ -16,7 +15,6 @@ function TranscriptBody({
   audioUploadId: string;
   onClose: () => void;
 }) {
-  const toast = useToast();
   const draftKey = useDraftKey();
   const { sources, attachExisting } = useSources(draftKey);
   const jobQuery = useJobQuery(audioUploadId);
@@ -49,10 +47,6 @@ function TranscriptBody({
       audioUploadId,
       fileName: job.fileName,
       source: job.source,
-    });
-    toast.show({
-      kind: "success",
-      message: `${job.fileName} added to the message.`,
     });
     onClose();
   };

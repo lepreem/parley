@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
-import type { JobSource, JobStatus } from "../../api/jobs";
+import type { JobStatus } from "../../api/jobs";
 import { useServerReady } from "../../hooks/server/useServerReady";
 import {
   useDeleteJobMutation,
   useJobsQuery,
 } from "../../hooks/queries/useJobQueries";
-import { useToast } from "../../hooks/toast/useToast";
 import { useSources } from "../../sources/useSources";
 import { useShell } from "../app/shellContext";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
@@ -28,13 +27,15 @@ const SEARCH_DEBOUNCE_MS = 250;
 export function SourcesDrawer() {
   const { setSourcesOpen, openSource, setOpenSource } = useShell();
   const ready = useServerReady();
-  const toast = useToast();
   const draftKey = useDraftKey();
   const { attachExisting, dropDeletedSource } = useSources(draftKey);
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [status, setStatus] = useState<JobStatus | null>(null);
+  // While a row is being dragged the backdrop lets the pointer through, so the
+  // chat behind it can take the drop.
+  const [dragging, setDragging] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{
     audioUploadId: string;
     fileName: string;
@@ -68,25 +69,13 @@ export function SourcesDrawer() {
 
   const jobs = jobsQuery.data?.pages.flatMap((page) => page.jobs) ?? [];
 
-  const attach = (
-    audioUploadId: string,
-    fileName: string,
-    source: JobSource,
-  ) => {
-    attachExisting({ audioUploadId, fileName, source });
-    toast.show({
-      kind: "success",
-      message: `${fileName} added to the message.`,
-    });
-  };
-
   return (
     <>
       <button
         type="button"
         aria-label="Close sources"
         onClick={() => setSourcesOpen(false)}
-        className="fixed inset-0 z-40 bg-ink/30"
+        className={`fixed inset-0 z-40 bg-ink/30 ${dragging ? "pointer-events-none" : ""}`}
       />
 
       <aside
@@ -163,8 +152,13 @@ export function SourcesDrawer() {
                       })
                     }
                     onAttach={() =>
-                      attach(job.audioUploadId, job.fileName, job.source)
+                      attachExisting({
+                        audioUploadId: job.audioUploadId,
+                        fileName: job.fileName,
+                        source: job.source,
+                      })
                     }
+                    onDragChange={setDragging}
                     onDelete={() =>
                       setDeleteTarget({
                         audioUploadId: job.audioUploadId,

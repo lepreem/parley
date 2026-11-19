@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { JobSummary } from "../../api/jobs";
+import { startSourceDrag } from "../../sources/sourceDrag";
 import { Icon } from "../ui/Icon";
 import { Meter, type MeterState } from "../ui/Meter";
 import { useDismissable } from "../ui/useDismissable";
@@ -22,9 +23,17 @@ type SourceRowProps = {
   onOpen: () => void;
   onAttach: () => void;
   onDelete: () => void;
+  /** A ready row can be dragged onto the chat; this reports when it lifts and lands. */
+  onDragChange: (dragging: boolean) => void;
 };
 
-export function SourceRow({ job, onOpen, onAttach, onDelete }: SourceRowProps) {
+export function SourceRow({
+  job,
+  onOpen,
+  onAttach,
+  onDelete,
+  onDragChange,
+}: SourceRowProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useDismissable<HTMLDivElement>(menuOpen, () =>
     setMenuOpen(false),
@@ -32,7 +41,20 @@ export function SourceRow({ job, onOpen, onAttach, onDelete }: SourceRowProps) {
   const ready = job.status === "completed";
 
   return (
-    <li className="relative border-b border-line last:border-b-0">
+    <li
+      draggable={ready}
+      onDragStart={(event) => {
+        startSourceDrag(event.dataTransfer, {
+          audioUploadId: job.audioUploadId,
+          fileName: job.fileName,
+          source: job.source,
+        });
+        setMenuOpen(false);
+        onDragChange(true);
+      }}
+      onDragEnd={() => onDragChange(false)}
+      className={`relative border-b border-line last:border-b-0 ${ready ? "cursor-grab active:cursor-grabbing" : ""}`}
+    >
       <div className="flex items-start gap-3 px-4 py-3">
         <Meter state={meterState(job.status)} className="mt-0.5 shrink-0" />
 
