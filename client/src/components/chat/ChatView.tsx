@@ -19,8 +19,9 @@ import { MAX_CONTEXT_MESSAGES } from "../../api/messages";
 import { useMessagesQuery } from "../../hooks/queries/useMessagesQuery";
 import { isSourceInFlight, type StagedSource } from "../../sources/types";
 import { useSources } from "../../sources/useSources";
+import { isSourceDrag, readSourceDrag } from "../../sources/sourceDrag";
 import { Composer } from "../composer/Composer";
-import { DropOverlay } from "../composer/DropOverlay";
+import { DropOverlay, type DragKind } from "../composer/DropOverlay";
 import { MessageList } from "./MessageList";
 import type { ChatMessage, ReplyInProgress } from "../../api/messages";
 import type { PendingTurn } from "./types";
@@ -72,7 +73,7 @@ export function ChatView() {
   const setText = (value: string) =>
     setTexts((current) => ({ ...current, [draftKey]: value }));
 
-  const { sources, takeSources, restoreSourcesFor, addFiles } =
+  const { sources, takeSources, restoreSourcesFor, addFiles, attachExisting } =
     useSources(draftKey);
   const messagesQuery = useMessagesQuery(conversationId);
   const chatModels = useChatModelsQuery(ready);
@@ -90,7 +91,7 @@ export function ChatView() {
     stop,
   } = useChatSend();
 
-  const [dragging, setDragging] = useState(false);
+  const [dragging, setDragging] = useState<DragKind | null>(null);
   const dragDepth = useRef(0);
 
   const history = messagesQuery.data?.messages;
@@ -229,22 +230,29 @@ export function ChatView() {
     });
   };
 
+  // Files off the computer, or a finished source dragged out of the library.
   // Without attachments, a dropped file is left to the browser.
+  const acceptsDrag = (event: DragEvent) =>
+    can.attachments &&
+    (event.dataTransfer.types.includes("Files") ||
+      isSourceDrag(event.dataTransfer));
   const handleDragEnter = (event: DragEvent) => {
-    if (!can.attachments || !event.dataTransfer.types.includes("Files")) return;
+    if (!acceptsDrag(event)) return;
     dragDepth.current += 1;
-    setDragging(true);
+    setDragging(isSourceDrag(event.dataTransfer) ? "library" : "files");
   };
   const handleDragLeave = () => {
     dragDepth.current = Math.max(0, dragDepth.current - 1);
-    if (dragDepth.current === 0) setDragging(false);
+    if (dragDepth.current === 0) setDragging(null);
   };
   const handleDrop = (event: DragEvent) => {
     if (!can.attachments) return;
     event.preventDefault();
     dragDepth.current = 0;
-    setDragging(false);
-    addFiles(Array.from(event.dataTransfer.files));
+    setDragging(null);
+    const existing = readSourceDrag(event.dataTransfer);
+    if (existing) attachExisting(existing);
+    else addFiles(Array.from(event.dataTransfer.files));
   };
 
   return (
@@ -252,8 +260,9 @@ export function ChatView() {
       className="relative flex min-h-0 flex-1 flex-col"
       onDragEnter={handleDragEnter}
       onDragOver={(event) => {
-        if (can.attachments && event.dataTransfer.types.includes("Files"))
-          event.preventDefault();
+        if (!acceptsDrag(event)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
       }}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -310,7 +319,7 @@ export function ChatView() {
         onSend={handleSend}
       />
 
-      {dragging && <DropOverlay />}
+      {dragging && <DropOverlay kind={dragging} />}
     </main>
   );
 }

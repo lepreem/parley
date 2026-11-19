@@ -329,6 +329,10 @@ export function SourcesProvider({ children }: { children: ReactNode }) {
           sourceUploadId: job.audioUploadId,
         }),
       ]);
+      toast.show({
+        kind: "success",
+        message: `${job.fileName} added to the message.`,
+      });
     },
     [appendSources, toast],
   );
