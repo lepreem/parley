@@ -8,7 +8,13 @@
  */
 export const tableStubs = {
   DEFAULT_CONVERSATION_TITLE: "New conversation",
-  users: { id: "id", createdAt: "created_at", updatedAt: "updated_at" },
+  users: {
+    id: "id",
+    avatarGlyph: "avatar_glyph",
+    avatarColor: "avatar_color",
+    createdAt: "created_at",
+    updatedAt: "updated_at",
+  },
 
   AudioTranscriptionJobs: {
     audioUploadId: "audio_upload_id",

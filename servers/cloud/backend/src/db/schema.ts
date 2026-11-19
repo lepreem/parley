@@ -1,7 +1,9 @@
 import type { MessageSource } from "@parley/contract";
+import { AVATAR_COLORS, AVATAR_GLYPHS } from "@parley/contract/avatars";
 import {
   bigint,
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -43,19 +45,42 @@ export const storageLedgerStatusEnum = pgEnum("storage_ledger_status", [
 ] as const);
 export const DEFAULT_CONVERSATION_TITLE = "New conversation";
 export const chatRoleEnum = pgEnum("chat_role", ["user", "assistant"] as const);
+/**
+ * The picture a user picked, from the lists in @parley/contract/avatars, so
+ * the client, the API's validation and the database share one list. Adding an
+ * id to a list is a generated migration (ALTER TYPE ... ADD VALUE); removing
+ * one means moving its rows off it first, since Postgres can't drop a value.
+ */
+export const avatarGlyphEnum = pgEnum("avatar_glyph", AVATAR_GLYPHS);
+export const avatarColorEnum = pgEnum("avatar_color", AVATAR_COLORS);
 
-export const users = pgTable("users", {
-  // WorkOS user id (eg "user_01...")
-  id: text("id").primaryKey(),
+export const users = pgTable(
+  "users",
+  {
+    // WorkOS user id (eg "user_01...")
+    id: text("id").primaryKey(),
 
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .defaultNow()
-    .$onUpdate(() => new Date())
-    .notNull(),
-}).enableRLS();
+    // The picture they picked. Null until they pick one: they see the default
+    // for their id (defaultAvatar) until then.
+    avatarGlyph: avatarGlyphEnum("avatar_glyph"),
+    avatarColor: avatarColorEnum("avatar_color"),
+
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    // A glyph without a colour, or the reverse, isn't a picture.
+    check(
+      "users_avatar_whole",
+      sql`(${table.avatarGlyph} is null) = (${table.avatarColor} is null)`,
+    ),
+  ],
+).enableRLS();
 
 /** Stored attachments that can be linked to one or more chat messages. */
 export const Attachments = pgTable(

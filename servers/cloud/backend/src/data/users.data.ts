@@ -1,4 +1,5 @@
 import { and, eq, like, lt, sql } from "drizzle-orm";
+import type { Avatar } from "@parley/contract/avatars";
 import { Conversations, db, users as Users } from "../db";
 
 /**
@@ -7,6 +8,38 @@ import { Conversations, db, users as Users } from "../db";
  */
 export async function ensureUser(userId: string) {
   await db.insert(Users).values({ id: userId }).onConflictDoNothing();
+}
+
+/**
+ * The picture they picked, or null when they haven't picked one (or have no
+ * row). The users_avatar_whole check keeps the two columns set together.
+ */
+export async function findAvatar(userId: string): Promise<Avatar | null> {
+  const [row] = await db
+    .select({ glyph: Users.avatarGlyph, color: Users.avatarColor })
+    .from(Users)
+    .where(eq(Users.id, userId))
+    .limit(1);
+  if (!row?.glyph || !row.color) return null;
+  return { glyph: row.glyph, color: row.color };
+}
+
+/**
+ * Saves the picture they picked. A guest's row, or a user whose row was
+ * lost, gets one made, as ensureUser would have.
+ */
+export async function setAvatar(userId: string, avatar: Avatar) {
+  await db
+    .insert(Users)
+    .values({
+      id: userId,
+      avatarGlyph: avatar.glyph,
+      avatarColor: avatar.color,
+    })
+    .onConflictDoUpdate({
+      target: Users.id,
+      set: { avatarGlyph: avatar.glyph, avatarColor: avatar.color },
+    });
 }
 
 /**
