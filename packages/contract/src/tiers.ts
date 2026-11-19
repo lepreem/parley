@@ -24,6 +24,8 @@ export const FEATURES = [
   "chooseEffort",
   /** Letting the model search the web and open pages. */
   "webSearch",
+  /** Grouping chats into projects, each with its own instructions. */
+  "projects",
 ] as const;
 export type Feature = (typeof FEATURES)[number];
 
@@ -60,7 +62,7 @@ const LADDER: Record<Tier, Rung> = {
   },
   free: {
     reachedBy: "sign in",
-    adds: ["attachments", "dictation", "chooseEffort", "webSearch"],
+    adds: ["attachments", "dictation", "chooseEffort", "webSearch", "projects"],
     modelPriceCeiling: null,
   },
 };

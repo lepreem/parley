@@ -92,6 +92,17 @@ function webInstructions() {
   return `Today is ${today}. You can search the web and open web pages. If you can't open a page you were asked about, say so plainly, and don't describe what it says from memory as if you had read it. If you read a copy of a page on another site instead of the original, name the site you read it on.`;
 }
 
+/**
+ * The caller's instructions first: they stay the same from turn to turn, so
+ * they sit in the cached prefix ahead of the web ones, which carry the date.
+ */
+function joinInstructions(...parts: (string | undefined)[]) {
+  const given = parts.filter(
+    (part) => part !== undefined && part.trim() !== "",
+  );
+  return given.length > 0 ? given.join("\n\n") : undefined;
+}
+
 /** The model reached its token ceiling while thinking, so it wrote nothing. */
 export class NoRoomToReply extends Error {
   constructor() {
@@ -205,6 +216,8 @@ async function streamChatAI(
 }
 
 export type ChatOptions = {
+  /** What the model is told before the conversation: a project's instructions. */
+  instructions?: string | undefined;
   onDelta?: ((delta: string) => void | Promise<void>) | undefined;
   /**
    * What a streamed call spent, as the provider reports it. The report comes
@@ -246,7 +259,10 @@ export async function complete(
   const responsesRequest: ResponsesRequest = {
     model,
     input: messages,
-    instructions: opts.webSearch ? webInstructions() : undefined,
+    instructions: joinInstructions(
+      opts.instructions,
+      opts.webSearch ? webInstructions() : undefined,
+    ),
     maxOutputTokens: opts.maxOutputTokens,
     reasoning: opts.reasoningEffort
       ? { effort: opts.reasoningEffort }

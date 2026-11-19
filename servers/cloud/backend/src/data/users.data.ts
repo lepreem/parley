@@ -1,5 +1,5 @@
 import { and, eq, like, lt, sql } from "drizzle-orm";
-import { ChatMessages, Conversations, db, users as Users } from "../db";
+import { Conversations, db, users as Users } from "../db";
 
 /**
  * First login creates the row; every later one is a no-op. The auth provider
@@ -15,7 +15,7 @@ export async function ensureUser(userId: string) {
  * sign-in or a year ago, makes no difference. The guest's conversations keep
  * their place in the list: moving them isn't an edit.
  *
- * Only conversations and messages move, because they're all a guest can have:
+ * Only conversations move, because they're all a guest can have:
  * guests chat in text only (requireFeature("attachments") on the upload routes). Letting them
  * upload would need more than adding Attachments here. Each stored object's key
  * starts with its owner's id (objectPath in storage/core.ts), so the objects
@@ -23,9 +23,7 @@ export async function ensureUser(userId: string) {
  * deleting the guest as this does now would cascade their attachment rows
  * away and unlink them from the moved messages.
  *
- * chat_messages refuses updates (drizzle/0004_immutable_messages.sql), except
- * to the columns its trigger tolerates, which user_id is one of
- * (drizzle/0005_tolerate_owner_change.sql).
+ * Messages go with their conversation: they have no owner of their own.
  */
 export async function adoptGuest(guestUserId: string, userId: string) {
   await db.transaction(async (tx) => {
@@ -33,12 +31,6 @@ export async function adoptGuest(guestUserId: string, userId: string) {
       .update(Conversations)
       .set({ userId, updatedAt: sql`${Conversations.updatedAt}` })
       .where(eq(Conversations.userId, guestUserId));
-    // updated_at would change on its own (schema.ts's $onUpdate), and the
-    // trigger tolerates only user_id.
-    await tx
-      .update(ChatMessages)
-      .set({ userId, updatedAt: sql`${ChatMessages.updatedAt}` })
-      .where(eq(ChatMessages.userId, guestUserId));
     await tx.delete(Users).where(eq(Users.id, guestUserId));
   });
 }

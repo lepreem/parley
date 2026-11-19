@@ -20,6 +20,7 @@ const {
   mockOffersModelTo,
   mockClaimAttachments,
   mockUnclaimAttachments,
+  mockFindConversationInstructions,
 } = vi.hoisted(() => ({
   mockFindOwnedConversation: vi.fn(),
   mockClaimConversationTurn: vi.fn(),
@@ -40,6 +41,12 @@ const {
   mockOffersModelTo: vi.fn(),
   mockClaimAttachments: vi.fn(),
   mockUnclaimAttachments: vi.fn(),
+  mockFindConversationInstructions: vi.fn(),
+}));
+
+vi.mock("../../src/data/projects.data", async (importActual) => ({
+  ...(await importActual<typeof import("../../src/data/projects.data")>()),
+  findConversationInstructions: mockFindConversationInstructions,
 }));
 
 vi.mock("../../src/data/attachments.data", async (importActual) => {
@@ -283,6 +290,7 @@ beforeEach(() => {
   mockClaimAttachments.mockResolvedValue(true);
   mockUnclaimAttachments.mockResolvedValue(undefined);
   mockFindContextHistory.mockResolvedValue([]);
+  mockFindConversationInstructions.mockResolvedValue("");
   mockResolveImages.mockResolvedValue([]);
   mockResolveMessageImages.mockResolvedValue(new Map());
   mockResolveImageAttachmentUrls.mockImplementation(
@@ -1336,6 +1344,7 @@ describe("POST /conversations/:conversationId/messages", () => {
       "claimAttachments",
       "claimConversationTurn",
       "findContextHistory",
+      "findInstructions",
       "findTranscripts",
       "persistAndUnclaimChatTurn",
       "resolveImages",
@@ -1422,6 +1431,7 @@ describe("POST /conversations/:conversationId/messages", () => {
       "claimAttachments",
       "claimConversationTurn",
       "findContextHistory",
+      "findInstructions",
       "findTranscripts",
       "resolveImages",
     ]);
@@ -1516,6 +1526,28 @@ describe("POST /conversations/:conversationId/messages", () => {
         { role: "user", content: "Hi there" },
       ],
       expect.objectContaining({ onDelta: expect.any(Function) }),
+    );
+  });
+
+  it("answers a chat in a project with the project's instructions", async () => {
+    mockFindConversationInstructions.mockResolvedValueOnce("Answer in French.");
+    mockChatAI.mockResolvedValueOnce("Bonjour");
+
+    const res = await postMessage({
+      messageContent: "Hi there",
+      chosenModelId: modelId,
+    });
+    expect(res.status).toBe(200);
+    await res.text();
+
+    expect(mockFindConversationInstructions).toHaveBeenCalledWith(
+      userId,
+      conversationId,
+    );
+    expect(mockChatAI).toHaveBeenCalledWith(
+      modelId,
+      [{ role: "user", content: "Hi there" }],
+      expect.objectContaining({ instructions: "Answer in French." }),
     );
   });
 

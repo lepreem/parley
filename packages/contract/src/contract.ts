@@ -25,6 +25,11 @@ export type Conversation = {
   title: string;
   createdAt: string;
   updatedAt: string;
+  /**
+   * The project it's in, or null for none. Absent from a server without
+   * projects: the local one, for now.
+   */
+  projectId?: string | null;
 };
 
 /** GET /conversations, most recently active first. */
@@ -35,6 +40,40 @@ export type CreateConversationBody = { conversationTitle?: string };
 
 /** PATCH /conversations/:conversationId */
 export type RenameConversationBody = { conversationTitle: string };
+
+/* ---------------------------------------------------------------- projects */
+
+// Only the cloud server has projects, for now.
+
+/**
+ * A group of conversations, and instructions every one of them is answered
+ * with.
+ */
+export type Project = {
+  id: string;
+  name: string;
+  /** Sent to the model with each turn of the project's chats; may be empty. */
+  instructions: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** GET /projects, most recently made first. */
+export type ProjectsResponse = { projects: Project[] };
+
+/** POST /projects */
+export type CreateProjectBody = { name: string; instructions?: string };
+
+/** PATCH /projects/:projectId: whichever of these change. */
+export type UpdateProjectBody = { name?: string; instructions?: string };
+
+/** POST /conversations on a server with projects: a new chat in a project. */
+export type CreateProjectConversationBody = CreateConversationBody & {
+  projectId?: string;
+};
+
+/** PUT /conversations/:conversationId/project: into a project, or out (null). */
+export type MoveConversationBody = { projectId: string | null };
 
 /* ---------------------------------------------------------------- messages */
 

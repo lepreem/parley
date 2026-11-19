@@ -38,6 +38,7 @@ describe("the tier ladder", () => {
       dictation: false,
       chooseEffort: false,
       webSearch: false,
+      projects: false,
       modelPriceCeiling: {
         inputPerMillionTokens: 0.1,
         outputPerMillionTokens: 0.5,

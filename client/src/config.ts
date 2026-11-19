@@ -20,6 +20,7 @@ export const cloudServer: Server = {
   alwaysOn: true,
   uploads: "signed",
   youtubeAudio: false,
+  projects: true,
 };
 
 const LOCAL_PORT = "3002";
@@ -53,6 +54,7 @@ export const localServer: Server = {
   alwaysOn: false,
   uploads: "direct",
   youtubeAudio: true,
+  projects: false,
 };
 
 export function authLoginUrl(): string {

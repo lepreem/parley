@@ -86,7 +86,6 @@ describe.skipIf(!testState.databaseUrl)("written once, in PostgreSQL", () => {
       role: "user",
       content: "Summarize this",
       conversationId,
-      userId,
     });
     await db.insert(Attachments).values({
       attachmentId: audioUploadId,
@@ -121,39 +120,7 @@ describe.skipIf(!testState.databaseUrl)("written once, in PostgreSQL", () => {
     expect(message?.content).toBe("Summarize this");
   });
 
-  it("lets a message change owner", async () => {
-    await db.insert(users).values({ id: "new-owner" });
-    await db
-      .update(ChatMessages)
-      .set({ userId: "new-owner", updatedAt: sql`${ChatMessages.updatedAt}` })
-      .where(eq(ChatMessages.id, messageId));
-    const [message] = await db.select().from(ChatMessages);
-    expect(message?.userId).toBe("new-owner");
-  });
-
-  it("refuses an owner change that bumps updated_at with it", async () => {
-    await db.insert(users).values({ id: "new-owner" });
-    await expect(
-      db
-        .update(ChatMessages)
-        .set({ userId: "new-owner" })
-        .where(eq(ChatMessages.id, messageId)),
-    ).rejects.toMatchObject(immutable("chat_messages"));
-  });
-
-  it("refuses an owner change that changes anything else", async () => {
-    await db.insert(users).values({ id: "new-owner" });
-    await expect(
-      db
-        .update(ChatMessages)
-        .set({ userId: "new-owner", content: "Rewritten" })
-        .where(eq(ChatMessages.id, messageId)),
-    ).rejects.toMatchObject(immutable("chat_messages"));
-    const [message] = await db.select().from(ChatMessages);
-    expect(message).toMatchObject({ userId, content: "Summarize this" });
-  });
-
-  it("refuses an update that changes nothing, where nothing is tolerated", async () => {
+  it("refuses an update that changes nothing", async () => {
     await expect(
       db
         .update(TranscriptContents)
@@ -177,7 +144,6 @@ describe.skipIf(!testState.databaseUrl)("written once, in PostgreSQL", () => {
       role: "user",
       content: "Hello",
       conversationId: guestConversationId,
-      userId: guestId,
     });
 
     await usersData.adoptGuest(guestId, userId);
@@ -191,7 +157,7 @@ describe.skipIf(!testState.databaseUrl)("written once, in PostgreSQL", () => {
       .select()
       .from(ChatMessages)
       .where(eq(ChatMessages.conversationId, guestConversationId));
-    expect(messages).toMatchObject([{ userId, content: "Hello" }]);
+    expect(messages).toMatchObject([{ content: "Hello" }]);
     expect(await db.select().from(users).where(eq(users.id, guestId))).toEqual(
       [],
     );

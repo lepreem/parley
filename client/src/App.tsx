@@ -11,6 +11,7 @@ import {
   servedByLocalServer,
 } from "./config";
 import { ChatView } from "./components/chat/ChatView";
+import { ProjectView } from "./components/projects/ProjectView";
 import { DownloadPage } from "./components/auth/DownloadPage";
 
 /**
@@ -33,6 +34,7 @@ function App() {
       <Route element={<RequireAuth />}>
         <Route element={<Section server={cloudServer} />}>
           <Route path="/chat/:conversationId?" element={<ChatView />} />
+          <Route path="/chat/projects/:projectId" element={<ProjectView />} />
         </Route>
       </Route>
       <Route path="/download" element={<DownloadPage />} />

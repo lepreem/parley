@@ -115,7 +115,6 @@ describe.skipIf(!testState.databaseUrl)("context history in PostgreSQL", () => {
         role: "user",
         content: "Compare these",
         conversationId,
-        userId,
         createdAt: at(1),
       },
       {
@@ -123,7 +122,6 @@ describe.skipIf(!testState.databaseUrl)("context history in PostgreSQL", () => {
         role: "assistant",
         content: "They differ",
         conversationId,
-        userId,
         createdAt: at(2),
       },
       {
@@ -131,7 +129,6 @@ describe.skipIf(!testState.databaseUrl)("context history in PostgreSQL", () => {
         role: "user",
         content: "Why?",
         conversationId,
-        userId,
         createdAt: at(3),
       },
     ]);

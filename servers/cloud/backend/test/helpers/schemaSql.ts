@@ -11,6 +11,7 @@ import { MIGRATIONS_FOLDER } from "../../scripts/migrations";
 export const HANDWRITTEN_MIGRATIONS = [
   "0004_immutable_messages",
   "0005_tolerate_owner_change",
+  "0011_refuse_every_message_update",
 ];
 
 /**

@@ -123,6 +123,38 @@ export const AudioTranscriptionJobs = pgTable(
   ],
 ).enableRLS();
 
+/**
+ * A user's group of conversations, and the instructions each of its turns is
+ * answered with.
+ */
+export const Projects = pgTable(
+  "projects",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    instructions: text("instructions").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    // findUserProjects: owner filter + the newest-first order it's served in.
+    index("projects_user_created_idx").on(
+      table.userId,
+      table.createdAt,
+      table.id,
+    ),
+  ],
+).enableRLS();
+
 /** Chat conversations owned by a user. */
 export const Conversations = pgTable(
   "conversations",
@@ -153,8 +185,16 @@ export const Conversations = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+
+    // Null for a chat in no project. Deleting the project leaves its chats
+    // in none.
+    projectId: uuid("project_id").references(() => Projects.id, {
+      onDelete: "set null",
+    }),
   },
   (table) => [
+    // Deleting a project finds its chats through it, to take them out.
+    index("conversations_project_idx").on(table.projectId),
     // findUserConversations: owner filter + the (updated_at, id) ordering the
     // list is served in.
     index("conversations_user_updated_idx").on(
@@ -195,11 +235,6 @@ export const ChatMessages = pgTable(
     conversationId: uuid("conversation_id")
       .notNull()
       .references(() => Conversations.id, { onDelete: "cascade" }),
-
-    // could be useful for future "shared chat" feature.
-    userId: text("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
   },
   (table) => [
     // The busiest read in the app: findConversationMessages (asc) and

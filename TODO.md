@@ -3,6 +3,26 @@
 Open work on the cloud server, checked against the code on 2026-10-23.
 Paths are under `servers/cloud/backend/`.
 
+## Projects: next steps
+
+The skeleton is in: a project groups chats and gives them instructions
+(`src/data/projects.data.ts`, `src/chat/turn.ts`). Agreed, not built:
+
+1. **A library of sources per project.** Opt-in only: a file transcribed in a
+   project's chat stays that chat's attachment until the person adds it from
+   the project page. Kept in a `project_attachments` table (project,
+   attachment, added at), not an array column, so links can't outlive their
+   file. The storage sweep has to count these links before deleting a file.
+   Nothing is put into the prompt up front: the model gets the titles and a
+   tool to read or search one source, and decides whether to fetch at all
+   (MCP or a tool of our own, still open).
+2. **Default model, effort and web search per project**, for new chats in it.
+3. **Deleting a project's chats with it, and undoing deletes.** Deleting a
+   project now keeps its chats, in no project. Waits on the "sweeper"
+   discussion.
+4. **Projects on the local server.** Cloud only for now
+   (`Server.projects` in the client).
+
 ## Message latency
 
 Every turn logs its timings ("Message preparation operation completed",

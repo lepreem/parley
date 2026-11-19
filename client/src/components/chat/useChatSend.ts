@@ -228,6 +228,8 @@ type TurnInput = {
 
 type SendInput = TurnInput & {
   conversationId: string | undefined;
+  /** The project a new chat starts in; ignored once the chat exists. */
+  projectId?: string | undefined;
   /** Called once the conversation exists, before the reply starts. */
   onConversation: (conversationId: string) => void;
 };
@@ -484,7 +486,7 @@ export function useChatSend() {
 
       try {
         if (!conversationId) {
-          const created = await createConversation(server);
+          const created = await createConversation(server, input.projectId);
           const createdId = created.id;
           conversationId = createdId;
           queryClient.setQueryData<Conversation[]>(

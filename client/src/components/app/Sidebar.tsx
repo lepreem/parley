@@ -5,8 +5,13 @@ import {
   useDeleteConversationMutation,
   useRenameConversationMutation,
 } from "../../hooks/queries/useConversationQueries";
+import {
+  useMoveConversationMutation,
+  useProjectsOffered,
+  useProjectsQuery,
+} from "../../hooks/queries/useProjectQueries";
 import { useAuth } from "../../hooks/auth/useAuth";
-import { useCapabilities, useTier } from "../../hooks/auth/useCapabilities";
+import { useTier } from "../../hooks/auth/useCapabilities";
 import { useServer } from "../../hooks/server/useServer";
 import { useServerReady } from "../../hooks/server/useServerReady";
 import {
@@ -22,6 +27,7 @@ import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { UseThisComputer } from "../auth/UseThisComputer";
 import { ConversationRow } from "./ConversationRow";
 import { PhoneAccessButton } from "./PhoneAccessButton";
+import { ProjectList } from "./ProjectList";
 import { groupConversations } from "./conversationGroups";
 import { sectionPath } from "./sections";
 import { useShell } from "./shellContext";
@@ -93,24 +99,39 @@ function SectionSwitch() {
 }
 
 export function Sidebar() {
-  const { conversationId } = useParams<{ conversationId: string }>();
+  const { conversationId, projectId } = useParams<{
+    conversationId: string;
+    projectId: string;
+  }>();
   const navigate = useNavigate();
   const server = useServer();
   const { user, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const can = useCapabilities();
   const guest = useTier() === "guest";
-  const { sidebarOpen, setSidebarOpen, setSourcesOpen } = useShell();
+  const { sidebarOpen, setSidebarOpen } = useShell();
   const ready = useServerReady();
   const conversationsQuery = useConversationsQuery(ready);
+  const projectsOffered = useProjectsOffered();
+  const projectsQuery = useProjectsQuery(ready);
+  const projects = projectsQuery.data ?? [];
   const renameConversation = useRenameConversationMutation();
   const deleteConversation = useDeleteConversationMutation();
+  const moveConversation = useMoveConversationMutation();
   const [pendingDelete, setPendingDelete] = useState<{
     id: string;
     title: string;
   } | null>(null);
 
-  const groups = groupConversations(conversationsQuery.data ?? []);
+  const conversations = conversationsQuery.data ?? [];
+  // Like ChatGPT: a project's chats are on its page, not in this list.
+  const groups = groupConversations(
+    conversations.filter((conversation) => !conversation.projectId),
+  );
+  const activeProjectId =
+    projectId ??
+    conversations.find((conversation) => conversation.id === conversationId)
+      ?.projectId ??
+    null;
 
   const confirmDelete = () => {
     if (!pendingDelete) return;
@@ -166,24 +187,21 @@ export function Sidebar() {
             <Icon name="plus" className="h-4 w-4" />
             New chat
           </Link>
-          {/* Without attachments there are no sources. */}
-          {can.attachments && (
-            <button
-              type="button"
-              onClick={() => {
-                setSidebarOpen(false);
-                setSourcesOpen(true);
-              }}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-muted transition-colors hover:bg-surface hover:text-ink"
-            >
-              <Icon name="library" className="h-4 w-4" />
-              Sources
-            </button>
-          )}
           <PhoneAccessButton />
         </div>
 
         <nav className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
+          {/* Sources are in the top bar; this spot is the projects'. */}
+          {projectsOffered && (
+            <div className="pb-2">
+              <ProjectList
+                projects={projects}
+                loading={projectsQuery.isLoading}
+                activeProjectId={activeProjectId}
+                onOpen={() => setSidebarOpen(false)}
+              />
+            </div>
+          )}
           {conversationsQuery.isLoading ? (
             <div className="space-y-2 pt-2">
               {[0, 1, 2].map((row) => (
@@ -217,6 +235,18 @@ export function Sidebar() {
                           title: conversation.title,
                         })
                       }
+                      {...(projectsOffered
+                        ? {
+                            move: {
+                              projects,
+                              onMove: (target: string | null) =>
+                                moveConversation.mutate({
+                                  conversationId: conversation.id,
+                                  projectId: target,
+                                }),
+                            },
+                          }
+                        : {})}
                     />
                   ))}
                 </div>

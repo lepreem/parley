@@ -29,6 +29,7 @@ export const queryKeys = {
   job: (server: ServerId, audioUploadId: string) =>
     [server, "job", audioUploadId] as const,
   conversations: (server: ServerId) => [server, "conversations"] as const,
+  projects: (server: ServerId) => [server, "projects"] as const,
   messages: (server: ServerId, conversationId: string) =>
     [server, "conversations", conversationId, "messages"] as const,
   toolApprovals: (server: ServerId, conversationId: string) =>
@@ -39,7 +40,8 @@ export const queryKeys = {
 
 /**
  * Only what is worth having on disk: the model catalogs, which are large and
- * change about daily, and the conversation list, which paints the sidebar.
+ * change about daily, and the conversation and project lists, which paint the
+ * sidebar.
  *
  * Messages are deliberately excluded — they are the bulk of the cache, they go
  * stale the moment anyone sends, and they are cheap to refetch for the one
@@ -48,7 +50,7 @@ export const queryKeys = {
 function shouldPersist(query: Query): boolean {
   if (query.state.status !== "success") return false;
   const [, root, second] = query.queryKey as string[];
-  if (root === "models") return true;
+  if (root === "models" || root === "projects") return true;
   // queryKeys.messages() also starts with "conversations", so the list is
   // matched by its exact single-segment key rather than by prefix.
   return root === "conversations" && second === undefined;

@@ -14,3 +14,12 @@ export const MAX_DICTATION_SECONDS = 5 * 60;
  * highest rate a browser's recorder is likely to pick fits well inside it.
  */
 export const MAX_DICTATION_BYTES = 10 * 1024 * 1024;
+
+/** A project's name, after trimming. */
+export const MAX_PROJECT_NAME_LENGTH = 100;
+
+/** A project's instructions. They go with every turn of its chats. */
+export const MAX_PROJECT_INSTRUCTIONS_LENGTH = 8_000;
+
+/** How many projects one account can have. */
+export const MAX_PROJECTS = 10;

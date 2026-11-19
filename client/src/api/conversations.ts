@@ -1,6 +1,8 @@
 import type {
   Conversation,
   ConversationsResponse,
+  CreateProjectConversationBody,
+  MoveConversationBody,
   RenameConversationBody,
 } from "@parley/contract";
 import { apiFetch, apiJson, jsonRequest } from "./http";
@@ -18,10 +20,31 @@ export async function fetchConversations(
   return data.conversations;
 }
 
+/** A new chat, in `projectId` when it's given. */
 export async function createConversation(
   server: Server,
+  projectId?: string,
 ): Promise<Conversation> {
-  return apiJson<Conversation>(server, "/conversations", { method: "POST" });
+  if (projectId === undefined)
+    return apiJson<Conversation>(server, "/conversations", { method: "POST" });
+  return apiJson<Conversation>(
+    server,
+    "/conversations",
+    jsonRequest("POST", { projectId } satisfies CreateProjectConversationBody),
+  );
+}
+
+/** Into a project, or out of one with null. */
+export async function moveConversation(
+  server: Server,
+  conversationId: string,
+  projectId: string | null,
+): Promise<Conversation> {
+  return apiJson<Conversation>(
+    server,
+    `/conversations/${conversationId}/project`,
+    jsonRequest("PUT", { projectId } satisfies MoveConversationBody),
+  );
 }
 
 export async function renameConversation(

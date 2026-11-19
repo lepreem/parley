@@ -71,6 +71,27 @@
       "when": 1793778075794,
       "tag": "0009_message_sources",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795098452870,
+      "tag": "0010_drop_message_owner",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1795098457664,
+      "tag": "0011_refuse_every_message_update",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1795100022560,
+      "tag": "0012_projects",
+      "breakpoints": true
     }
   ]
 }

@@ -1,8 +1,10 @@
 import type { Conversation, ConversationsResponse } from "@parley/contract";
-import { authed } from "../middleware/auth.middleware";
+import { CAPABILITIES } from "@parley/contract/tiers";
+import { authed, refusalOf } from "../middleware/auth.middleware";
 import { validate } from "../middleware/validate.middleware";
 import {
   conversationCreateBodySchema,
+  conversationMoveBodySchema,
   conversationPatchBodySchema,
   conversationReqParamSchema,
 } from "../schema/conversations.schema";
@@ -17,6 +19,7 @@ function toConversationJson(
     title: row.title,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    projectId: row.projectId,
   };
 }
 
@@ -48,16 +51,45 @@ export const handleGetConversation = authed.createHandlers(
   },
 );
 
-/** POST /conversations — title optional; the DB default applies when omitted. */
+/**
+ * POST /conversations — title optional; the DB default applies when omitted.
+ * With a project, the chat starts in it.
+ */
 export const handleCreateConversation = authed.createHandlers(
   validate("json", conversationCreateBodySchema),
   async (c) => {
-    const { userId } = c.var;
-    const { conversationTitle: title } = c.req.valid("json");
+    const { userId, tier } = c.var;
+    const { conversationTitle: title, projectId } = c.req.valid("json");
+    if (projectId !== undefined && !CAPABILITIES[tier].projects)
+      return c.json({ message: refusalOf(tier, "projects") }, 403);
 
-    const row = await data.conversations.createConversation(userId, title);
+    const row = await data.conversations.createConversation(userId, {
+      ...(title !== undefined ? { title } : {}),
+      ...(projectId !== undefined ? { projectId } : {}),
+    });
 
+    if (!row) return c.json({ message: "Project not found" }, 404);
     return c.json(toConversationJson(row), 201);
+  },
+);
+
+/** PUT /conversations/:conversationId/project — into a project, or out of one. */
+export const handleMoveConversation = authed.createHandlers(
+  validate("param", conversationReqParamSchema),
+  validate("json", conversationMoveBodySchema),
+  async (c) => {
+    const { userId } = c.var;
+    const { conversationId } = c.req.valid("param");
+    const { projectId } = c.req.valid("json");
+
+    const row = await data.conversations.moveConversation(
+      userId,
+      conversationId,
+      projectId,
+    );
+
+    if (!row) return c.json({ message: "Conversation not found" }, 404);
+    return c.json(toConversationJson(row));
   },
 );
 

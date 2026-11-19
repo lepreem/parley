@@ -1,11 +1,23 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, isNull, lt, or, sql, type SQL } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  exists,
+  isNull,
+  lt,
+  or,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import {
   Conversations,
   DEFAULT_CONVERSATION_TITLE,
   db,
+  Projects,
   type Executor,
 } from "../db";
+import * as projects from "./projects.data";
 
 const conversationColumns = {
   id: Conversations.id,
@@ -14,6 +26,7 @@ const conversationColumns = {
   updatedAt: Conversations.updatedAt,
   lastMessageId: Conversations.lastMessageId,
   activeTurnClaimToken: Conversations.activeTurnClaimToken,
+  projectId: Conversations.projectId,
 };
 
 export type ConversationRow = Pick<
@@ -168,14 +181,68 @@ export async function completeConversationTurn(
   return Boolean(row);
 }
 
-/** Omitting `title` leaves the column to its DB default. */
-export async function createConversation(userId: string, title?: string) {
+/**
+ * Omitting `title` leaves the column to its DB default. Null when `projectId`
+ * names a project the user doesn't own. The project's row is held until the
+ * chat is in, so it can't be deleted in between; a chat in no project needs
+ * no transaction.
+ */
+export async function createConversation(
+  userId: string,
+  { title, projectId }: { title?: string; projectId?: string } = {},
+) {
+  const insert = async (executor: Executor) => {
+    const [row] = await executor
+      .insert(Conversations)
+      .values({
+        userId,
+        ...(title !== undefined ? { title } : {}),
+        ...(projectId !== undefined ? { projectId } : {}),
+      })
+      .returning(conversationColumns);
+    return row ?? null;
+  };
+  if (projectId === undefined) return insert(db);
+
+  return db.transaction(async (tx) => {
+    const [project] = await tx
+      .select({ id: Projects.id })
+      .from(Projects)
+      .where(projects.ownedBy(userId, projectId))
+      .for("share");
+    return project ? insert(tx) : null;
+  });
+}
+
+/**
+ * Puts the chat in a project the user owns, or in none. Null when either
+ * isn't theirs. Moving isn't activity, so the chat keeps its place in the
+ * list.
+ */
+export async function moveConversation(
+  userId: string,
+  conversationId: string,
+  projectId: string | null,
+) {
   const [row] = await db
-    .insert(Conversations)
-    .values({ userId, ...(title !== undefined ? { title } : {}) })
+    .update(Conversations)
+    .set({ projectId, updatedAt: sql`${Conversations.updatedAt}` })
+    .where(
+      and(
+        ownedBy(userId, conversationId),
+        projectId === null
+          ? undefined
+          : exists(
+              db
+                .select({ id: Projects.id })
+                .from(Projects)
+                .where(projects.ownedBy(userId, projectId)),
+            ),
+      ),
+    )
     .returning(conversationColumns);
 
-  return row;
+  return row ?? null;
 }
 
 export async function renameConversation(
