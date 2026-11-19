@@ -36,12 +36,16 @@ export const queryKeys = {
     [server, "conversations", conversationId, "toolApprovals"] as const,
   health: (server: ServerId) => [server, "health"] as const,
   guestChat: (server: ServerId) => [server, "guestChat"] as const,
+  /** By user too: signing out leaves the cache, and the next person's differs. */
+  profile: (server: ServerId, userId: string) =>
+    [server, "profile", userId] as const,
 };
 
 /**
  * Only what is worth having on disk: the model catalogs, which are large and
- * change about daily, and the conversation and project lists, which paint the
- * sidebar.
+ * change about daily, and the conversation and project lists and the profile,
+ * which paint the sidebar (without the profile, everyone's default picture
+ * would flash first).
  *
  * Messages are deliberately excluded — they are the bulk of the cache, they go
  * stale the moment anyone sends, and they are cheap to refetch for the one
@@ -50,7 +54,8 @@ export const queryKeys = {
 function shouldPersist(query: Query): boolean {
   if (query.state.status !== "success") return false;
   const [, root, second] = query.queryKey as string[];
-  if (root === "models" || root === "projects") return true;
+  if (root === "models" || root === "projects" || root === "profile")
+    return true;
   // queryKeys.messages() also starts with "conversations", so the list is
   // matched by its exact single-segment key rather than by prefix.
   return root === "conversations" && second === undefined;

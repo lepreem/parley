@@ -92,6 +92,13 @@
       "when": 1795100022560,
       "tag": "0012_projects",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1795116268100,
+      "tag": "0013_user_avatar",
+      "breakpoints": true
     }
   ]
 }

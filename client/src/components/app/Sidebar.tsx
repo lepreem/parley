@@ -25,6 +25,7 @@ import { useTheme } from "../../hooks/theme/useTheme";
 import { Icon } from "../ui/Icon";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { UseThisComputer } from "../auth/UseThisComputer";
+import { AvatarButton } from "../avatar/AvatarButton";
 import { ConversationRow } from "./ConversationRow";
 import { PhoneAccessButton } from "./PhoneAccessButton";
 import { ProjectList } from "./ProjectList";
@@ -270,9 +271,7 @@ export function Sidebar() {
             </a>
           ) : server.signIn === "session" ? (
             <>
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface text-xs font-semibold text-muted">
-                {user?.userId.slice(0, 2).toUpperCase()}
-              </span>
+              {user && <AvatarButton userId={user.userId} />}
               <button
                 type="button"
                 onClick={() => void signOut()}

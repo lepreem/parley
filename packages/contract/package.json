@@ -7,7 +7,8 @@
     ".": "./src/contract.ts",
     "./limits": "./src/limits.ts",
     "./youtube": "./src/youtube.ts",
-    "./tiers": "./src/tiers.ts"
+    "./tiers": "./src/tiers.ts",
+    "./avatars": "./src/avatars.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

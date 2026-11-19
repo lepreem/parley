@@ -36,6 +36,7 @@ export const RATE_LIMIT_POLICIES = {
 
   job: { limit: 100, windowMs: FIFTEEN_MINUTES_MS, key: "userId" },
   conversation: { limit: 100, windowMs: FIFTEEN_MINUTES_MS, key: "userId" },
+  profile: { limit: 60, windowMs: FIFTEEN_MINUTES_MS, key: "userId" },
 
   /**
    * Sending or editing a message: each one is a paid model call. It has its

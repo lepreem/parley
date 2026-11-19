@@ -105,6 +105,7 @@ export const authGuestRateLimiter = createLimiter("authGuest");
 
 export const jobRateLimiter = createLimiter("job");
 export const conversationRateLimiter = createLimiter("conversation");
+export const profileRateLimiter = createLimiter("profile");
 export const chatTurnRateLimiter = createLimiter("chatTurn");
 /** Counts guests' turns only; anyone else passes. */
 export const guestChatTurnRateLimiter = createLimiter("guestChatTurn", {
