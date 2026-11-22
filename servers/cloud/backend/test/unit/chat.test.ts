@@ -396,6 +396,7 @@ describe("chatAI", () => {
             status: "completed",
             url: "https://read.test/page",
             title: "A page it read",
+            content: "What it says",
           },
         };
         yield {
@@ -442,12 +443,42 @@ describe("chatAI", () => {
     });
 
     expect(onSource.mock.calls).toEqual([
-      ["https://read.test/page", "A page it read"],
+      ["https://read.test/page", "A page it read", "What it says"],
       ["https://found.test/page", "A page a search found"],
     ]);
     expect(onUnreadPage.mock.calls).toEqual([
       ["https://blocked.test/thread", "No content"],
     ]);
+  });
+
+  it("says when the model starts a search or opens a page", async () => {
+    mockResponsesSend.mockResolvedValueOnce(
+      (async function* () {
+        yield {
+          type: "response.output_item.added",
+          item: { type: "openrouter:web_search", status: "in_progress" },
+        };
+        yield {
+          type: "response.output_item.added",
+          item: { type: "openrouter:web_fetch", status: "in_progress" },
+        };
+        yield {
+          type: "response.output_item.added",
+          item: { type: "message", content: [], status: "in_progress" },
+        };
+        yield textDelta("hi");
+      })(),
+    );
+    const onActivity = vi.fn();
+
+    await chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
+      onDelta: () => {},
+      webSearch: true,
+      onActivity,
+      tier: "free",
+    });
+
+    expect(onActivity.mock.calls).toEqual([["searching"], ["reading"]]);
   });
 
   it.each([
@@ -877,12 +908,12 @@ describe("generateTitle", () => {
       {
         responsesRequest: expect.objectContaining({
           model: "~openai/gpt-luna-latest",
+          instructions: expect.stringContaining("Never answer"),
           input: [
             {
               role: "user",
-              content: expect.stringContaining(
-                "How should we organize the next quarter?",
-              ),
+              content:
+                "<conversation>\nHow should we organize the next quarter?\n</conversation>",
             },
           ],
           maxOutputTokens: 24,
@@ -891,5 +922,20 @@ describe("generateTitle", () => {
       },
       { signal: expect.any(AbortSignal) },
     );
+  });
+
+  it("fails a title the model was cut off writing, rather than keep part of a reply", async () => {
+    mockResponsesSend.mockResolvedValueOnce({
+      ...responseOf(
+        "I can't access the Reddit post from the link alone. Paste",
+      ),
+      status: "incomplete",
+    });
+
+    await expect(
+      chat.generateTitle("conversation", "read https://reddit.com/r/x", {
+        tier: "free",
+      }),
+    ).rejects.toThrow("cut off");
   });
 });

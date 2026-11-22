@@ -113,3 +113,45 @@ export function countMessagesInContextWindow(
 
   return messageCount;
 }
+
+/** Less of a page than this says too little to be worth sending. */
+const MIN_PAGE_CHARS = 2_000;
+
+/** Marks a page the prompt had room for only the start of. */
+export const PAGE_CUT_SHORT = "\n[The rest of this page didn't fit.]";
+
+/**
+ * Of the pages read for past replies, newest reply first, what fits in
+ * `roomChars` as `blockChars` measures them: whole pages while they fit, then
+ * as much of the next as there's room for, if that's worth sending. The turns
+ * themselves come first, so pages only get what they left.
+ */
+export function admitPages<Page extends { content: string }>(
+  pagesNewestFirst: readonly (readonly Page[])[],
+  roomChars: number,
+  blockChars: (pages: readonly Page[]) => number,
+): Page[][] {
+  let remainingChars = roomChars;
+
+  return pagesNewestFirst.map((pages) => {
+    const admitted: Page[] = [];
+    for (const page of pages) {
+      const addedChars = blockChars([...admitted, page]) - blockChars(admitted);
+      if (addedChars <= remainingChars) {
+        admitted.push(page);
+        remainingChars -= addedChars;
+        continue;
+      }
+      const wrapperChars = addedChars - page.content.length;
+      const fits = remainingChars - wrapperChars - PAGE_CUT_SHORT.length;
+      if (fits >= MIN_PAGE_CHARS) {
+        admitted.push({
+          ...page,
+          content: page.content.slice(0, fits) + PAGE_CUT_SHORT,
+        });
+        remainingChars = 0;
+      }
+    }
+    return admitted;
+  });
+}

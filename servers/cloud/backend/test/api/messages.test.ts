@@ -241,6 +241,7 @@ function createMessageHistory(
     createdAt: new Date(createdAt),
     content: "",
     transcripts: [],
+    pages: [],
     images: imageUrls.map((url) => ({
       imageUploadId: url,
       signedUrl: url,
@@ -741,6 +742,97 @@ describe("POST /conversations/:conversationId/messages", () => {
         expect.objectContaining({ sources }),
       );
       expect(body).toContain(`"sources":${JSON.stringify(sources)}`);
+    });
+
+    it("keeps the text of pages it read for later turns, and never sends it to the browser", async () => {
+      canSearch(true);
+      mockChatAI.mockImplementationOnce(
+        async (
+          _model: string,
+          _turns: unknown,
+          opts: {
+            onSource: (url: unknown, title: unknown, content?: unknown) => void;
+            onUnreadPage: (url: unknown, error: unknown) => void;
+            onActivity: (activity: string) => void;
+          },
+        ) => {
+          opts.onActivity("reading");
+          opts.onSource("https://a.example/page", "A page", "What it says");
+          opts.onActivity("reading");
+          opts.onUnreadPage("https://www.reddit.com/r/x", "Blocked");
+          return "Answer";
+        },
+      );
+
+      const res = await postMessage({
+        messageContent: "Hi",
+        chosenModelId: modelId,
+        webSearch: true,
+      });
+      const body = await res.text();
+
+      expect(mockPersistAndUnclaimChatTurn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sources: [
+            {
+              url: "https://a.example/page",
+              title: "A page",
+              content: "What it says",
+            },
+            {
+              url: "https://www.reddit.com/r/x",
+              title: "www.reddit.com",
+              unread: true,
+            },
+          ],
+        }),
+      );
+      expect(doneOf(body).sources).toEqual([
+        { url: "https://a.example/page", title: "A page" },
+        {
+          url: "https://www.reddit.com/r/x",
+          title: "www.reddit.com",
+          unread: true,
+        },
+      ]);
+      expect(body).not.toContain("What it says");
+      expect(body.match(/event: activity/g)).toHaveLength(2);
+    });
+
+    it("sends the pages a past reply read with the message it answered", async () => {
+      const page = {
+        url: "https://a.example/page",
+        title: "A page",
+        content: "What it says",
+      };
+      mockFindContextHistory.mockResolvedValueOnce([
+        createMessageHistory({
+          id: assistantRow.id,
+          role: "assistant",
+          content: "It says this",
+          pages: [page],
+        }),
+        createMessageHistory({ id: userRow.id, content: "Read this page" }),
+      ]);
+      mockChatAI.mockResolvedValueOnce("Answer");
+
+      const res = await postMessage({
+        messageContent: "And then?",
+        chosenModelId: modelId,
+      });
+      const { stats } = doneOf(await res.text());
+
+      const [, turns] = mockChatAI.mock.calls[0];
+      expect(turns).toHaveLength(3);
+      expect(turns[0].content).toMatch(
+        /^Read this page\n\n<pages_read>\n.*\n<page url="https:\/\/a\.example\/page" title="A page">\nWhat it says\n<\/page>\n<\/pages_read>$/,
+      );
+      expect(turns[1]).toEqual({ role: "assistant", content: "It says this" });
+      expect(stats?.context).toMatchObject({
+        pages: 1,
+        pageChars: turns[0].content.length - "Read this page".length,
+        historyChars: "Read this page".length + "It says this".length,
+      });
     });
 
     it("doesn't offer search unless asked", async () => {
@@ -1364,6 +1456,8 @@ describe("POST /conversations/:conversationId/messages", () => {
       historyMessages: 0,
       historyChars: 0,
       newTurnChars: "Hi there".length,
+      pages: 0,
+      pageChars: 0,
       maxChars: MAX_CONTEXT_CHARS,
       maxHistoryMessages: MAX_HISTORY_MESSAGES,
     });

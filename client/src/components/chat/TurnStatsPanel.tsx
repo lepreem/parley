@@ -76,7 +76,8 @@ function rowsOf(stats: TurnStats): Row[] {
 export function TurnStatsPanel({ stats }: { stats: TurnStats }) {
   const scale = Math.max(stats.totalMs, 1);
   const { context } = stats;
-  const promptChars = context.historyChars + context.newTurnChars;
+  const pageChars = context.pageChars ?? 0;
+  const promptChars = context.historyChars + pageChars + context.newTurnChars;
 
   return (
     <div className="mt-2 rounded-lg border border-line bg-sunk p-3 font-mono text-[11px] text-muted">
@@ -136,6 +137,15 @@ export function TurnStatsPanel({ stats }: { stats: TurnStats }) {
           {count(context.maxHistoryMessages)} messages,{" "}
           {count(context.historyChars)} chars
         </dd>
+        {context.pages !== undefined && (
+          <>
+            <dt className="text-faint">pages sent</dt>
+            <dd>
+              {count(context.pages)} read for past replies, {count(pageChars)}{" "}
+              chars
+            </dd>
+          </>
+        )}
         <dt className="text-faint">this message</dt>
         <dd>{count(context.newTurnChars)} chars</dd>
         <dt className="text-faint">context used</dt>

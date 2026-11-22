@@ -108,11 +108,22 @@ export type ChatMessage = {
   transcriptAttachments: MessageTranscript[];
   /** An assistant reply someone stopped before it finished. */
   stopped: boolean;
-  /** The web pages a search found for this reply; empty when none ran. */
+  /**
+   * The web pages the model found or read for this reply, and the ones it
+   * tried to open and couldn't; empty when it didn't use the web.
+   */
   sources: MessageSource[];
 };
 
-export type MessageSource = { url: string; title: string };
+export type MessageSource = {
+  url: string;
+  title: string;
+  /** The model tried to open this page and couldn't. */
+  unread?: true;
+};
+
+/** What a reply is doing on the web before its next words. */
+export type ReplyActivity = "searching" | "reading";
 
 /**
  * A turn the server is answering right now. Neither message is stored until
@@ -191,6 +202,13 @@ export type TurnStats = {
     /** Characters those carried, transcripts included. */
     historyChars: number;
     newTurnChars: number;
+    /**
+     * Pages past replies read, sent again with the messages they answered,
+     * and the characters they took. A server that doesn't keep pages leaves
+     * them out.
+     */
+    pages?: number;
+    pageChars?: number;
     maxChars: number;
     maxHistoryMessages: number;
   };
@@ -208,6 +226,11 @@ export type ReplyStreamEvents = {
    * stale from now on. Only the cloud server sends it, for now.
    */
   toolCall: { name: string };
+  /**
+   * The model has started a search or opened a page. It lasts until the next
+   * `delta`. A server that can't tell never sends it.
+   */
+  activity: { activity: ReplyActivity };
   /**
    * The turn is saved. `stopped` when it was stopped partway. `stats` is how
    * the turn went, for anyone curious; a server that doesn't time its turns

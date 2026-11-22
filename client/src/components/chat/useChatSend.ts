@@ -9,6 +9,7 @@ import {
   type ChatMessage,
   type MessageAttachmentInput,
   type MessageSource,
+  type ReplyActivity,
   type MessagesResponse,
   type TurnStats,
 } from "../../api/messages";
@@ -336,6 +337,16 @@ export function useChatSend() {
           return { ...current, [target]: { ...turn, assistantContent } };
         }),
       );
+      // Shown from the moment the model goes to the web until its next words.
+      let activityShown = false;
+      const showActivity = (activity: ReplyActivity | undefined) => {
+        activityShown = activity !== undefined;
+        setPendingTurns((current) => {
+          const turn = current[target];
+          if (!turn) return current;
+          return { ...current, [target]: { ...turn, activity } };
+        });
+      };
 
       try {
         await streamMessage(
@@ -362,7 +373,11 @@ export function useChatSend() {
                 if (!turn) return current;
                 return { ...current, [target]: { ...turn, stoppable: true } };
               }),
-            onDelta: (delta) => deltas.push(delta),
+            onDelta: (delta) => {
+              if (activityShown) showActivity(undefined);
+              deltas.push(delta);
+            },
+            onActivity: showActivity,
             onDone: (lastMessageId, stopped, sources, stats) => {
               stored = { id: lastMessageId, stopped, sources, stats };
             },

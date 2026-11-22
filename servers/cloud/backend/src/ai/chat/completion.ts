@@ -12,6 +12,7 @@ import type {
   Usage,
 } from "@openrouter/sdk/models";
 import { withTimeout } from "@parley/server-kit/runtime/withTimeout";
+import type { ReplyActivity } from "@parley/contract";
 
 export type ChatTurn = {
   role: "user" | "assistant";
@@ -169,9 +170,19 @@ async function nonStreamChatAI(
 
   if (!("output" in response))
     throw new Error("Expected a non-streaming chat response");
+  // What a model wrote before its limit cut it off isn't what was asked for:
+  // a title cut off this way was a reply to the message it was meant to name.
+  if (response.status === "incomplete")
+    throw new Error("The model was cut off before it finished");
 
   return replyText(response);
 }
+
+/** What the model is starting to do on the web, from a part it opens. */
+const ACTIVITY_OF_ITEM: Partial<Record<OutputItems["type"], ReplyActivity>> = {
+  "openrouter:web_search": "searching",
+  "openrouter:web_fetch": "reading",
+};
 
 /** What a finished part of a response says about the pages behind the reply. */
 function readPages(
@@ -180,7 +191,7 @@ function readPages(
 ) {
   if (item.type === "openrouter:web_fetch") {
     if (item.status === "completed" && !item.error) {
-      onSource?.(item.url, item.title);
+      onSource?.(item.url, item.title, item.content);
     } else {
       onUnreadPage?.(item.url, item.error);
     }
@@ -247,7 +258,10 @@ async function streamChatAI(
   sender: OpenRouter,
   responsesRequest: ResponsesRequest,
   onDelta: (delta: string) => void | Promise<void>,
-  opts: Pick<ChatOptions, "onUsage" | "onSource" | "onUnreadPage">,
+  opts: Pick<
+    ChatOptions,
+    "onUsage" | "onSource" | "onUnreadPage" | "onActivity"
+  >,
   {
     abortSignal,
     markProgress,
@@ -283,6 +297,13 @@ async function streamChatAI(
           await onDelta(event.delta);
         }
         break;
+      case "response.output_item.added": {
+        // Says only that it started: which page, and whether it opened, come
+        // when the part is done.
+        const activity = ACTIVITY_OF_ITEM[event.item.type];
+        if (activity) opts.onActivity?.(activity);
+        break;
+      }
       case "response.output_item.done": {
         readPages(event.item, opts);
         const replay = replayOf(event.item);
@@ -322,7 +343,10 @@ async function streamReply(
   responsesRequest: ResponsesRequest & { input: InputsUnion1[] },
   onDelta: (delta: string) => void | Promise<void>,
   tools: FunctionTools | undefined,
-  opts: Pick<ChatOptions, "onUsage" | "onSource" | "onUnreadPage">,
+  opts: Pick<
+    ChatOptions,
+    "onUsage" | "onSource" | "onUnreadPage" | "onActivity"
+  >,
   ctx: { abortSignal: AbortSignal; markProgress: () => void },
 ): Promise<string> {
   let input = responsesRequest.input;
@@ -375,7 +399,10 @@ async function streamReply(
 }
 
 export type ChatOptions = {
-  /** What the model is told before the conversation: a project's instructions. */
+  /**
+   * What the model is told before the conversation: a project's instructions,
+   * or how to name a chat or a recording.
+   */
   instructions?: string | undefined;
   onDelta?: ((delta: string) => void | Promise<void>) | undefined;
   /**
@@ -402,10 +429,16 @@ export type ChatOptions = {
   signal?: AbortSignal | undefined;
   /** Lets the model search the web and open pages, if it decides it needs to. */
   webSearch?: boolean | undefined;
-  /** Each page the model found or read, as OpenRouter describes it. */
-  onSource?: ((url: unknown, title: unknown) => void) | undefined;
+  /**
+   * Each page the model found or read, as OpenRouter describes it, with the
+   * text it read when it opened one.
+   */
+  onSource?:
+    ((url: unknown, title: unknown, content?: unknown) => void) | undefined;
   /** Each page the model tried to open and couldn't. */
   onUnreadPage?: ((url: unknown, error: unknown) => void) | undefined;
+  /** The model has started a search or opened a page. */
+  onActivity?: ((activity: ReplyActivity) => void) | undefined;
   /**
    * Parley's own tools the model may call. Only a streamed call offers them,
    * which a chat turn always is.

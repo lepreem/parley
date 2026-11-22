@@ -20,8 +20,9 @@ import {
 import type { TurnClaim } from "./turnClaim";
 
 /**
- * Answers a turn as server-sent events: `delta` ({ delta }) per model chunk
- * and `toolCall` ({ name }) as the model starts each call to one of Parley's
+ * Answers a turn as server-sent events: `delta` ({ delta }) per model chunk,
+ * `activity` ({ activity }) when it starts a search or opens a page, and
+ * `toolCall` ({ name }) as the model starts each call to one of Parley's
  * own routes, then `done` ({ lastMessageId, stopped, stats }) once the turn is
  * stored, `cancelled` if it was stopped before any reply came, or `error`
  * ({ message }) if the model call fails. A turn rejected before the model is
@@ -121,6 +122,7 @@ async function writeReply({
         }
         sseEvents.push("delta", { delta });
       },
+      onActivity: (activity) => sseEvents.push("activity", { activity }),
       onToolCall: (name) => sseEvents.push("toolCall", { name }),
       onModelFinished: () => {
         timings.modelFinishedAfterMs = msSince(metrics.startedAt);

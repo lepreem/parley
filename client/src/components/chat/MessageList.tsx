@@ -137,6 +137,7 @@ export function MessageList({
                   <AssistantTurn
                     content={pending.assistantContent}
                     streaming
+                    activity={pending.activity}
                     elsewhere={pending.elsewhere}
                   />
                   {conversationId && (
