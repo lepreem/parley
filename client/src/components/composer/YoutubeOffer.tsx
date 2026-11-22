@@ -1,5 +1,6 @@
 import { Icon } from "../ui/Icon";
 import { youtubeLabel } from "../../media/youtube";
+import { buttonClass } from "../ui/buttonClass";
 
 /**
  * A pasted link is a hint, not an instruction — so this asks rather than acts.
@@ -16,7 +17,7 @@ export function YoutubeOffer({
 }) {
   return (
     <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-signal/40 bg-signal-tint px-3 py-2">
-      <Icon name="link" className="h-4 w-4 shrink-0 text-signal-strong" />
+      <Icon name="link" className="h-4 w-4 shrink-0 text-signal-ink" />
       <p className="min-w-0 flex-1 text-[13px] text-ink">
         That's a YouTube link —{" "}
         <span className="font-mono text-[11px] text-muted">
@@ -28,14 +29,14 @@ export function YoutubeOffer({
         <button
           type="button"
           onClick={onDismiss}
-          className="rounded-md px-2.5 py-1.5 text-[13px] font-medium text-muted transition-colors hover:text-ink"
+          className={buttonClass("quiet", "sm")}
         >
           Not now
         </button>
         <button
           type="button"
           onClick={onAccept}
-          className="rounded-md bg-signal px-2.5 py-1.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+          className={buttonClass("primary", "sm")}
         >
           Add transcript
         </button>

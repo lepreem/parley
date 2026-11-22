@@ -9,6 +9,7 @@ import { queryKeys } from "../../lib/queryClient";
 import { Icon } from "../ui/Icon";
 import { Meter } from "../ui/Meter";
 import { UseThisComputer } from "./UseThisComputer";
+import { buttonClass } from "../ui/buttonClass";
 
 /**
  * The hero is the thing this app actually does that others don't: one message
@@ -104,7 +105,7 @@ function GuestButton() {
       type="button"
       onClick={() => void start()}
       disabled={starting}
-      className="inline-flex items-center rounded-lg border border-line px-5 py-2.5 text-sm font-medium text-muted transition-colors hover:border-signal hover:text-ink disabled:opacity-60"
+      className={buttonClass("secondary", "lg")}
     >
       Try it without an account
     </button>
@@ -112,7 +113,7 @@ function GuestButton() {
 }
 
 export function LandingPage() {
-  const { theme, toggleTheme } = useTheme();
+  const { resolvedMode, setMode } = useTheme();
 
   return (
     <div className="flex flex-1 flex-col">
@@ -120,13 +121,18 @@ export function LandingPage() {
         <span className="eyebrow text-ink">Parley</span>
         <button
           type="button"
-          onClick={toggleTheme}
+          onClick={() => setMode(resolvedMode === "dark" ? "light" : "dark")}
           aria-label={
-            theme === "dark" ? "Switch to light mode" : "Switch to dark mode"
+            resolvedMode === "dark"
+              ? "Switch to light mode"
+              : "Switch to dark mode"
           }
           className="rounded-lg p-2 text-muted transition-colors hover:bg-sunk hover:text-ink"
         >
-          <Icon name={theme === "dark" ? "sun" : "moon"} className="h-4 w-4" />
+          <Icon
+            name={resolvedMode === "dark" ? "sun" : "moon"}
+            className="h-4 w-4"
+          />
         </button>
       </header>
 
@@ -135,24 +141,19 @@ export function LandingPage() {
           <h1 className="text-4xl font-semibold leading-[1.1] tracking-tight sm:text-5xl">
             Several recordings.
             <br />
-            <span className="text-signal-strong dark:text-signal">
-              One question.
-            </span>
+            <span className="text-signal-ink">One question.</span>
           </h1>
           <p className="mx-auto mt-5 max-w-md text-[15px] leading-relaxed text-muted">
             Drop audio, video or a YouTube link. Each becomes a transcript, and
             one message carries as many as the question needs.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <a
-              href={authLoginUrl()}
-              className="inline-flex items-center rounded-lg bg-signal px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
-            >
+            <a href={authLoginUrl()} className={buttonClass("primary", "lg")}>
               Sign in
             </a>
             <GuestButton />
             {/* No account needed: the app runs on the user's own machine. */}
-            <UseThisComputer className="inline-flex items-center rounded-lg border border-line px-5 py-2.5 text-sm font-medium text-muted transition-colors hover:border-signal hover:text-ink" />
+            <UseThisComputer className={buttonClass("secondary", "lg")} />
           </div>
         </div>
 

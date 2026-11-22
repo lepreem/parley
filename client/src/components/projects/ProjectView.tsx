@@ -22,6 +22,7 @@ import { ConversationRow } from "../app/ConversationRow";
 import { newChatInProjectPath, sectionPath } from "../app/sections";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { Icon } from "../ui/Icon";
+import { buttonClass } from "../ui/buttonClass";
 
 /** A project's page: its name, its instructions and its chats. */
 export function ProjectView() {
@@ -45,7 +46,7 @@ export function ProjectView() {
             </p>
             <Link
               to={sectionPath(server)}
-              className="mt-3 inline-block text-sm text-signal-strong hover:underline"
+              className="mt-3 inline-block text-sm text-signal-ink hover:underline"
             >
               Start a new chat
             </Link>
@@ -218,7 +219,7 @@ function ProjectPage({ project }: { project: Project }) {
                 <button
                   type="button"
                   onClick={() => setDraftInstructions(project.instructions)}
-                  className="rounded-lg px-3 py-1.5 text-sm text-muted transition-colors hover:bg-sunk hover:text-ink"
+                  className={buttonClass("quiet")}
                 >
                   Discard
                 </button>
@@ -226,7 +227,7 @@ function ProjectPage({ project }: { project: Project }) {
               <button
                 type="submit"
                 disabled={!instructionsChanged || updateProject.isPending}
-                className="rounded-lg bg-signal px-3 py-1.5 text-sm font-medium text-white transition-opacity disabled:opacity-40"
+                className={buttonClass("primary")}
               >
                 {updateProject.isPending ? "Saving…" : "Save"}
               </button>

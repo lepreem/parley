@@ -105,7 +105,7 @@ function PriceTier({ pricing }: { pricing: ModelPricing | null }) {
     return (
       <span
         title={exact}
-        className="shrink-0 font-mono text-[10px] text-signal"
+        className="shrink-0 font-mono text-[10px] text-signal-ink"
       >
         free
       </span>
@@ -313,7 +313,7 @@ export function ModelPicker({
             <Icon name="eye" className="h-3.5 w-3.5 text-faint" />
           )}
           {entry.id === value && (
-            <Icon name="check" className="h-4 w-4 text-signal" />
+            <Icon name="check" className="h-4 w-4 text-signal-ink" />
           )}
         </span>
       </button>
@@ -358,7 +358,7 @@ export function ModelPicker({
           </div>
 
           {excluded > 0 && (
-            <p className="shrink-0 border-b border-line bg-signal-tint px-3 py-1.5 text-[11px] text-signal-strong">
+            <p className="shrink-0 border-b border-line bg-signal-tint px-3 py-1.5 text-[11px] text-signal-ink">
               {requirements.image
                 ? `${excluded} models hidden — this conversation carries an image`
                 : `${excluded} models hidden — this conversation is too long for them`}
@@ -372,7 +372,7 @@ export function ModelPicker({
                 onClick={() => setProvider(null)}
                 className={`flex w-full items-center justify-between px-3 py-1.5 text-left text-[12px] transition-colors ${
                   provider === null
-                    ? "bg-signal-tint text-signal-strong"
+                    ? "bg-signal-tint text-signal-ink"
                     : "text-muted hover:bg-sunk hover:text-ink"
                 }`}
               >
@@ -387,7 +387,7 @@ export function ModelPicker({
                   title={item.label}
                   className={`flex w-full items-center justify-between px-3 py-1.5 text-left text-[12px] transition-colors ${
                     provider === item.label
-                      ? "bg-signal-tint text-signal-strong"
+                      ? "bg-signal-tint text-signal-ink"
                       : "text-muted hover:bg-sunk hover:text-ink"
                   }`}
                 >

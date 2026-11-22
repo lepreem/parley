@@ -6,16 +6,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Parley</title>
     <script>
+      // Before the first paint, so the page never flashes the wrong colours.
+      // Same keys as hooks/theme/themes.ts; React takes over once it loads.
       (function () {
-        var stored =
-          localStorage.getItem("parley-theme") ||
-          localStorage.getItem("summarizer-theme");
-        var prefersDark = window.matchMedia(
-          "(prefers-color-scheme: dark)",
-        ).matches;
-        if (stored === "dark" || (!stored && prefersDark)) {
-          document.documentElement.classList.add("dark");
-        }
+        var root = document.documentElement;
+        var theme = null;
+        var mode = null;
+        try {
+          theme = localStorage.getItem("parley-palette");
+          mode = localStorage.getItem("parley-mode");
+        } catch (e) {}
+        var dark =
+          mode === "dark" ||
+          (mode !== "light" &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches);
+        root.dataset.theme = theme || "studio";
+        if (dark) root.classList.add("dark");
       })();
     </script>
   </head>

@@ -116,7 +116,7 @@ export function SourcesDrawer() {
                 aria-pressed={status === filter.status}
                 className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
                   status === filter.status
-                    ? "bg-signal-tint text-signal-strong"
+                    ? "bg-signal-tint text-signal-ink"
                     : "text-muted hover:bg-sunk hover:text-ink"
                 }`}
               >

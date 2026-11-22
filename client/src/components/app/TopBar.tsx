@@ -1,4 +1,4 @@
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useMatch, useParams, useSearchParams } from "react-router-dom";
 import { useConversationsQuery } from "../../hooks/queries/useConversationQueries";
 import {
   useProjectsOffered,
@@ -8,7 +8,7 @@ import { useServer } from "../../hooks/server/useServer";
 import { useServerReady } from "../../hooks/server/useServerReady";
 import { useCapabilities } from "../../hooks/auth/useCapabilities";
 import { Icon } from "../ui/Icon";
-import { NEW_CHAT_PROJECT_PARAM, projectPath } from "./sections";
+import { NEW_CHAT_PROJECT_PARAM, projectPath, settingsPath } from "./sections";
 import { useShell } from "./shellContext";
 
 export function TopBar() {
@@ -24,6 +24,7 @@ export function TopBar() {
   const conversationsQuery = useConversationsQuery(ready);
   const projectsQuery = useProjectsQuery(ready);
   const projectsOffered = useProjectsOffered();
+  const onSettings = useMatch(settingsPath(server)) !== null;
 
   const conversation = conversationId
     ? conversationsQuery.data?.find(
@@ -44,9 +45,11 @@ export function TopBar() {
 
   const title = projectId
     ? null
-    : conversationId
-      ? (conversation?.title ?? "Chat")
-      : "New chat";
+    : onSettings
+      ? "Settings"
+      : conversationId
+        ? (conversation?.title ?? "Chat")
+        : "New chat";
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-3">

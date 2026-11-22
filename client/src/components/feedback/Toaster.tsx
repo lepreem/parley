@@ -9,7 +9,7 @@ const kindIcons: Record<ToastKind, IconName> = {
 };
 
 const kindColors: Record<ToastKind, string> = {
-  success: "text-signal",
+  success: "text-signal-ink",
   error: "text-live",
   info: "text-muted",
 };

@@ -16,6 +16,11 @@ export function projectPath(server: Server, projectId: string): string {
   return `${server.appPath}/projects/${projectId}`;
 }
 
+/** The settings page, reached from either section. */
+export function settingsPath(server: Server): string {
+  return `${server.appPath}/settings`;
+}
+
 /** A new chat that starts in this project once its first message is sent. */
 export function newChatInProjectPath(
   server: Server,
