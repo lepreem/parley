@@ -470,6 +470,175 @@ describe("chatAI", () => {
   });
 });
 
+describe("chatAI with Parley's own tools", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const functionCall = (callId: string, name: string, args: object) => ({
+    type: "response.output_item.done",
+    item: {
+      type: "function_call",
+      id: `fc_${callId}`,
+      callId,
+      name,
+      arguments: JSON.stringify(args),
+    },
+  });
+  const tools = (run: (name: string, args: string) => Promise<string>) => ({
+    instructions: "You can act in Parley.",
+    definitions: [
+      {
+        name: "rename_chat",
+        description: "Rename a chat.",
+        parameters: { type: "object", properties: {}, required: [] },
+      },
+    ],
+    run: vi.fn(run),
+  });
+
+  it("runs each call, then goes back to the model with what it answered", async () => {
+    mockResponsesSend
+      .mockResolvedValueOnce(
+        (async function* () {
+          yield textDelta("On it.");
+          yield {
+            type: "response.output_item.done",
+            item: {
+              type: "message",
+              content: [{ type: "output_text", text: "On it." }],
+            },
+          };
+          yield functionCall("call_1", "rename_chat", { title: "Trips" });
+        })(),
+      )
+      .mockResolvedValueOnce(
+        (async function* () {
+          yield textDelta("Renamed it to Trips.");
+        })(),
+      );
+    const turnTools = tools(async () => '{"status":200}');
+    const deltas: string[] = [];
+
+    const reply = await chat.complete(
+      MODEL_ID,
+      [{ role: "user", content: "call this chat Trips" }],
+      {
+        tier: "free",
+        onDelta: (delta) => void deltas.push(delta),
+        instructions: "Answer in French.",
+        tools: turnTools,
+      },
+    );
+
+    expect(reply).toBe("On it.\n\nRenamed it to Trips.");
+    expect(deltas.join("")).toBe(reply);
+    expect(turnTools.run).toHaveBeenCalledWith(
+      "rename_chat",
+      '{"title":"Trips"}',
+      expect.any(AbortSignal),
+    );
+
+    const requestOf = (call: number) =>
+      (
+        mockResponsesSend.mock.calls[call]?.[0] as {
+          responsesRequest: {
+            instructions: string;
+            tools: unknown[];
+            input: unknown[];
+          };
+        }
+      ).responsesRequest;
+    // The caller's, then the tools'.
+    expect(requestOf(0).instructions).toBe(
+      "Answer in French.\n\nYou can act in Parley.",
+    );
+    expect(requestOf(0).tools).toEqual([
+      expect.objectContaining({ type: "function", name: "rename_chat" }),
+    ]);
+    expect(requestOf(1).input).toEqual([
+      { role: "user", content: "call this chat Trips" },
+      { role: "assistant", content: "On it." },
+      {
+        type: "function_call",
+        id: "fc_call_1",
+        callId: "call_1",
+        name: "rename_chat",
+        arguments: '{"title":"Trips"}',
+      },
+      {
+        type: "function_call_output",
+        callId: "call_1",
+        output: '{"status":200}',
+      },
+    ]);
+  });
+
+  it("runs a round's calls in the order the model made them", async () => {
+    mockResponsesSend
+      .mockResolvedValueOnce(
+        (async function* () {
+          yield functionCall("a", "create_project", {});
+          yield functionCall("b", "move_chat_to_project", {});
+        })(),
+      )
+      .mockResolvedValueOnce(
+        (async function* () {
+          yield textDelta("Done.");
+        })(),
+      );
+    const order: string[] = [];
+    const turnTools = tools(async (name) => {
+      order.push(`start ${name}`);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      order.push(`end ${name}`);
+      return "{}";
+    });
+
+    await chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
+      tier: "free",
+      onDelta: () => {},
+      tools: turnTools,
+    });
+
+    expect(order).toEqual([
+      "start create_project",
+      "end create_project",
+      "start move_chat_to_project",
+      "end move_chat_to_project",
+    ]);
+  });
+
+  it("gives up on a model that keeps calling tools without answering", async () => {
+    mockResponsesSend.mockImplementation(async () =>
+      (async function* () {
+        yield functionCall("again", "rename_chat", {});
+      })(),
+    );
+
+    await expect(
+      chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
+        tier: "free",
+        onDelta: () => {},
+        tools: tools(async () => "{}"),
+      }),
+    ).rejects.toThrow("without answering");
+    expect(mockResponsesSend).toHaveBeenCalledTimes(8);
+  });
+
+  it("offers no tools to a call that doesn't stream, such as a title's", async () => {
+    mockResponsesSend.mockResolvedValue(responseOf("A title"));
+
+    await chat.complete(MODEL_ID, [{ role: "user", content: "yo" }], {
+      tier: "free",
+      tools: tools(async () => "{}"),
+    });
+
+    expect(
+      (mockResponsesSend.mock.calls[0]?.[0] as { responsesRequest: object })
+        .responsesRequest,
+    ).toMatchObject({ tools: undefined, instructions: undefined });
+  });
+});
+
 type SendOptions = { signal: AbortSignal };
 
 /**

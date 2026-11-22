@@ -17,7 +17,12 @@ import { offeredModels } from "./model_catalog";
 import * as openRouter from "./openRouter";
 
 export { ping } from "./openRouter";
-export { buildUserTurn, NoRoomToReply, type ChatTurn } from "./completion";
+export {
+  buildUserTurn,
+  NoRoomToReply,
+  type ChatTurn,
+  type FunctionTools,
+} from "./completion";
 export { defaultModelId, recommendedModelIds } from "./model_catalog";
 
 /* -------------------------------------------------------------- completions */

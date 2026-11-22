@@ -76,6 +76,11 @@ type StreamCallbacks = {
   ) => void;
   /** Stopped before any of the reply came: nothing was saved. */
   onCancelled: () => void;
+  /**
+   * The model is acting in the app for the user, renaming a chat or making a
+   * project, so whatever it touched is stale here.
+   */
+  onToolCall?: (name: string) => void;
 };
 
 function dispatchReplyEvent(
@@ -87,7 +92,8 @@ function dispatchReplyEvent(
   const data = JSON.parse(rawData) as Partial<
     ReplyStreamEvents["delta"] &
       ReplyStreamEvents["done"] &
-      ReplyStreamEvents["error"]
+      ReplyStreamEvents["error"] &
+      ReplyStreamEvents["toolCall"]
   >;
   if (eventName === "delta" && typeof data.delta === "string") {
     callbacks.onDelta(data.delta);
@@ -100,6 +106,8 @@ function dispatchReplyEvent(
         ? data.stats
         : undefined,
     );
+  } else if (eventName === "toolCall" && typeof data.name === "string") {
+    callbacks.onToolCall?.(data.name);
   } else if (eventName === "cancelled") {
     callbacks.onCancelled();
   } else if (eventName === "error") {

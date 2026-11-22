@@ -3,6 +3,7 @@
 import type { OpenRouter } from "@openrouter/sdk";
 import type {
   InputImage,
+  InputsUnion1,
   InputText,
   OpenResponsesResult,
   OutputItems,
@@ -84,6 +85,40 @@ const WEB_TOOLS: NonNullable<ResponsesRequest["tools"]> = [
 ];
 
 /**
+ * How many times one turn goes back to the model with what its tools
+ * answered. A model that hasn't answered by then is going round in circles.
+ */
+const MAX_TOOL_ROUNDS = 8;
+
+/** A tool of Parley's own: its parameters are a JSON Schema object. */
+type FunctionToolDefinition = {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+};
+
+/** Parley's own tools a turn offers the model, and how to run a call. */
+export type FunctionTools = {
+  definitions: FunctionToolDefinition[];
+  /** What the model is told about acting with them. */
+  instructions: string;
+  /** Runs one call; what it answers is what the model reads back. */
+  run: (
+    name: string,
+    rawArguments: string,
+    signal?: AbortSignal,
+  ) => Promise<string>;
+};
+
+/** The model kept calling tools and never answered. */
+class TooManyToolRounds extends Error {
+  constructor() {
+    super(`The model called tools ${MAX_TOOL_ROUNDS} times without answering`);
+    this.name = "TooManyToolRounds";
+  }
+}
+
+/**
  * Without this, models were seen to answer from memory about a page they had
  * just failed to open, and to date their answers by their training data.
  */
@@ -93,8 +128,9 @@ function webInstructions() {
 }
 
 /**
- * The caller's instructions first: they stay the same from turn to turn, so
- * they sit in the cached prefix ahead of the web ones, which carry the date.
+ * The caller's instructions first, then the tools': they stay the same from
+ * turn to turn, so they sit in the cached prefix ahead of the web ones, which
+ * carry the date.
  */
 function joinInstructions(...parts: (string | undefined)[]) {
   const given = parts.filter(
@@ -161,6 +197,52 @@ function readPages(
   }
 }
 
+/** What one call to the model came back with. */
+type Round = {
+  text: string;
+  /** Tool calls for us to run, in the order the model made them. */
+  calls: { callId: string; name: string; arguments: string }[];
+  /**
+   * What the model did this round, as the next round's input takes it: its
+   * thinking, what it wrote and its calls, so it picks up where it left off.
+   */
+  replay: InputsUnion1[];
+  reachedCeiling: boolean;
+};
+
+/**
+ * An output item as the next request's input. Server tools' items (the web)
+ * aren't carried: their results are in what the model wrote.
+ */
+function replayOf(item: OutputItems): InputsUnion1 | undefined {
+  switch (item.type) {
+    case "reasoning":
+      return {
+        type: "reasoning",
+        id: item.id,
+        summary: item.summary,
+        encryptedContent: item.encryptedContent ?? null,
+        ...(item.content ? { content: item.content } : {}),
+      };
+    case "function_call":
+      return {
+        type: "function_call",
+        callId: item.callId,
+        name: item.name,
+        arguments: item.arguments,
+        ...(item.id ? { id: item.id } : {}),
+      };
+    case "message": {
+      const text = item.content
+        .flatMap((part) => (part.type === "output_text" ? [part.text] : []))
+        .join("");
+      return text ? { role: "assistant", content: text } : undefined;
+    }
+    default:
+      return undefined;
+  }
+}
+
 async function streamChatAI(
   sender: OpenRouter,
   responsesRequest: ResponsesRequest,
@@ -170,7 +252,7 @@ async function streamChatAI(
     abortSignal,
     markProgress,
   }: { abortSignal: AbortSignal; markProgress: () => void },
-) {
+): Promise<Round> {
   const stream = await sender.beta.responses.send(
     { responsesRequest: { ...responsesRequest, stream: true } },
     { signal: abortSignal },
@@ -179,8 +261,12 @@ async function streamChatAI(
   if (!(Symbol.asyncIterator in stream))
     throw new Error("Expected a streaming chat response");
 
-  let full = "";
-  let reachedCeiling = false;
+  const round: Round = {
+    text: "",
+    calls: [],
+    replay: [],
+    reachedCeiling: false,
+  };
 
   for await (const event of stream) {
     switch (event.type) {
@@ -193,15 +279,27 @@ async function streamChatAI(
         // think silently for longer than the between-chunk limit.
         if (event.delta) {
           markProgress();
-          full += event.delta;
+          round.text += event.delta;
           await onDelta(event.delta);
         }
         break;
-      case "response.output_item.done":
+      case "response.output_item.done": {
         readPages(event.item, opts);
+        const replay = replayOf(event.item);
+        if (replay) round.replay.push(replay);
+        if (event.item.type === "function_call") {
+          // A call is progress as much as text is.
+          markProgress();
+          round.calls.push({
+            callId: event.item.callId,
+            name: event.item.name,
+            arguments: event.item.arguments,
+          });
+        }
         break;
+      }
       case "response.incomplete":
-        reachedCeiling =
+        round.reachedCeiling =
           event.response.incompleteDetails?.reason === "max_output_tokens";
         if (event.response.usage) opts.onUsage?.(event.response.usage);
         break;
@@ -211,8 +309,69 @@ async function streamChatAI(
     }
   }
 
-  if (reachedCeiling && !full) throw new NoRoomToReply();
-  return full;
+  return round;
+}
+
+/**
+ * The reply, going back to the model with what `tools` answered for as long
+ * as it calls them. Each round's text streams to onDelta as it comes, a blank
+ * line apart from the round before.
+ */
+async function streamReply(
+  sender: OpenRouter,
+  responsesRequest: ResponsesRequest & { input: InputsUnion1[] },
+  onDelta: (delta: string) => void | Promise<void>,
+  tools: FunctionTools | undefined,
+  opts: Pick<ChatOptions, "onUsage" | "onSource" | "onUnreadPage">,
+  ctx: { abortSignal: AbortSignal; markProgress: () => void },
+): Promise<string> {
+  let input = responsesRequest.input;
+  let full = "";
+
+  for (let roundNumber = 0; roundNumber < MAX_TOOL_ROUNDS; roundNumber++) {
+    let roundStarted = false;
+    const round = await streamChatAI(
+      sender,
+      { ...responsesRequest, input },
+      async (delta) => {
+        if (!roundStarted && full && !full.endsWith("\n\n")) {
+          const gap = full.endsWith("\n") ? "\n" : "\n\n";
+          full += gap;
+          await onDelta(gap);
+        }
+        roundStarted = true;
+        full += delta;
+        await onDelta(delta);
+      },
+      opts,
+      ctx,
+    );
+
+    if (round.calls.length === 0 || !tools) {
+      if (round.reachedCeiling && !full) throw new NoRoomToReply();
+      return full;
+    }
+
+    const outputs = [];
+    // One at a time, in the order the model made them: a later call can
+    // depend on an earlier one, such as making a project then moving a chat
+    // into it.
+    for (const call of round.calls) {
+      const output = await tools.run(
+        call.name,
+        call.arguments,
+        ctx.abortSignal,
+      );
+      outputs.push({
+        type: "function_call_output" as const,
+        callId: call.callId,
+        output,
+      });
+      ctx.markProgress();
+    }
+    input = [...input, ...round.replay, ...outputs];
+  }
+  throw new TooManyToolRounds();
 }
 
 export type ChatOptions = {
@@ -247,7 +406,27 @@ export type ChatOptions = {
   onSource?: ((url: unknown, title: unknown) => void) | undefined;
   /** Each page the model tried to open and couldn't. */
   onUnreadPage?: ((url: unknown, error: unknown) => void) | undefined;
+  /**
+   * Parley's own tools the model may call. Only a streamed call offers them,
+   * which a chat turn always is.
+   */
+  tools?: FunctionTools | undefined;
 };
+
+/** The web's tools and Parley's own, whichever the call has. */
+function toolsOf(
+  webSearch: boolean,
+  functionTools: FunctionTools | undefined,
+): ResponsesRequest["tools"] {
+  const tools = [
+    ...(webSearch ? WEB_TOOLS : []),
+    ...(functionTools?.definitions ?? []).map((definition) => ({
+      type: "function" as const,
+      ...definition,
+    })),
+  ];
+  return tools.length > 0 ? tools : undefined;
+}
 
 /** The reply, sent through `sender`: streamed to onDelta when it's given. */
 export async function complete(
@@ -256,11 +435,15 @@ export async function complete(
   messages: ChatTurn[],
   opts: ChatOptions,
 ): Promise<string> {
-  const responsesRequest: ResponsesRequest = {
+  const { onDelta } = opts;
+  // Running a call needs the next round, which only the streamed loop makes.
+  const functionTools = onDelta ? opts.tools : undefined;
+  const responsesRequest = {
     model,
     input: messages,
     instructions: joinInstructions(
       opts.instructions,
+      functionTools?.instructions,
       opts.webSearch ? webInstructions() : undefined,
     ),
     maxOutputTokens: opts.maxOutputTokens,
@@ -272,22 +455,20 @@ export async function complete(
     // warm provider.
     provider: { sort: "latency" },
     sessionId: opts.sessionId,
-    tools: opts.webSearch ? WEB_TOOLS : undefined,
+    tools: toolsOf(opts.webSearch ?? false, functionTools),
     // Claude caches a prompt only when asked: the first turn of a chat costs
     // about a quarter more (writing the cache) and each reply within 5 minutes
     // of the last about 15x less (reading it). Other models cache on their own
     // and ignore this; measured 2026-11-10 on GPT, Gemini and DeepSeek, it
     // changed neither their cost nor their cache hits.
     cacheControl: { type: "ephemeral" },
-  };
+  } satisfies ResponsesRequest;
 
   const timeoutOptions = {
     timeoutMs: opts.timeoutMs ?? CHAT_TOTAL_TIMEOUT_MS,
-    firstProgressTimeoutMs: opts.onDelta
-      ? CHAT_FIRST_TOKEN_TIMEOUT_MS
-      : undefined,
-    progressTimeoutMs: opts.onDelta
-      ? opts.webSearch
+    firstProgressTimeoutMs: onDelta ? CHAT_FIRST_TOKEN_TIMEOUT_MS : undefined,
+    progressTimeoutMs: onDelta
+      ? opts.webSearch || functionTools
         ? CHAT_BETWEEN_CHUNKS_ON_THE_WEB_TIMEOUT_MS
         : CHAT_BETWEEN_CHUNKS_TIMEOUT_MS
       : undefined,
@@ -295,8 +476,8 @@ export async function complete(
   };
 
   return withTimeout(timeoutOptions, (ctx) =>
-    opts.onDelta
-      ? streamChatAI(sender, responsesRequest, opts.onDelta, opts, ctx)
+    onDelta
+      ? streamReply(sender, responsesRequest, onDelta, functionTools, opts, ctx)
       : nonStreamChatAI(sender, responsesRequest, ctx.abortSignal),
   );
 }

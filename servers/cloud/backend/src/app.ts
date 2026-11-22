@@ -19,6 +19,7 @@ import { speechRouter } from "./routes/speech.router";
 import { profileRouter } from "./routes/profile.router";
 import { handleEvents } from "./controllers/events.controller";
 import { requireAuth } from "./middleware/auth.middleware";
+import * as agentTools from "./agentTools";
 
 import { verifyApiServices } from "./startup";
 
@@ -79,6 +80,9 @@ export async function createApp() {
   app.route("/projects", projectsRouter);
   app.route("/speech", speechRouter);
   app.route("/profile", profileRouter);
+  // Every route is mounted by now, so the ones the model can call are found
+  // under their full paths.
+  agentTools.install(app);
 
   // The built client, on the API's own origin, so the session cookie is
   // first-party. Under `npm run dev` it isn't built and Vite serves it.

@@ -20,10 +20,11 @@ import {
 import type { TurnClaim } from "./turnClaim";
 
 /**
- * Answers a turn as server-sent events: `delta` ({ delta }) per model chunk,
- * then `done` ({ lastMessageId, stopped, stats }) once the turn is stored, `cancelled`
- * if it was stopped before any reply came, or `error` ({ message }) if the
- * model call fails. A turn rejected before the model is
+ * Answers a turn as server-sent events: `delta` ({ delta }) per model chunk
+ * and `toolCall` ({ name }) as the model starts each call to one of Parley's
+ * own routes, then `done` ({ lastMessageId, stopped, stats }) once the turn is
+ * stored, `cancelled` if it was stopped before any reply came, or `error`
+ * ({ message }) if the model call fails. A turn rejected before the model is
  * asked gets a plain JSON error instead. The client reads the stream with
  * fetch + response.body.getReader() (EventSource can't POST).
  *
@@ -107,12 +108,8 @@ async function writeReply({
   };
 
   try {
-    const answer = await answerTurn(
-      request,
-      claim,
-      prepared,
-      entry,
-      (delta) => {
+    const answer = await answerTurn(request, claim, prepared, entry, {
+      onDelta: (delta) => {
         if (delta.length > 0 && timings.firstTokenAfterMs === null) {
           timings.firstTokenAfterMs = msSince(metrics.startedAt);
           metrics.log.info("Message first token generated", {
@@ -124,10 +121,11 @@ async function writeReply({
         }
         sseEvents.push("delta", { delta });
       },
-      () => {
+      onToolCall: (name) => sseEvents.push("toolCall", { name }),
+      onModelFinished: () => {
         timings.modelFinishedAfterMs = msSince(metrics.startedAt);
       },
-    );
+    });
 
     if (answer) {
       sseEvents.push("done", {
