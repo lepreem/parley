@@ -159,7 +159,7 @@ import {
   MAX_HISTORY_MESSAGES,
 } from "../../src/chat/contextWindow";
 import { MAX_TRANSCRIPTS } from "../../src/schema/messages.schema";
-import { NoRoomToReply } from "../../src/ai/chat";
+import { NoRoomToReply, type FunctionTools } from "../../src/ai/chat";
 import {
   authedHeaders,
   guestCookieHeader,
@@ -1549,6 +1549,77 @@ describe("POST /conversations/:conversationId/messages", () => {
       [{ role: "user", content: "Hi there" }],
       expect.objectContaining({ instructions: "Answer in French." }),
     );
+  });
+
+  describe("acting in the app", () => {
+    const takesTools = (searchesWeb: boolean) =>
+      mockFindChatModel.mockResolvedValue({
+        id: modelId,
+        contextTokens: null,
+        acceptsImages: true,
+        searchesWeb,
+      });
+
+    it("offers the model Parley's tools, and tells the client as it uses one", async () => {
+      takesTools(true);
+      mockFindConversationInstructions.mockResolvedValueOnce(
+        "Answer in French.",
+      );
+      mockChatAI.mockImplementationOnce(
+        async (
+          _model: string,
+          _turns: unknown,
+          opts: { tools: FunctionTools },
+        ) => {
+          expect(opts.tools.definitions.map((d) => d.name)).toContain(
+            "rename_chat",
+          );
+          // An empty title is turned away by the route's own validator,
+          // after requireAuth has let the call through as the user.
+          const output = await opts.tools.run(
+            "rename_chat",
+            JSON.stringify({ conversationId, conversationTitle: "" }),
+          );
+          expect(JSON.parse(output)).toMatchObject({ status: 400 });
+          return "Renamed it.";
+        },
+      );
+
+      const res = await postMessage({
+        messageContent: "Call this chat Trips",
+        chosenModelId: modelId,
+      });
+      const body = await res.text();
+
+      expect(body).toContain('event: toolCall\ndata: {"name":"rename_chat"}');
+      expect(mockChatAI).toHaveBeenCalledWith(
+        modelId,
+        expect.anything(),
+        expect.objectContaining({
+          instructions: "Answer in French.",
+          tools: expect.objectContaining({
+            instructions: expect.stringContaining(conversationId),
+          }),
+        }),
+      );
+    });
+
+    it("offers no tools to a model that takes none", async () => {
+      takesTools(false);
+      mockChatAI.mockResolvedValueOnce("Hi");
+
+      const res = await postMessage({
+        messageContent: "Hi",
+        chosenModelId: modelId,
+      });
+      await res.text();
+
+      expect(mockChatAI).toHaveBeenCalledWith(
+        modelId,
+        expect.anything(),
+        expect.objectContaining({ tools: undefined, instructions: "" }),
+      );
+    });
   });
 
   it("leaves out of the next history read the text this one read and saved", async () => {

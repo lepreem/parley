@@ -369,6 +369,16 @@ export function useChatSend() {
             onCancelled: () => {
               cancelled = true;
             },
+            // The sidebar shows what the model renamed, moved or made as it
+            // happens rather than once the reply ends.
+            onToolCall: () => {
+              void queryClient.invalidateQueries({
+                queryKey: queryKeys.conversations(server.id),
+              });
+              void queryClient.invalidateQueries({
+                queryKey: queryKeys.projects(server.id),
+              });
+            },
           },
         );
       } finally {

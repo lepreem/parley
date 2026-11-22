@@ -24,6 +24,7 @@ import { buildPrompt, countImageInputs, withTranscripts } from "./prompt";
 import type { TurnClaim } from "./turnClaim";
 import { CAPABILITIES, howToReach, type Tier } from "@parley/contract/tiers";
 import { refusalOf } from "../middleware/auth.middleware";
+import * as agentTools from "../agentTools";
 
 const log = logger.child({ component: "chat-turn" });
 
@@ -377,12 +378,21 @@ async function titleForFirstTurn(request: TurnRequest) {
   }
 }
 
+/** What answerTurn tells its caller while the reply is written. */
+export type ReplyListeners = {
+  /** Each piece of the answer, as it comes. */
+  onDelta: (delta: string) => void;
+  /** Each of Parley's own routes the model calls, as the call starts. */
+  onToolCall: (name: string) => void;
+  /** The model is done with a reply that will be saved, stopped or not. */
+  onModelFinished: () => void;
+};
+
 /**
- * Asks the model, handing each piece of the answer to `onDelta`, then saves
- * the turn and lets go of the claim in one transaction, keeping its text for
- * the next turn's history read here. Returns the conversation's new head.
- * `onModelFinished` marks the model being done with a reply that will be
- * saved, stopped or not.
+ * Asks the model, then saves the turn and lets go of the claim in one
+ * transaction, keeping its text for the next turn's history read here.
+ * Returns the conversation's new head. While it answers, the model can act in
+ * Parley as the user through the routes agentTools offers it.
  *
  * A stopped reply is saved with what came before the stop, marked as
  * stopped. One stopped before anything came isn't saved: this returns null,
@@ -393,8 +403,7 @@ export async function answerTurn(
   claim: TurnClaim,
   prepared: PreparedTurn,
   entry: ReplyInProgressEntry,
-  onDelta: (delta: string) => void,
-  onModelFinished: () => void,
+  { onDelta, onToolCall, onModelFinished }: ReplyListeners,
 ) {
   const conversationTitle =
     request.expectedLastMessageId === null
@@ -403,6 +412,15 @@ export async function answerTurn(
 
   const model = await chat.findModel(request.chosenModelId);
   const sources: MessageSource[] = [];
+  // searchesWeb is the model taking tools at all (the web's are tools too).
+  // Offered to one that takes none, they'd fail the turn.
+  const tools = model?.searchesWeb
+    ? agentTools.forTurn({
+        user: { userId: request.userId, tier: request.tier },
+        conversationId: request.conversationId,
+        onCall: onToolCall,
+      })
+    : undefined;
 
   let assistantContent: string;
   let stopped = false;
@@ -430,6 +448,7 @@ export async function answerTurn(
             cost: usage.cost,
           }),
         instructions: prepared.instructions,
+        tools,
         maxOutputTokens: completionTokenCeiling(model, request.reasoningEffort),
         reasoningEffort: request.reasoningEffort,
         ...(request.webSearch

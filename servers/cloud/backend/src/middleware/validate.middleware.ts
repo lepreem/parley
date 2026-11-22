@@ -1,7 +1,15 @@
 import type { Env, MiddlewareHandler } from "hono";
 import type { z } from "zod";
 
-type Target = "json" | "param" | "query";
+export type Target = "json" | "param" | "query";
+
+/**
+ * What a validate() middleware checks, readable from outside: agentTool reads
+ * it to tell the model what a route takes, so a route's schema is written
+ * once, for the browser and the model alike.
+ */
+export const VALIDATES = Symbol("validates");
+export type Validates = { target: Target; schema: z.ZodTypeAny };
 
 const INVALID_MESSAGE: Record<Target, string> = {
   json: "Invalid request body",
@@ -34,8 +42,14 @@ function readTarget(c: Parameters<MiddlewareHandler>[0], target: Target) {
 export function validate<T extends Target, S extends z.ZodTypeAny>(
   target: T,
   schema: S,
-): MiddlewareHandler<Env, string, { out: { [K in T]: z.output<S> } }> {
-  return async (c, next) => {
+): MiddlewareHandler<Env, string, { out: { [K in T]: z.output<S> } }> & {
+  [VALIDATES]: Validates;
+} {
+  const middleware: MiddlewareHandler<
+    Env,
+    string,
+    { out: { [K in T]: z.output<S> } }
+  > = async (c, next) => {
     const result = await schema.safeParseAsync(await readTarget(c, target));
     if (!result.success) {
       const message =
@@ -48,4 +62,7 @@ export function validate<T extends Target, S extends z.ZodTypeAny>(
     c.req.addValidatedData(target, result.data);
     await next();
   };
+  return Object.assign(middleware, {
+    [VALIDATES]: { target, schema } satisfies Validates,
+  });
 }

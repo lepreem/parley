@@ -5,6 +5,7 @@ import { COOKIE_KEYS } from "../cookies/session";
 import { logger } from "@parley/server-kit/runtime/logger";
 import * as auth from "../auth";
 import * as guest from "../guest";
+import * as agentTools from "../agentTools";
 import {
   CAPABILITIES,
   howToReach,
@@ -35,6 +36,21 @@ export async function verifySessionToken(token: string) {
 }
 
 export const requireAuth = createMiddleware<AuthEnv>(async (c, next) => {
+  // A tool call from the model, made inside this process during a chat turn,
+  // for the user whose turn it is. That turn's request was signed in, which is
+  // the check this call relies on. No request from outside can be one of
+  // these: see agentTools/agentCallUser.ts.
+  const agentCallUser = agentTools.readAgentCallUser(c.env);
+  if (agentCallUser) {
+    c.set("userId", agentCallUser.userId);
+    c.set("tier", agentCallUser.tier);
+    // Only GET /auth/me reads this, and it isn't a tool. The turn checked a
+    // session that hadn't expired; this call has no session of its own.
+    c.set("sessionExpiresAtEpochSeconds", Math.floor(Date.now() / 1000));
+    await next();
+    return;
+  }
+
   const token = getCookie(c, COOKIE_KEYS.session);
   if (!token) return c.json({ message: "Unauthorized" }, 401);
 

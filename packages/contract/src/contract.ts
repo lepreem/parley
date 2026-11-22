@@ -203,6 +203,12 @@ export type TurnStats = {
 export type ReplyStreamEvents = {
   delta: { delta: string };
   /**
+   * The model is calling one of Parley's own routes for the user: renaming a
+   * chat, making a project. Whatever it changes, the client's copy of it is
+   * stale from now on. Only the cloud server sends it, for now.
+   */
+  toolCall: { name: string };
+  /**
    * The turn is saved. `stopped` when it was stopped partway. `stats` is how
    * the turn went, for anyone curious; a server that doesn't time its turns
    * leaves it out.
