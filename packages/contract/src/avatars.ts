@@ -43,12 +43,6 @@ export type AvatarColor = (typeof AVATAR_COLORS)[number];
 
 export type Avatar = { glyph: AvatarGlyph; color: AvatarColor };
 
-/** GET /profile, and what PATCH /profile answers. */
-export type ProfileResponse = { avatar: Avatar };
-
-/** PATCH /profile. */
-export type UpdateProfileBody = { avatar: Avatar };
-
 /**
  * The picture someone has until they pick one: the same for the same id
  * every time, and spread across the lists so two people rarely share it.

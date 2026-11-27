@@ -25,6 +25,7 @@ import { Icon } from "../ui/Icon";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { UseThisComputer } from "../auth/UseThisComputer";
 import { UserAvatar } from "../avatar/AvatarPicker";
+import { useProfileQuery } from "../../hooks/queries/useProfileQueries";
 import { ConversationRow } from "./ConversationRow";
 import { PhoneAccessButton } from "./PhoneAccessButton";
 import { ProjectList } from "./ProjectList";
@@ -98,6 +99,18 @@ function SectionSwitch() {
   );
 }
 
+/** Their username, or a nudge to pick one. */
+function AccountName({ userId }: { userId: string }) {
+  const profile = useProfileQuery(userId);
+  if (profile.isPending) return null;
+  const username = profile.data?.username;
+  return username ? (
+    username
+  ) : (
+    <span className="font-normal text-faint">Set a username</span>
+  );
+}
+
 export function Sidebar() {
   const { conversationId, projectId } = useParams<{
     conversationId: string;
@@ -108,6 +121,8 @@ export function Sidebar() {
   const { user } = useAuth();
   const onSettings = useMatch(settingsPath(server)) !== null;
   const guest = useTier() === "guest";
+  // Someone signed in to an account, who has a picture and a username.
+  const account = user && server.signIn === "session" && !guest ? user : null;
   const { sidebarOpen, setSidebarOpen } = useShell();
   const ready = useServerReady();
   const conversationsQuery = useConversationsQuery(ready);
@@ -273,28 +288,35 @@ export function Sidebar() {
             to={settingsPath(server)}
             onClick={() => setSidebarOpen(false)}
             aria-current={onSettings ? "page" : undefined}
-            className={`flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-surface ${
+            className={`group flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-surface ${
               onSettings ? "bg-surface" : ""
             }`}
           >
-            {user && server.signIn === "session" && !guest ? (
-              <UserAvatar userId={user.userId} className="h-7 w-7 shrink-0" />
+            {account ? (
+              <UserAvatar
+                userId={account.userId}
+                className="h-7 w-7 shrink-0"
+              />
             ) : (
               <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line text-muted">
-                <Icon name="settings" className="h-3.5 w-3.5" />
+                <Icon
+                  name={server.signIn === "session" ? "user" : "monitor"}
+                  className="h-3.5 w-3.5"
+                />
               </span>
             )}
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-medium text-ink">
-                Settings
-              </span>
-              <span className="block truncate text-xs text-faint">
-                {server.signIn !== "session"
-                  ? "Runs on this computer"
-                  : guest
-                    ? "Appearance"
-                    : "Your account and appearance"}
-              </span>
+            <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">
+              {account ? (
+                <AccountName userId={account.userId} />
+              ) : server.signIn === "session" ? (
+                "Guest"
+              ) : (
+                "This computer"
+              )}
+            </span>
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted transition-colors group-hover:text-ink">
+              <Icon name="settings" className="h-4 w-4" />
+              <span className="sr-only">Settings</span>
             </span>
           </Link>
         </div>

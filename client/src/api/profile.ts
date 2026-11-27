@@ -1,8 +1,7 @@
 import type {
-  Avatar,
   ProfileResponse,
   UpdateProfileBody,
-} from "@parley/contract/avatars";
+} from "@parley/contract/profile";
 import { apiJson, jsonRequest } from "./http";
 import type { Server } from "./server";
 
@@ -10,13 +9,14 @@ export async function fetchProfile(server: Server): Promise<ProfileResponse> {
   return apiJson<ProfileResponse>(server, "/profile");
 }
 
-export async function updateAvatar(
+/** Saves whichever of their picture and username the body has. */
+export async function updateProfile(
   server: Server,
-  avatar: Avatar,
+  changes: UpdateProfileBody,
 ): Promise<ProfileResponse> {
   return apiJson<ProfileResponse>(
     server,
     "/profile",
-    jsonRequest("PATCH", { avatar } satisfies UpdateProfileBody),
+    jsonRequest("PATCH", changes),
   );
 }

@@ -12,6 +12,7 @@ export const tableStubs = {
     id: "id",
     avatarGlyph: "avatar_glyph",
     avatarColor: "avatar_color",
+    username: "username",
     createdAt: "created_at",
     updatedAt: "updated_at",
   },
