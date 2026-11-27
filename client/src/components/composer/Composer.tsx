@@ -12,7 +12,7 @@ import type {
 } from "../../api/models";
 import { useShell } from "../app/shellContext";
 import { useCapabilities } from "../../hooks/auth/useCapabilities";
-import { findYoutubeUrl } from "../../media/youtube";
+import { findYoutubeUrl, withoutLink } from "../../media/youtube";
 import { useSources } from "../../sources/useSources";
 import { Icon } from "../ui/Icon";
 import { Meter } from "../ui/Meter";
@@ -171,7 +171,12 @@ export function Composer({
         {offeredUrl && (
           <YoutubeOffer
             url={offeredUrl}
-            onAccept={() => addYoutube(offeredUrl)}
+            onAccept={() => {
+              addYoutube(offeredUrl);
+              // The chip stands for the video now, so the link would only
+              // tempt the model to fetch the page as well.
+              onTextChange(withoutLink(text, offeredUrl));
+            }}
             onDismiss={() =>
               setDismissed((current) => ({
                 draftKey,
