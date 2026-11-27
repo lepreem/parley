@@ -13,6 +13,7 @@ import {
 import { ChatView } from "./components/chat/ChatView";
 import { ProjectView } from "./components/projects/ProjectView";
 import { DownloadPage } from "./components/auth/DownloadPage";
+import { SettingsPage } from "./components/settings/SettingsPage";
 
 /**
  * Landing route: send authenticated users straight to the app. A page the
@@ -35,12 +36,14 @@ function App() {
         <Route element={<Section server={cloudServer} />}>
           <Route path="/chat/:conversationId?" element={<ChatView />} />
           <Route path="/chat/projects/:projectId" element={<ProjectView />} />
+          <Route path="/chat/settings" element={<SettingsPage />} />
         </Route>
       </Route>
       <Route path="/download" element={<DownloadPage />} />
       {canReachLocalServer ? (
         <Route element={<Section server={localServer} />}>
           <Route path="/local/:conversationId?" element={<ChatView />} />
+          <Route path="/local/settings" element={<SettingsPage />} />
         </Route>
       ) : (
         <Route

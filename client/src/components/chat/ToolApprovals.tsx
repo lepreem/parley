@@ -14,12 +14,12 @@ import { useServerReady } from "../../hooks/server/useServerReady";
 import { useToast } from "../../hooks/toast/useToast";
 import { queryKeys } from "../../lib/queryClient";
 import { useEventsConnected } from "../../sse/useEventsConnected";
+import { buttonClass } from "../ui/buttonClass";
 
 /** How often the prompts are read when pushes aren't arriving. */
 const POLL_MS = 3_000;
 
-const SECONDARY =
-  "rounded-lg border border-line px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-sunk disabled:opacity-50";
+const SECONDARY = buttonClass("secondary");
 
 function ApprovalCard({
   approval,
@@ -45,7 +45,7 @@ function ApprovalCard({
           type="button"
           disabled={answering}
           onClick={() => onAnswer("allow")}
-          className="rounded-lg bg-signal px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+          className={buttonClass("primary")}
         >
           Allow
         </button>

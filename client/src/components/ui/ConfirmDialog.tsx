@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { buttonClass } from "./buttonClass";
 
 type ConfirmDialogProps = {
   title: string;
@@ -47,7 +48,7 @@ export function ConfirmDialog({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-lg px-3 py-2 text-sm font-medium text-muted transition-colors hover:bg-sunk hover:text-ink"
+            className={buttonClass("quiet")}
           >
             Cancel
           </button>
@@ -55,7 +56,7 @@ export function ConfirmDialog({
             ref={confirmRef}
             type="button"
             onClick={onConfirm}
-            className="rounded-lg bg-live px-3 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+            className={buttonClass("danger")}
           >
             {confirmLabel}
           </button>

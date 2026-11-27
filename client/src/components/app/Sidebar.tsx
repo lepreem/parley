@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useMatch, useNavigate, useParams } from "react-router-dom";
 import {
   useConversationsQuery,
   useDeleteConversationMutation,
@@ -21,16 +21,15 @@ import {
   localServer,
   servedByLocalServer,
 } from "../../config";
-import { useTheme } from "../../hooks/theme/useTheme";
 import { Icon } from "../ui/Icon";
 import { ConfirmDialog } from "../ui/ConfirmDialog";
 import { UseThisComputer } from "../auth/UseThisComputer";
-import { AvatarButton } from "../avatar/AvatarButton";
+import { UserAvatar } from "../avatar/AvatarPicker";
 import { ConversationRow } from "./ConversationRow";
 import { PhoneAccessButton } from "./PhoneAccessButton";
 import { ProjectList } from "./ProjectList";
 import { groupConversations } from "./conversationGroups";
-import { sectionPath } from "./sections";
+import { sectionPath, settingsPath } from "./sections";
 import { useShell } from "./shellContext";
 
 function Wordmark() {
@@ -87,7 +86,7 @@ function SectionSwitch() {
             onClick={() => setSidebarOpen(false)}
             className={`rounded-md px-2 py-1.5 text-center text-[12px] font-medium transition-colors ${
               active
-                ? "bg-signal-tint text-signal-strong"
+                ? "bg-signal-tint text-signal-ink"
                 : "text-muted hover:text-ink"
             }`}
           >
@@ -106,8 +105,8 @@ export function Sidebar() {
   }>();
   const navigate = useNavigate();
   const server = useServer();
-  const { user, signOut } = useAuth();
-  const { theme, toggleTheme } = useTheme();
+  const { user } = useAuth();
+  const onSettings = useMatch(settingsPath(server)) !== null;
   const guest = useTier() === "guest";
   const { sidebarOpen, setSidebarOpen } = useShell();
   const ready = useServerReady();
@@ -256,48 +255,48 @@ export function Sidebar() {
           )}
         </nav>
 
-        <div className="flex items-center gap-2 border-t border-line px-3 py-3">
-          {guest ? (
+        <div className="space-y-1 border-t border-line p-2">
+          {guest && (
             // A guest can't sign out, only lose their chats: signing in
             // keeps them, so that's what's offered.
             <a
               href={authLoginUrl()}
-              className="flex-1 rounded-lg px-2 py-1.5 text-sm text-muted transition-colors hover:bg-surface hover:text-ink"
+              className="block rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-surface"
             >
               <span className="block font-medium text-ink">Sign in</span>
               <span className="block text-xs text-faint">
                 to keep your chats and add files
               </span>
             </a>
-          ) : server.signIn === "session" ? (
-            <>
-              {user && <AvatarButton userId={user.userId} />}
-              <button
-                type="button"
-                onClick={() => void signOut()}
-                className="flex-1 rounded-lg px-2 py-1.5 text-left text-sm text-muted transition-colors hover:bg-surface hover:text-ink"
-              >
-                Sign out
-              </button>
-            </>
-          ) : (
-            <span className="flex-1 px-2 text-sm text-faint">
-              Runs on this computer
-            </span>
           )}
-          <button
-            type="button"
-            onClick={toggleTheme}
-            aria-label={
-              theme === "dark" ? "Switch to light mode" : "Switch to dark mode"
-            }
-            className="rounded-lg p-2 text-muted transition-colors hover:bg-surface hover:text-ink"
+          <Link
+            to={settingsPath(server)}
+            onClick={() => setSidebarOpen(false)}
+            aria-current={onSettings ? "page" : undefined}
+            className={`flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-surface ${
+              onSettings ? "bg-surface" : ""
+            }`}
           >
-            <Icon
-              name={theme === "dark" ? "sun" : "moon"}
-              className="h-4 w-4"
-            />
-          </button>
+            {user && server.signIn === "session" && !guest ? (
+              <UserAvatar userId={user.userId} className="h-7 w-7 shrink-0" />
+            ) : (
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line text-muted">
+                <Icon name="settings" className="h-3.5 w-3.5" />
+              </span>
+            )}
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium text-ink">
+                Settings
+              </span>
+              <span className="block truncate text-xs text-faint">
+                {server.signIn !== "session"
+                  ? "Runs on this computer"
+                  : guest
+                    ? "Appearance"
+                    : "Your account and appearance"}
+              </span>
+            </span>
+          </Link>
         </div>
       </aside>
 

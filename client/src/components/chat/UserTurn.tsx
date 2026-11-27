@@ -4,6 +4,7 @@ import { Icon } from "../ui/Icon";
 import { useShell } from "../app/shellContext";
 import { TurnSources } from "./TurnSources";
 import type { TurnImage } from "./types";
+import { buttonClass } from "../ui/buttonClass";
 
 /**
  * Rewriting a sent message in place. Saving replaces it and every turn after
@@ -69,7 +70,7 @@ function TurnEditor({
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-md px-2.5 py-1 text-xs text-muted transition-colors hover:text-ink"
+          className={buttonClass("quiet", "sm")}
         >
           Cancel
         </button>
@@ -77,7 +78,7 @@ function TurnEditor({
           type="button"
           onClick={() => onSave(content)}
           disabled={!saveable}
-          className="rounded-md bg-signal px-2.5 py-1 text-xs text-white transition-colors hover:bg-signal-strong disabled:bg-line disabled:text-faint"
+          className={buttonClass("primary", "sm")}
         >
           Send
         </button>

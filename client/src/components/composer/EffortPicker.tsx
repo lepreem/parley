@@ -49,7 +49,7 @@ export function EffortPicker({
     >
       <span className="truncate">{label}</span>
       {effort === current && (
-        <Icon name="check" className="h-4 w-4 shrink-0 text-signal" />
+        <Icon name="check" className="h-4 w-4 shrink-0 text-signal-ink" />
       )}
     </button>
   );

@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { DESKTOP_APP_LINK } from "../../lib/openDesktopApp";
+import { buttonClass } from "../ui/buttonClass";
 
 const RELEASES = "https://github.com/lepreem/parley/releases/latest/download";
 
@@ -65,9 +66,7 @@ function PlatformDownloads({
             key={file}
             href={`${RELEASES}/${file}`}
             className={
-              featured
-                ? "inline-flex items-center rounded-lg bg-signal px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
-                : "inline-flex items-center rounded-lg border border-line px-4 py-2 text-sm font-medium text-muted transition-colors hover:border-signal hover:text-ink"
+              featured ? buttonClass("primary") : buttonClass("secondary")
             }
           >
             {label}
@@ -120,7 +119,7 @@ export function DownloadPage() {
           </p>
           <a
             href={DESKTOP_APP_LINK}
-            className="mt-3 inline-block text-sm text-signal-strong hover:underline"
+            className="mt-3 inline-block text-sm text-signal-ink hover:underline"
           >
             Already installed? Open Parley
           </a>

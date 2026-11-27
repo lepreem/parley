@@ -1,16 +1,13 @@
 import { createContext } from "react";
-
-export type Theme = "light" | "dark";
+import type { Mode, ResolvedMode, ThemeId } from "./themes";
 
 export type ThemeContextValue = {
-  theme: Theme;
-  setTheme: (theme: Theme) => void;
-  toggleTheme: () => void;
+  theme: ThemeId;
+  setTheme: (theme: ThemeId) => void;
+  mode: Mode;
+  setMode: (mode: Mode) => void;
+  /** What the page shows now: `mode`, with "system" settled. */
+  resolvedMode: ResolvedMode;
 };
 
 export const ThemeContext = createContext<ThemeContextValue | null>(null);
-
-export const THEME_STORAGE_KEY = "parley-theme";
-
-/** Where the theme was kept before the rename to Parley; read once, then rewritten. */
-export const LEGACY_THEME_STORAGE_KEY = "summarizer-theme";

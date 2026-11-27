@@ -258,7 +258,7 @@ export function Composer({
                 }
                 className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
                   webSearch
-                    ? "bg-signal-tint text-signal-strong"
+                    ? "bg-signal-tint text-signal-ink"
                     : "text-muted hover:bg-sunk hover:text-ink"
                 }`}
               >
@@ -304,7 +304,7 @@ export function Composer({
                 aria-pressed={dictation.status === "recording"}
                 className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
                   dictation.status === "recording"
-                    ? "bg-signal text-white hover:bg-signal-strong"
+                    ? "bg-signal text-on-signal hover:bg-signal-strong"
                     : "text-muted hover:text-ink"
                 }`}
               >
@@ -327,7 +327,7 @@ export function Composer({
                       ? "Stop the reply"
                       : "Waiting for the reply"
                 }
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-signal text-white transition-colors hover:bg-signal-strong disabled:hover:bg-signal"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-signal text-on-signal transition-colors hover:bg-signal-strong disabled:hover:bg-signal"
               >
                 {onStop && !stopping ? (
                   <Icon name="stop" className="h-4 w-4" />
@@ -343,7 +343,7 @@ export function Composer({
                 aria-label="Send message"
                 className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors ${
                   canSendNow
-                    ? "bg-signal text-white hover:bg-signal-strong"
+                    ? "bg-signal text-on-signal hover:bg-signal-strong"
                     : "bg-line text-faint"
                 }`}
               >
