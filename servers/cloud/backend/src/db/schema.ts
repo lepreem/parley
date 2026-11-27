@@ -1,4 +1,5 @@
 import { AVATAR_COLORS, AVATAR_GLYPHS } from "@parley/contract/avatars";
+import { USERNAME_MAX_LENGTH } from "@parley/contract/profile";
 import type { StoredSource } from "@parley/server-kit/webSources";
 import {
   bigint,
@@ -65,6 +66,10 @@ export const users = pgTable(
     avatarGlyph: avatarGlyphEnum("avatar_glyph"),
     avatarColor: avatarColorEnum("avatar_color"),
 
+    // The name they picked to show as themselves; null until they pick one.
+    // Not unique, and never filled in from their sign-in account.
+    username: text("username"),
+
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -78,6 +83,12 @@ export const users = pgTable(
     check(
       "users_avatar_whole",
       sql`(${table.avatarGlyph} is null) = (${table.avatarColor} is null)`,
+    ),
+    // The API trims it and refuses an empty or over-long one; this keeps any
+    // other writer to the same rule.
+    check(
+      "users_username_length",
+      sql`char_length(${table.username}) between 1 and ${sql.raw(String(USERNAME_MAX_LENGTH))}`,
     ),
   ],
 ).enableRLS();

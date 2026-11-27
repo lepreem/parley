@@ -99,6 +99,13 @@
       "when": 1795116268100,
       "tag": "0013_user_avatar",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1795766669670,
+      "tag": "0014_user_username",
+      "breakpoints": true
     }
   ]
 }

@@ -1,14 +1,16 @@
 /**
- * The palettes a person can pick. Each one's colours live in themes.css, once
- * for light and once for dark; themes.test.ts fails if a palette here is
- * missing there, or misses a token in either mode.
+ * The palettes a person can pick. Each is an accent colour only: backgrounds,
+ * borders and text are the same greys in all of them. The colours live in
+ * themes.css, once for light and once for dark; themes.test.ts fails if a
+ * palette here is missing there, or sets more than the accent.
  */
+// The ids are what's saved on each device, so they keep their old names.
 export const THEMES = [
-  { id: "studio", label: "Studio", blurb: "Teal on cool grey" },
-  { id: "paper", label: "Paper", blurb: "Warm cream, amber accent" },
-  { id: "graphite", label: "Graphite", blurb: "Plain greys, no colour" },
-  { id: "forest", label: "Forest", blurb: "Green-grey, moss accent" },
-  { id: "plum", label: "Plum", blurb: "Cool violet" },
+  { id: "studio", label: "Teal", blurb: "The default" },
+  { id: "paper", label: "Amber", blurb: "Warm orange" },
+  { id: "graphite", label: "Graphite", blurb: "No colour" },
+  { id: "forest", label: "Moss", blurb: "Soft green" },
+  { id: "plum", label: "Plum", blurb: "Violet" },
 ] as const;
 
 export type ThemeId = (typeof THEMES)[number]["id"];

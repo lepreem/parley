@@ -8,7 +8,8 @@
     "./limits": "./src/limits.ts",
     "./youtube": "./src/youtube.ts",
     "./tiers": "./src/tiers.ts",
-    "./avatars": "./src/avatars.ts"
+    "./avatars": "./src/avatars.ts",
+    "./profile": "./src/profile.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

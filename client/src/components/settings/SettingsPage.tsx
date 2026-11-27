@@ -1,6 +1,14 @@
-import type { ReactNode } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
+import {
+  normalizeUsername,
+  USERNAME_MAX_LENGTH,
+} from "@parley/contract/profile";
 import { authLoginUrl } from "../../config";
 import { useAuth } from "../../hooks/auth/useAuth";
+import {
+  useProfileQuery,
+  useUpdateProfileMutation,
+} from "../../hooks/queries/useProfileQueries";
 import { useTier } from "../../hooks/auth/useCapabilities";
 import { useServer } from "../../hooks/server/useServer";
 import { useTheme } from "../../hooks/theme/useTheme";
@@ -97,8 +105,9 @@ function AccountSection() {
     <SettingsSection
       id="account"
       title="Account"
-      hint="Your picture shows on every device you sign in on."
+      hint="Your name and picture show on every device you sign in on."
     >
+      <UsernameField userId={user.userId} />
       <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
         <UserAvatar userId={user.userId} className="h-16 w-16 shrink-0" />
         <AvatarPicker userId={user.userId} />
@@ -114,6 +123,58 @@ function AccountSection() {
         </button>
       </div>
     </SettingsSection>
+  );
+}
+
+/**
+ * The name the app shows for them. It saves with the button or Enter, and
+ * clearing the box and saving removes it.
+ */
+function UsernameField({ userId }: { userId: string }) {
+  const profile = useProfileQuery(userId);
+  const updateProfile = useUpdateProfileMutation(userId);
+  const saved = profile.data?.username ?? null;
+  // What they've typed, or null while the box shows what's saved.
+  const [draft, setDraft] = useState<string | null>(null);
+  const value = draft ?? saved ?? "";
+  const next = normalizeUsername(value);
+  const changed = draft !== null && next !== saved;
+
+  const save = (event: FormEvent) => {
+    event.preventDefault();
+    if (!changed) return;
+    updateProfile.mutate(
+      { username: next },
+      { onSettled: () => setDraft(null) },
+    );
+  };
+
+  return (
+    <form onSubmit={save}>
+      <label htmlFor="username" className="eyebrow block pb-2 text-faint">
+        Username
+      </label>
+      <div className="flex max-w-sm gap-2">
+        <input
+          id="username"
+          value={value}
+          onChange={(event) => setDraft(event.target.value)}
+          maxLength={USERNAME_MAX_LENGTH}
+          placeholder="What should Parley call you?"
+          autoComplete="nickname"
+          spellCheck={false}
+          disabled={profile.isPending}
+          className="min-w-0 flex-1 rounded-lg border border-line bg-canvas px-3 py-1.5 text-sm text-ink outline-none placeholder:text-faint focus:border-signal focus:ring-1 focus:ring-signal disabled:opacity-60"
+        />
+        <button
+          type="submit"
+          disabled={!changed || updateProfile.isPending}
+          className={buttonClass("primary")}
+        >
+          Save
+        </button>
+      </div>
+    </form>
   );
 }
 

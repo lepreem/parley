@@ -6,7 +6,7 @@ import {
 } from "@parley/contract/avatars";
 import {
   useProfileQuery,
-  useUpdateAvatarMutation,
+  useUpdateProfileMutation,
 } from "../../hooks/queries/useProfileQueries";
 import { Avatar } from "./Avatar";
 import { COLOR_ART, COLOR_LABELS, GLYPH_LABELS } from "./avatarArt";
@@ -34,13 +34,13 @@ export function UserAvatar({
  */
 export function AvatarPicker({ userId }: { userId: string }) {
   const profile = useProfileQuery(userId);
-  const updateAvatar = useUpdateAvatarMutation(userId);
+  const updateProfile = useUpdateProfileMutation(userId);
 
   // Until the server answers, the default it would answer with.
   const avatar = profile.data?.avatar ?? defaultAvatar(userId);
   const pick = (next: AvatarIds) => {
     if (next.glyph === avatar.glyph && next.color === avatar.color) return;
-    updateAvatar.mutate(next);
+    updateProfile.mutate({ avatar: next });
   };
 
   return (

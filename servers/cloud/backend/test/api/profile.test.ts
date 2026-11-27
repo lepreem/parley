@@ -1,12 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-const { mockSelect, mockLimit, mockInsert, mockValues, mockOnConflict } =
-  vi.hoisted(() => ({
-    mockSelect: vi.fn(),
-    mockLimit: vi.fn(),
-    mockInsert: vi.fn(),
-    mockValues: vi.fn(),
-    mockOnConflict: vi.fn(),
-  }));
+const {
+  mockSelect,
+  mockLimit,
+  mockInsert,
+  mockValues,
+  mockOnConflict,
+  mockReturning,
+} = vi.hoisted(() => ({
+  mockSelect: vi.fn(),
+  mockLimit: vi.fn(),
+  mockInsert: vi.fn(),
+  mockValues: vi.fn(),
+  mockOnConflict: vi.fn(),
+  mockReturning: vi.fn(),
+}));
 
 vi.mock("../../src/db", async () => ({
   db: { select: mockSelect, insert: mockInsert },
@@ -28,7 +35,10 @@ beforeEach(() => {
   mockValues.mockImplementation(() => ({
     onConflictDoUpdate: mockOnConflict,
   }));
-  mockOnConflict.mockResolvedValue(undefined);
+  mockOnConflict.mockImplementation(() => ({ returning: mockReturning }));
+  mockReturning.mockResolvedValue([
+    { glyph: null, color: null, username: null },
+  ]);
 });
 
 async function patch(body: unknown) {
@@ -48,8 +58,10 @@ describe("GET /profile", () => {
     expect(res.status).toBe(401);
   });
 
-  it("returns the picture they picked", async () => {
-    mockLimit.mockResolvedValueOnce([{ glyph: "moon", color: "plum" }]);
+  it("returns the picture and username they picked", async () => {
+    mockLimit.mockResolvedValueOnce([
+      { glyph: "moon", color: "plum", username: "river" },
+    ]);
     const res = await (
       await createApp()
     ).request("http://localhost/profile", {
@@ -58,31 +70,85 @@ describe("GET /profile", () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       avatar: { glyph: "moon", color: "plum" },
+      username: "river",
     });
   });
 
-  it("returns their default when they haven't picked one", async () => {
-    mockLimit.mockResolvedValueOnce([{ glyph: null, color: null }]);
+  it("returns their default picture and no username before they pick", async () => {
+    mockLimit.mockResolvedValueOnce([
+      { glyph: null, color: null, username: null },
+    ]);
     const res = await (
       await createApp()
     ).request("http://localhost/profile", {
       headers: await authedHeaders(userId),
     });
-    expect(await res.json()).toEqual({ avatar: defaultAvatar(userId) });
+    expect(await res.json()).toEqual({
+      avatar: defaultAvatar(userId),
+      username: null,
+    });
   });
 });
 
 describe("PATCH /profile", () => {
   it("saves the picture they picked", async () => {
-    const avatar = { glyph: "bolt", color: "sky" };
-    const res = await patch({ avatar });
+    mockReturning.mockResolvedValueOnce([
+      { glyph: "bolt", color: "sky", username: "river" },
+    ]);
+    const res = await patch({ avatar: { glyph: "bolt", color: "sky" } });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ avatar });
+    expect(await res.json()).toEqual({
+      avatar: { glyph: "bolt", color: "sky" },
+      username: "river",
+    });
     expect(mockValues).toHaveBeenCalledWith({
       id: userId,
       avatarGlyph: "bolt",
       avatarColor: "sky",
     });
+  });
+
+  it("saves a username tidied, leaving the picture alone", async () => {
+    const res = await patch({ username: "  River   Stone " });
+    expect(res.status).toBe(200);
+    expect(mockValues).toHaveBeenCalledWith({
+      id: userId,
+      username: "River Stone",
+    });
+    expect(mockOnConflict).toHaveBeenCalledWith(
+      expect.objectContaining({ set: { username: "River Stone" } }),
+    );
+  });
+
+  it("clears the username for null or only spaces", async () => {
+    for (const username of [null, "   "]) {
+      mockValues.mockClear();
+      expect((await patch({ username })).status).toBe(200);
+      expect(mockValues).toHaveBeenCalledWith({ id: userId, username: null });
+    }
+  });
+
+  it("refuses a username that's too long or has control characters", async () => {
+    for (const username of [
+      "x".repeat(33),
+      "a\u0000b",
+      "line\u200bbreak",
+      "abc\u202edef",
+    ]) {
+      expect((await patch({ username })).status, username).toBe(400);
+    }
+    expect(mockInsert).not.toHaveBeenCalled();
+  });
+
+  it("keeps emoji made with joiners", async () => {
+    const res = await patch({ username: "🧑‍💻 dev" });
+    expect(res.status).toBe(200);
+    expect(mockValues).toHaveBeenCalledWith({ id: userId, username: "🧑‍💻 dev" });
+  });
+
+  it("refuses a body with nothing to change", async () => {
+    expect((await patch({})).status).toBe(400);
+    expect(mockInsert).not.toHaveBeenCalled();
   });
 
   it("refuses an id it doesn't offer", async () => {

@@ -58,23 +58,55 @@ const FLOORS: [text: string, on: string, floor: number][] = [
   ["signal", "canvas", 3],
 ];
 
+/** The tokens a palette sets. Everything else is the shared neutrals. */
+const ACCENT = [
+  "--on-signal",
+  "--signal",
+  "--signal-ink",
+  "--signal-strong",
+  "--signal-tint",
+];
+
+const SELECTORS = {
+  light: (match: string) => `[data-theme${match}]`,
+  dark: (match: string) =>
+    `.dark[data-theme${match}],\n.dark [data-theme${match}]`,
+};
+
 describe("themes.css", () => {
   it("finds the tokens", () => {
     expect(expected).toContain("--signal");
+    for (const token of ACCENT) expect(expected).toContain(token);
   });
+
+  for (const mode of ["light", "dark"] as const) {
+    it(`sets every neutral token, and no accent, once for ${mode}`, () => {
+      const base = palettes.find(
+        (found) => found.selector === SELECTORS[mode](""),
+      );
+      expect(base?.tokens).toEqual(
+        expected.filter((token) => !ACCENT.includes(token)),
+      );
+    });
+  }
 
   for (const { id } of THEMES) {
     for (const mode of ["light", "dark"] as const) {
-      it(`gives ${id} every token, readable, in ${mode}`, () => {
-        const selector =
-          mode === "light"
-            ? `[data-theme="${id}"]`
-            : `.dark[data-theme="${id}"],\n.dark [data-theme="${id}"]`;
-        const block = palettes.find((found) => found.selector === selector);
-        expect(block?.tokens).toEqual(expected);
+      it(`gives ${id} only the accent, readable, in ${mode}`, () => {
+        const base = palettes.find(
+          (found) => found.selector === SELECTORS[mode](""),
+        );
+        const block = palettes.find(
+          (found) => found.selector === SELECTORS[mode](`="${id}"`),
+        );
+        expect(block?.tokens).toEqual(ACCENT);
+        const values = new Map([
+          ...(base?.values ?? []),
+          ...(block?.values ?? []),
+        ]);
         for (const [text, on, floor] of FLOORS) {
-          const fg = parseOklch(block?.values.get(text) ?? "");
-          const bg = parseOklch(block?.values.get(on) ?? "");
+          const fg = parseOklch(values.get(text) ?? "");
+          const bg = parseOklch(values.get(on) ?? "");
           expect(fg, `--${text} as oklch()`).not.toBeNull();
           expect(bg, `--${on} as oklch()`).not.toBeNull();
           if (!fg || !bg) continue;

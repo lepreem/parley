@@ -1,5 +1,9 @@
 import { and, eq, like, lt, sql } from "drizzle-orm";
-import type { Avatar } from "@parley/contract/avatars";
+import type {
+  Avatar,
+  AvatarColor,
+  AvatarGlyph,
+} from "@parley/contract/avatars";
 import { Conversations, db, users as Users } from "../db";
 
 /**
@@ -11,35 +15,63 @@ export async function ensureUser(userId: string) {
 }
 
 /**
- * The picture they picked, or null when they haven't picked one (or have no
- * row). The users_avatar_whole check keeps the two columns set together.
+ * How they appear: the picture and username they picked, each null when they
+ * haven't picked one (or have no row). The users_avatar_whole check keeps the
+ * two avatar columns set together.
  */
-export async function findAvatar(userId: string): Promise<Avatar | null> {
+export async function findProfile(userId: string) {
   const [row] = await db
-    .select({ glyph: Users.avatarGlyph, color: Users.avatarColor })
+    .select(profileColumns)
     .from(Users)
     .where(eq(Users.id, userId))
     .limit(1);
-  if (!row?.glyph || !row.color) return null;
-  return { glyph: row.glyph, color: row.color };
+  return toProfile(row);
 }
 
 /**
- * Saves the picture they picked. A guest's row, or a user whose row was
- * lost, gets one made, as ensureUser would have.
+ * Saves whichever of their picture and username is given, and returns the
+ * profile as it now stands. A guest's row, or a user whose row was lost, gets
+ * one made, as ensureUser would have.
  */
-export async function setAvatar(userId: string, avatar: Avatar) {
-  await db
+export async function updateProfile(
+  userId: string,
+  changes: { avatar?: Avatar; username?: string | null },
+) {
+  const set = {
+    ...(changes.avatar && {
+      avatarGlyph: changes.avatar.glyph,
+      avatarColor: changes.avatar.color,
+    }),
+    ...(changes.username !== undefined && { username: changes.username }),
+  };
+  const [row] = await db
     .insert(Users)
-    .values({
-      id: userId,
-      avatarGlyph: avatar.glyph,
-      avatarColor: avatar.color,
-    })
-    .onConflictDoUpdate({
-      target: Users.id,
-      set: { avatarGlyph: avatar.glyph, avatarColor: avatar.color },
-    });
+    .values({ id: userId, ...set })
+    .onConflictDoUpdate({ target: Users.id, set })
+    .returning(profileColumns);
+  return toProfile(row);
+}
+
+const profileColumns = {
+  glyph: Users.avatarGlyph,
+  color: Users.avatarColor,
+  username: Users.username,
+};
+
+function toProfile(
+  row:
+    | {
+        glyph: AvatarGlyph | null;
+        color: AvatarColor | null;
+        username: string | null;
+      }
+    | undefined,
+): { avatar: Avatar | null; username: string | null } {
+  return {
+    avatar:
+      row?.glyph && row.color ? { glyph: row.glyph, color: row.color } : null,
+    username: row?.username ?? null,
+  };
 }
 
 /**
