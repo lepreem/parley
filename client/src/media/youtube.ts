@@ -13,6 +13,28 @@ export function findYoutubeUrl(text: string): string | null {
   return null;
 }
 
+/**
+ * The message once a link has become an attached transcript: every copy of it
+ * gone, with the gap it leaves closed up. Line breaks the user typed stay.
+ */
+export function withoutLink(text: string, url: string): string {
+  const escaped = url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const linkWithSpaces = new RegExp(`[ \\t]*${escaped}[ \\t]*`, "g");
+  return text
+    .replace(linkWithSpaces, (match, offset: number) => {
+      const before = text[offset - 1];
+      const after = text[offset + match.length];
+      // Mid-line, the words either side still need a space between them.
+      const atLineEdge =
+        before === undefined ||
+        before === "\n" ||
+        after === undefined ||
+        after === "\n";
+      return atLineEdge ? "" : " ";
+    })
+    .trim();
+}
+
 /** The video id, for a label short enough to sit in one line of chrome. */
 export function youtubeLabel(url: string): string {
   const id = youtubeVideoId(url);

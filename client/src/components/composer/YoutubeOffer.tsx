@@ -4,7 +4,8 @@ import { buttonClass } from "../ui/buttonClass";
 
 /**
  * A pasted link is a hint, not an instruction — so this asks rather than acts.
- * The URL stays in the message either way.
+ * Accepting moves the link out of the message and into a source chip;
+ * declining leaves the message as typed.
  */
 export function YoutubeOffer({
   url,
